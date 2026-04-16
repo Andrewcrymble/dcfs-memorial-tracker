@@ -371,6 +371,37 @@
         .checkbox-group { display: flex; align-items: center; gap: 0.5rem; }
         .checkbox-group input[type="checkbox"] { width: auto; }
 
+        /* ── LIVE PRICE INDICATORS (form) ── */
+        .price-indicator {
+            display: flex;
+            gap: 0.6rem;
+            align-items: center;
+            margin-top: 0.3rem;
+            font-size: 0.78rem;
+            min-height: 1.3em;
+            flex-wrap: wrap;
+        }
+        .pi-cost { color: var(--text-muted); }
+        .pi-retail { color: var(--green); font-weight: 700; }
+        .pi-profit { color: var(--cyan); font-size: 0.72rem; }
+        .pi-sep { color: var(--border); }
+
+        /* ── LIVE TOTALS BAR ── */
+        .live-totals {
+            background: var(--green);
+            color: white;
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1rem;
+            text-align: center;
+            margin: 1rem 0;
+        }
+        .lt-col { display: flex; flex-direction: column; gap: 0.15rem; }
+        .lt-label { font-size: 0.7rem; opacity: 0.75; text-transform: uppercase; letter-spacing: 0.05em; }
+        .lt-value { font-size: 1.5rem; font-weight: 700; }
+
         @media print {
             .app-header, .sidebar, .action-bar { display: none; }
             .main-container { height: auto; }
@@ -1171,7 +1202,7 @@
                         <div class="form-grid">
                             <div class="form-group">
                                 <label>Type</label>
-                                <select name="hsType">
+                                <select name="hsType" id="f_hsType" onchange="updateFormPrices()">
                                     <option value="">Select type</option>
                                     ${getHeadstoneTypes().map(type =>
                                         `<option value="${type}" ${order.hsType === type ? 'selected' : ''}>${type}</option>`
@@ -1180,16 +1211,17 @@
                             </div>
                             <div class="form-group">
                                 <label>Size</label>
-                                <select name="hsSize">
+                                <select name="hsSize" id="f_hsSize" onchange="updateFormPrices()">
                                     <option value="">Select size</option>
                                     ${getHeadstoneSizes().map(size =>
                                         `<option value="${size}" ${order.hsSize === size ? 'selected' : ''}>${size}</option>`
                                     ).join('')}
                                 </select>
+                                <div class="price-indicator" id="pi_headstone"></div>
                             </div>
                             <div class="form-group">
                                 <label>Colour</label>
-                                <select name="hsColour">
+                                <select name="hsColour" id="f_hsColour" onchange="updateFormPrices()">
                                     <option value="">Select colour</option>
                                     <option value="Black" ${order.hsColour === 'Black' ? 'selected' : ''}>Black (standard)</option>
                                     <option value="SA Impala" ${order.hsColour === 'SA Impala' ? 'selected' : ''}>SA Impala (+£50)</option>
@@ -1212,23 +1244,25 @@
                             </div>
                             <div class="form-group">
                                 <label>Surround Type</label>
-                                <select name="surroundType">
+                                <select name="surroundType" id="f_surroundType" onchange="updateFormPrices()">
                                     <option value="">No surround</option>
                                     ${getUniqueValues(priceBook.Surrounds, 'type').length > 0
                                         ? getUniqueValues(priceBook.Surrounds, 'type').map(t => `<option value="${t}" ${order.surroundType === t ? 'selected' : ''}>${t}</option>`).join('')
                                         : ['Full Kerb', 'Half Kerb', 'Cremation Kerb', 'Vase Kerb'].map(t => `<option value="${t}" ${order.surroundType === t ? 'selected' : ''}>${t}</option>`).join('')
                                     }
                                 </select>
+                                <div class="price-indicator" id="pi_surround"></div>
                             </div>
                             <div class="form-group">
                                 <label>Stone / Chippings</label>
-                                <select name="stoneType">
+                                <select name="stoneType" id="f_stoneType" onchange="updateFormPrices()">
                                     <option value="">None</option>
                                     ${getUniqueValues(priceBook.Stones, 'type').length > 0
                                         ? getUniqueValues(priceBook.Stones, 'type').map(t => `<option value="${t}" ${order.stoneType === t ? 'selected' : ''}>${t}</option>`).join('')
                                         : ['White Marble', 'Black Granite', 'Grey Granite', 'Pea Gravel', 'Slate'].map(t => `<option value="${t}" ${order.stoneType === t ? 'selected' : ''}>${t}</option>`).join('')
                                     }
                                 </select>
+                                <div class="price-indicator" id="pi_stone"></div>
                             </div>
                         </div>
                     </div>
@@ -1239,14 +1273,15 @@
                         <div class="form-grid">
                             <div class="form-group">
                                 <label>Type</label>
-                                <select name="inscriptionType">
+                                <select name="inscriptionType" id="f_inscType" onchange="updateFormPrices()">
                                     <option value="new" ${order.inscriptionType === 'new' ? 'selected' : ''}>New</option>
                                     <option value="additional" ${order.inscriptionType === 'additional' ? 'selected' : ''}>Additional</option>
                                 </select>
                             </div>
                             <div class="form-group">
                                 <label>Number of Lines</label>
-                                <input type="number" name="inscriptionLines" value="${order.inscriptionLines || 0}" min="0" max="8">
+                                <input type="number" name="inscriptionLines" id="f_inscLines" value="${order.inscriptionLines || 0}" min="0" max="8" onchange="updateFormPrices()">
+                                <div class="price-indicator" id="pi_inscription"></div>
                             </div>
                             <div class="form-group">
                                 <label>Style</label>
@@ -1263,7 +1298,8 @@
                             </div>
                             <div class="form-group" style="grid-column: 1 / -1;">
                                 <label>Inscription Text</label>
-                                <textarea name="inscriptionText" rows="5">${order.inscriptionText || ''}</textarea>
+                                <textarea name="inscriptionText" id="f_inscText" rows="5" oninput="updateFormPrices()">${order.inscriptionText || ''}</textarea>
+                                <div class="price-indicator" id="pi_inscText"></div>
                             </div>
                         </div>
                     </div>
@@ -1274,12 +1310,13 @@
                         <div class="form-grid">
                             <div class="form-group">
                                 <label>Cemetery</label>
-                                <select name="cemetery">
+                                <select name="cemetery" id="f_cemetery" onchange="updateFormPrices()">
                                     <option value="">Select cemetery</option>
                                     ${getCemeteryOptions().map(loc =>
                                         `<option value="${loc}" ${order.cemetery === loc ? 'selected' : ''}>${loc}</option>`
                                     ).join('')}
                                 </select>
+                                <div class="price-indicator" id="pi_cemetery"></div>
                             </div>
                             <div class="form-group">
                                 <label>Grave Number</label>
@@ -1299,13 +1336,17 @@
                     <!-- Accessories -->
                     <div class="form-section">
                         <div class="section-title">🎁 Accessories</div>
-                        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:0.5rem;">
+                        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap:0.5rem;">
                             ${ACCESSORY_OPTIONS.map(acc => {
                                 const checked = (order.accessories || []).includes(acc);
+                                const accData = (priceBook.Accessories || []).find(a => a.name === acc);
+                                const priceHint = accData
+                                    ? `<span style="margin-left:auto;font-size:0.72rem;color:var(--green);font-weight:600;">£${parseFloat(accData.sell||0).toFixed(0)}</span>`
+                                    : '';
                                 return `
                                     <label style="display:flex;align-items:center;gap:0.4rem;padding:0.4rem 0.6rem;background:white;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:0.85rem;${checked ? 'border-color:var(--cyan);background:#e0f7fa;' : ''}">
-                                        <input type="checkbox" name="accessories" value="${acc}" ${checked ? 'checked' : ''} style="accent-color:var(--cyan);">
-                                        ${acc}
+                                        <input type="checkbox" name="accessories" value="${acc}" ${checked ? 'checked' : ''} style="accent-color:var(--cyan);" onchange="updateFormPrices()">
+                                        ${acc}${priceHint}
                                     </label>`;
                             }).join('')}
                         </div>
@@ -1324,6 +1365,22 @@
                         </div>
                     </div>
 
+                    <!-- Live Totals -->
+                    <div class="live-totals" id="liveTotals">
+                        <div class="lt-col">
+                            <div class="lt-label">Mason Cost</div>
+                            <div class="lt-value" id="lt_cost">£0.00</div>
+                        </div>
+                        <div class="lt-col">
+                            <div class="lt-label">Customer Total</div>
+                            <div class="lt-value" id="lt_sell">£0.00</div>
+                        </div>
+                        <div class="lt-col">
+                            <div class="lt-label">Your Profit</div>
+                            <div class="lt-value" id="lt_profit">£0.00</div>
+                        </div>
+                    </div>
+
                     <div class="action-buttons">
                         <button type="submit" class="btn btn-primary">💾 Save Order</button>
                         <button type="button" class="btn btn-secondary" onclick="closeOrderModal()">Cancel</button>
@@ -1332,6 +1389,7 @@
             `;
 
             document.getElementById('orderModal').classList.add('active');
+            updateFormPrices();
         }
 
         // Get unique values from price book with hardcoded fallbacks
@@ -1366,6 +1424,126 @@
             'LED Lights', 'Pebbles', 'Granite Chips', 'Kerb Letters',
             'Butterfly', 'Angel', 'Book', 'Bench'
         ];
+
+        // ── LIVE PRICING ──────────────────────────────────────────
+        function showPI(id, cost, sell) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (!cost && !sell) { el.innerHTML = ''; return; }
+            const profit = sell - cost;
+            el.innerHTML =
+                `<span class="pi-cost">Cost £${cost.toFixed(2)}</span>` +
+                `<span class="pi-sep">|</span>` +
+                `<span class="pi-retail">Retail £${sell.toFixed(2)}</span>` +
+                (profit > 0 ? `<span class="pi-profit">(+£${profit.toFixed(2)})</span>` : '');
+        }
+
+        function updateFormPrices() {
+            const g = id => document.getElementById(id);
+            const val = id => (g(id) || {}).value || '';
+
+            let totalCost = 0, totalSell = 0;
+
+            // — Headstone —
+            const hsType = val('f_hsType');
+            const hsSize = val('f_hsSize');
+            let hsCost = 0, hsSell = 0;
+            if (hsType && hsSize && priceBook.Headstones) {
+                const hs = priceBook.Headstones.find(h => h.type === hsType && h.size === hsSize);
+                if (hs) { hsCost = parseFloat(hs.cost) || 0; hsSell = parseFloat(hs.sell) || 0; }
+            }
+            // Colour adjustment
+            const hsColour = val('f_hsColour');
+            if (hsColour && priceBook.Headstone_Colours) {
+                const col = priceBook.Headstone_Colours.find(c => c.name === hsColour || c.colour === hsColour);
+                if (col) { hsCost += parseFloat(col.costAdj || col.cost_adj || 0); hsSell += parseFloat(col.sellAdj || col.sell_adj || 0); }
+            }
+            showPI('pi_headstone', hsCost, hsSell);
+            totalCost += hsCost; totalSell += hsSell;
+
+            // — Surround —
+            const surroundType = val('f_surroundType');
+            let surCost = 0, surSell = 0;
+            if (surroundType && priceBook.Surrounds) {
+                const sur = priceBook.Surrounds.find(s => s.type === surroundType);
+                if (sur) { surCost = parseFloat(sur.baseCost || sur.cost) || 0; surSell = parseFloat(sur.baseSell || sur.sell) || 0; }
+            }
+            showPI('pi_surround', surCost, surSell);
+            totalCost += surCost; totalSell += surSell;
+
+            // — Stone —
+            const stoneType = val('f_stoneType');
+            let stoneCost = 0, stoneSell = 0;
+            if (stoneType && priceBook.Stones) {
+                const st = priceBook.Stones.find(s => s.type === stoneType);
+                if (st) {
+                    stoneCost = parseFloat(surroundType ? (st.withSurroundCost || st.cost) : (st.standaloneCost || st.cost)) || 0;
+                    stoneSell = parseFloat(st.sell) || 0;
+                }
+            }
+            showPI('pi_stone', stoneCost, stoneSell);
+            totalCost += stoneCost; totalSell += stoneSell;
+
+            // — Cemetery fee —
+            const cemetery = val('f_cemetery');
+            let cemFee = 0;
+            if (cemetery && priceBook.Cemetery_Fees) {
+                const cem = priceBook.Cemetery_Fees.find(c => c.location === cemetery);
+                if (cem) cemFee = parseFloat(cem.fee || cem.Fee) || 0;
+            }
+            const piCem = document.getElementById('pi_cemetery');
+            if (piCem) piCem.innerHTML = cemFee > 0
+                ? `<span class="pi-retail">Fee £${cemFee.toFixed(2)}</span>`
+                : '';
+            totalCost += cemFee; totalSell += cemFee;
+
+            // — Inscription lines —
+            const inscLines = parseInt(val('f_inscLines')) || 0;
+            const inscPpl = 35; // price per line fallback
+            const lineCost = inscLines * 25;
+            const lineSell = inscLines * inscPpl;
+            showPI('pi_inscription', lineCost, lineSell);
+            totalCost += lineCost; totalSell += lineSell;
+
+            // — Inscription text (letter count) —
+            const inscText = (g('f_inscText') || {}).value || '';
+            const inscType = val('f_inscType') || 'new';
+            const letters = (inscText.match(/[a-zA-Z0-9]/g) || []).length;
+            let txtCost = 0, txtSell = 0;
+            if (inscType === 'new') {
+                if (letters > 100) { txtCost = (letters - 100) * 2; txtSell = (letters - 100) * 3; }
+            } else {
+                txtCost = letters <= 50 ? 150 : 150 + (letters - 50) * 3;
+                txtSell = letters <= 50 ? 250 : 250 + (letters - 50) * 4.5;
+            }
+            const piTxt = document.getElementById('pi_inscText');
+            if (piTxt) {
+                piTxt.innerHTML = letters > 0
+                    ? `<span class="pi-cost">${letters} letters</span>` +
+                      (txtSell > 0 ? `<span class="pi-sep">|</span><span class="pi-cost">Cost £${txtCost.toFixed(2)}</span><span class="pi-sep">|</span><span class="pi-retail">Retail £${txtSell.toFixed(2)}</span>` : '<span class="pi-cost"> (first 100 free)</span>')
+                    : '';
+            }
+            totalCost += txtCost; totalSell += txtSell;
+
+            // — Accessories —
+            const checkedAcc = document.querySelectorAll('[name="accessories"]:checked');
+            checkedAcc.forEach(cb => {
+                if (priceBook.Accessories) {
+                    const acc = priceBook.Accessories.find(a => a.name === cb.value);
+                    if (acc) { totalCost += parseFloat(acc.cost) || 0; totalSell += parseFloat(acc.sell) || 0; }
+                }
+            });
+
+            // — Update totals bar —
+            const profit = totalSell - totalCost;
+            if (g('lt_cost')) g('lt_cost').textContent = '£' + totalCost.toFixed(2);
+            if (g('lt_sell')) g('lt_sell').textContent = '£' + totalSell.toFixed(2);
+            if (g('lt_profit')) {
+                g('lt_profit').textContent = '£' + profit.toFixed(2);
+                g('lt_profit').style.color = profit > 0 ? '#a5d6a7' : '#ef9a9a';
+            }
+        }
+        // ──────────────────────────────────────────────────────────
 
         // Save order form
         async function saveOrderForm(event) {
