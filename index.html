@@ -1603,30 +1603,42 @@
                 : '';
             totalCost += cemFee; totalSell += cemFee;
 
-            // — Inscription lines —
+            // — Inscription lines — (display only, no pricing — letter count drives cost)
             const inscLines = parseInt(val('f_inscLines')) || 0;
-            const inscPpl = 35; // price per line fallback
-            const lineCost = inscLines * 25;
-            const lineSell = inscLines * inscPpl;
-            showPI('pi_inscription', lineCost, lineSell);
-            totalCost += lineCost; totalSell += lineSell;
+            const piInsc = document.getElementById('pi_inscription');
+            if (piInsc) piInsc.innerHTML = inscLines > 0
+                ? `<span class="pi-cost-small">${inscLines} line${inscLines !== 1 ? 's' : ''} — pricing based on letter count below</span>`
+                : '';
 
-            // — Inscription text (letter count) —
+            // — Inscription text (letter count drives ALL inscription pricing) —
             const inscText = (g('f_inscText') || {}).value || '';
             const inscType = val('f_inscType') || 'new';
             const letters = (inscText.match(/[a-zA-Z0-9]/g) || []).length;
+            const ni = priceBook.NewInscription || {};
+            const ai = priceBook.AdditionalInscription || {};
             let txtCost = 0, txtSell = 0;
+            let inscNote = '';
             if (inscType === 'new') {
-                if (letters > 100) { txtCost = (letters - 100) * 2; txtSell = (letters - 100) * 3; }
+                if (letters > 100) {
+                    const extra = letters - 100;
+                    txtCost = extra * (ni.costPerLetterAfter100 ?? 2);
+                    txtSell = extra * (ni.sellPerLetterAfter100 ?? 3);
+                    inscNote = `${letters} letters — first 100 free, ${extra} charged`;
+                } else {
+                    inscNote = `${letters} letters — all included (first 100 free)`;
+                }
             } else {
-                txtCost = letters <= 50 ? 150 : 150 + (letters - 50) * 3;
-                txtSell = letters <= 50 ? 250 : 250 + (letters - 50) * 4.5;
+                const cpl = ai.costPerLetterAfter50 ?? 3;
+                const spl = ai.sellPerLetterAfter50 ?? 4.5;
+                txtCost = letters * cpl;
+                txtSell = letters * spl;
+                inscNote = `${letters} letters @ £${spl.toFixed(2)}/letter`;
             }
             const piTxt = document.getElementById('pi_inscText');
             if (piTxt) {
                 piTxt.innerHTML = letters > 0
-                    ? `<span class="pi-cost">${letters} letters</span>` +
-                      (txtSell > 0 ? `<span class="pi-sep">|</span><span class="pi-cost">Cost £${txtCost.toFixed(2)}</span><span class="pi-sep">|</span><span class="pi-retail">Retail £${txtSell.toFixed(2)}</span>` : '<span class="pi-cost"> (first 100 free)</span>')
+                    ? `<span class="pi-cost-small">${inscNote}</span>` +
+                      (txtSell > 0 ? `<span class="pi-retail-big" style="margin-top:0.2rem;">£${txtSell.toFixed(2)}</span><span class="pi-cost-small">Mason cost: £${txtCost.toFixed(2)}</span>` : '')
                     : '';
             }
             totalCost += txtCost; totalSell += txtSell;
@@ -2046,34 +2058,29 @@
     let cost = 0;
     let sell = 0;
 
-    // Safe access with hardcoded fallbacks if priceBook entries are missing
     const ni = priceBook.NewInscription || {};
     const ai = priceBook.AdditionalInscription || {};
 
     if (order.inscriptionType === 'new') {
+        // First 100 letters FREE — charge only for letters over 100
         if (letterCount > 100) {
             const extraLetters = letterCount - 100;
             cost = extraLetters * (ni.costPerLetterAfter100 ?? 2);
             sell = extraLetters * (ni.sellPerLetterAfter100 ?? 3);
         }
     } else {
-        const baseCost = ai.baseCost ?? 150;
-        const baseSell = ai.baseSell ?? 250;
-        if (letterCount <= 50) {
-            cost = baseCost;
-            sell = baseSell;
-        } else {
-            const extraLetters = letterCount - 50;
-            cost = baseCost + extraLetters * (ai.costPerLetterAfter50 ?? 3);
-            sell = baseSell + extraLetters * (ai.sellPerLetterAfter50 ?? 4.5);
-        }
+        // Additional Inscription — charged from letter 1, no free allowance
+        const costPerLetter = ai.costPerLetterAfter50 ?? 3;
+        const sellPerLetter = ai.sellPerLetterAfter50 ?? 4.5;
+        cost = letterCount * costPerLetter;
+        sell = letterCount * sellPerLetter;
     }
 
     return {
         cost,
         sell,
         margin: sell - cost,
-        letterCount: letterCount
+        letterCount
     };
 }
 

@@ -534,11 +534,9 @@ function loadPriceBook() {
   };
   
   priceBook.AdditionalInscription = {
-    baseLetters: 50,
-    baseCost: 150,
-    baseSell: 250,
-    costPerLetterAfter50: 3.00,
-    sellPerLetterAfter50: 4.50
+    // Charged from letter 1 — no free allowance, no flat rate
+    costPerLetterAfter50: 3.00,   // reusing field name — applies from letter 1
+    sellPerLetterAfter50: 4.50    // reusing field name — applies from letter 1
   };
   
   return priceBook;
