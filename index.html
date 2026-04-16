@@ -2495,19 +2495,16 @@
                     body: JSON.stringify({ action: 'upsert', order: orderData })
                 });
 
-                // Update local list immediately so it shows without waiting
-                if (!editingOrderId) {
-                    allOrders.unshift(orderData);
+                // Update local list immediately
+                const existingIdx = allOrders.findIndex(o => o.orderId === orderData.orderId);
+                if (existingIdx >= 0) {
+                    allOrders[existingIdx] = orderData; // update existing
                 } else {
-                    const idx = allOrders.findIndex(o => o.orderId === orderData.orderId);
-                    if (idx >= 0) allOrders[idx] = orderData;
+                    allOrders.unshift(orderData); // genuinely new order
                 }
                 currentOrder = orderData;
                 renderOrderList();
-                renderOrderDetails(orderData);
-
-                // Also reload from sheet after 3s to confirm server saved it
-                setTimeout(() => loadOrders(), 3000);
+                renderOrderDetails();
 
             } catch (error) {
                 console.error('Error saving order:', error);
