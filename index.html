@@ -669,52 +669,57 @@
         }
 
         // Load orders from Google Sheets
-        async function loadOrders() {
-            try {
-                // Use JSONP to avoid CORS issues
-                const callbackName = 'handleOrders_' + Date.now();
-                
-                window[callbackName] = function(data) {
-                    allOrders = data.orders || [];
-                    if (data.priceBook) {
-                        priceBook = data.priceBook;
-                    }
-                    renderOrderList();
-                    delete window[callbackName];
-                };
-                
-                const script = document.createElement('script');
-                script.src = SCRIPT_URL + '?callback=' + callbackName;
-                script.onerror = function() {
-                    console.error('Error loading orders from Google Sheets');
+        function loadOrders() {
+            return new Promise((resolve, reject) => {
+                try {
+                    const callbackName = 'handleOrders_' + Date.now();
+                    const bust = '&t=' + Date.now(); // cache buster
+
+                    window[callbackName] = function(data) {
+                        allOrders = data.orders || [];
+                        if (data.priceBook) priceBook = data.priceBook;
+                        renderOrderList();
+                        delete window[callbackName];
+                        resolve();
+                    };
+
+                    const script = document.createElement('script');
+                    script.src = SCRIPT_URL + '?callback=' + callbackName + bust;
+                    script.onerror = function() {
+                        console.error('Error loading orders from Google Sheets');
+                        document.getElementById('orderList').innerHTML = `
+                            <li class="loading" style="color: #ef4444; padding: 1rem;">
+                                <strong>Error loading orders</strong><br>
+                                <small>Make sure your Google Apps Script is deployed and accessible.</small><br>
+                                <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="loadOrders()">Retry</button>
+                            </li>
+                        `;
+                        delete window[callbackName];
+                        reject();
+                    };
+
+                    document.head.appendChild(script);
+
+                    // Timeout after 10s
+                    setTimeout(() => {
+                        if (script.parentNode) script.parentNode.removeChild(script);
+                        if (window[callbackName]) {
+                            delete window[callbackName];
+                            reject('timeout');
+                        }
+                    }, 10000);
+
+                } catch (error) {
+                    console.error('Error loading orders:', error);
                     document.getElementById('orderList').innerHTML = `
                         <li class="loading" style="color: #ef4444; padding: 1rem;">
-                            <strong>Error loading orders</strong><br>
-                            <small>Make sure your Google Apps Script is deployed and accessible.</small><br>
+                            <strong>Error: ${error.message}</strong><br>
                             <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="loadOrders()">Retry</button>
                         </li>
                     `;
-                    delete window[callbackName];
-                };
-                
-                document.head.appendChild(script);
-                
-                // Clean up script tag after execution
-                setTimeout(() => {
-                    if (script.parentNode) {
-                        script.parentNode.removeChild(script);
-                    }
-                }, 5000);
-                
-            } catch (error) {
-                console.error('Error loading orders:', error);
-                document.getElementById('orderList').innerHTML = `
-                    <li class="loading" style="color: #ef4444; padding: 1rem;">
-                        <strong>Error: ${error.message}</strong><br>
-                        <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="loadOrders()">Retry</button>
-                    </li>
-                `;
-            }
+                    reject(error);
+                }
+            });
         }
 
         // Map Google Sheet field names to app field names
@@ -748,7 +753,19 @@
 
         // Refresh orders
         function refreshOrders() {
-            loadOrders();
+            const btn = document.querySelector('button[onclick="refreshOrders()"]');
+            if (btn) { btn.textContent = '⏳ Loading…'; btn.disabled = true; }
+            const prevOrderId = currentOrder?.orderId;
+            loadOrders().then(() => {
+                // Re-select the open order with fresh data
+                if (prevOrderId) {
+                    const fresh = allOrders.find(o => o.orderId === prevOrderId);
+                    if (fresh) { currentOrder = fresh; renderOrderDetails(); }
+                }
+                if (btn) { btn.textContent = '🔄 Refresh'; btn.disabled = false; }
+            }).catch(() => {
+                if (btn) { btn.textContent = '🔄 Refresh'; btn.disabled = false; }
+            });
         }
 
         // Filter orders
