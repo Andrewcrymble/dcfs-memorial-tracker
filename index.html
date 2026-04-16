@@ -554,8 +554,7 @@
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', () => {
-            loadPriceBook();
-            loadOrders();
+            loadOrders(); // priceBook is included in the Apps Script response
         });
 
         // Load price book from Google Sheets
@@ -993,66 +992,39 @@
             return text.replace(/[^a-zA-Z0-9]/g, '').length;
         }
 
-        // Render price breakdown
+        // Render price breakdown using stored prices
         function renderPriceBreakdown(order, total) {
             let html = '';
 
-            const headstone = priceBook.Headstones?.find(h => 
-                h.type === order.hsType && h.size === order.hsSize
-            );
-            if (headstone) {
-                html += `<div class="price-row"><span>Headstone (${order.hsType} - ${order.hsSize})</span><span>£${parseFloat(headstone.sell).toFixed(2)}</span></div>`;
+            if (parseFloat(order.hsSellPrice) > 0) {
+                html += `<div class="price-row"><span>Headstone (${order.hsType || ''} ${order.hsSize || ''})</span><span>£${parseFloat(order.hsSellPrice).toFixed(2)}</span></div>`;
             }
 
-            if (order.hsColourAdj) {
-                html += `<div class="price-row"><span>Colour Adjustment</span><span>£${parseFloat(order.hsColourAdj).toFixed(2)}</span></div>`;
+            if (parseFloat(order.surroundSellPrice) > 0) {
+                const graniteNote = order.surroundGranite ? ' + Granite' : '';
+                html += `<div class="price-row"><span>Surround (${order.surroundType || ''}${graniteNote})</span><span>£${parseFloat(order.surroundSellPrice).toFixed(2)}</span></div>`;
             }
 
-            const surround = priceBook.Surrounds?.find(s => s.type === order.surroundType);
-            if (surround) {
-                html += `<div class="price-row"><span>Surround (${order.surroundType})</span><span>£${parseFloat(surround.baseSell).toFixed(2)}</span></div>`;
-                if (order.surroundGranite) {
-                    html += `<div class="price-row"><span>Granite Upgrade</span><span>£${parseFloat(surround.graniteSellAdd).toFixed(2)}</span></div>`;
-                }
+            if (parseFloat(order.stoneSellPrice) > 0) {
+                html += `<div class="price-row"><span>Stone / Chippings (${order.stoneType || ''})</span><span>£${parseFloat(order.stoneSellPrice).toFixed(2)}</span></div>`;
             }
 
-            const stone = priceBook.Stones?.find(s => s.type === order.stoneType);
-            if (stone) {
-                const stonePrice = order.surroundType ?
-                    parseFloat(stone.withSurroundCost || 0) :
-                    parseFloat(stone.standaloneCost || 0);
-                html += `<div class="price-row"><span>Stone (${order.stoneType})</span><span>£${stonePrice.toFixed(2)}</span></div>`;
+            if (parseFloat(order.accessoriesSellPrice) > 0) {
+                const accLabel = (order.accessories || []).join(', ') || 'Accessories';
+                html += `<div class="price-row"><span>${accLabel}</span><span>£${parseFloat(order.accessoriesSellPrice).toFixed(2)}</span></div>`;
             }
 
-            if (order.accessories && Array.isArray(order.accessories)) {
-                order.accessories.forEach(acc => {
-                    const accessory = priceBook.Accessories?.find(a => a.name === acc);
-                    if (accessory) {
-                        html += `<div class="price-row"><span>${acc}</span><span>£${parseFloat(accessory.sell).toFixed(2)}</span></div>`;
-                    }
-                });
+            if (parseFloat(order.inscriptionSellPrice) > 0) {
+                const inscType = order.inscriptionType === 'additional' ? 'Additional Inscription' : 'New Inscription';
+                html += `<div class="price-row"><span>${inscType}</span><span>£${parseFloat(order.inscriptionSellPrice).toFixed(2)}</span></div>`;
             }
 
-            const cemetery = priceBook.Cemetery_Fees?.find(c => c.location === order.cemetery);
-            if (cemetery) {
-                html += `<div class="price-row"><span>Cemetery Fee (${order.cemetery})</span><span>£${parseFloat(cemetery.fee).toFixed(2)}</span></div>`;
+            if (parseFloat(order.cemeteryFee) > 0) {
+                html += `<div class="price-row"><span>Cemetery Fee (${order.cemetery || ''})</span><span>£${parseFloat(order.cemeteryFee).toFixed(2)}</span></div>`;
             }
 
-            const inscriptionLines = parseInt(order.inscriptionLines || 0);
-            const inscriptionPpl = parseFloat(order.inscriptionPpl || 35);
-            if (inscriptionLines > 0) {
-                html += `<div class="price-row"><span>Inscription (${inscriptionLines} lines @ £${inscriptionPpl})</span><span>£${(inscriptionLines * inscriptionPpl).toFixed(2)}</span></div>`;
-            }
-
-            const letters = countLetters(order.inscriptionText || '');
-            if (order.inscriptionType === 'additional') {
-                const letterCharge = Math.max(200, letters * 5);
-                html += `<div class="price-row"><span>Additional Inscription (${letters} letters)</span><span>£${letterCharge.toFixed(2)}</span></div>`;
-            } else {
-                if (letters > 100) {
-                    const extraLetters = letters - 100;
-                    html += `<div class="price-row"><span>Extra Letters (${extraLetters} @ £4)</span><span>£${(extraLetters * 4).toFixed(2)}</span></div>`;
-                }
+            if (parseFloat(order.servicesSellPrice) > 0) {
+                html += `<div class="price-row"><span>Additional Services</span><span>£${parseFloat(order.servicesSellPrice).toFixed(2)}</span></div>`;
             }
 
             if (order.extraCharges && Array.isArray(order.extraCharges)) {
@@ -1061,12 +1033,13 @@
                 });
             }
 
-            html += `<div class="price-row price-total"><span>Total</span><span>£${total.toFixed(2)}</span></div>`;
+            const displayTotal = parseFloat(order.totalSellPrice) > 0 ? parseFloat(order.totalSellPrice) : total;
+            html += `<div class="price-row price-total"><span>Total</span><span>£${displayTotal.toFixed(2)}</span></div>`;
 
-            if (order.depositPaid) {
+            if (parseFloat(order.depositPaid) > 0) {
                 const deposit = parseFloat(order.depositPaid);
                 html += `<div class="price-row"><span>Deposit Paid</span><span>-£${deposit.toFixed(2)}</span></div>`;
-                html += `<div class="price-row" style="font-weight: 600;"><span>Balance Outstanding</span><span>£${(total - deposit).toFixed(2)}</span></div>`;
+                html += `<div class="price-row" style="font-weight: 600;"><span>Balance Outstanding</span><span>£${Math.max(0, displayTotal - deposit).toFixed(2)}</span></div>`;
             }
 
             return html;
@@ -1356,6 +1329,25 @@
             for (let [key, value] of formData.entries()) {
                 orderData[key] = value;
             }
+
+            // Calculate and store prices from price book
+            const totals = calculateOrderTotals(orderData);
+            orderData.hsSellPrice = totals.breakdown.headstone.sell;
+            orderData.hsCostPrice = totals.breakdown.headstone.cost;
+            orderData.surroundSellPrice = totals.breakdown.surround.sell;
+            orderData.surroundCostPrice = totals.breakdown.surround.cost;
+            orderData.stoneSellPrice = totals.breakdown.stone.sell;
+            orderData.stoneCostPrice = totals.breakdown.stone.cost;
+            orderData.inscriptionSellPrice = totals.breakdown.inscription.sell;
+            orderData.inscriptionCostPrice = totals.breakdown.inscription.cost;
+            orderData.accessoriesSellPrice = totals.breakdown.accessories.sell;
+            orderData.accessoriesCostPrice = totals.breakdown.accessories.cost;
+            orderData.cemeteryFee = totals.breakdown.cemeteryFee;
+            orderData.totalSellPrice = totals.totalSell;
+            orderData.totalCostPrice = totals.totalCost;
+            orderData.profitMargin = totals.profitMargin;
+            orderData.marginPercentage = totals.marginPercentage;
+            orderData.balanceDue = Math.max(0, totals.totalSell - (parseFloat(orderData.depositPaid) || 0));
 
             // Add activity log entry
             if (!orderData.log) orderData.log = [];
