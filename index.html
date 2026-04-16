@@ -1,0 +1,2438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DC&S Headstone Order Tracker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --header-green: #669d35;
+            --accent-cyan: #0097a7;
+            --bg-grey: #f0f4f7;
+            --surface-white: #ffffff;
+            --text-dark: #1a2733;
+            --status-enquiry: #94a3b8;
+            --status-quoted: #f59e0b;
+            --status-confirmed: #3b82f6;
+            --status-design: #8b5cf6;
+            --status-production: #f97316;
+            --status-ready: #10b981;
+            --status-installed: #059669;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--bg-grey);
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+
+        .app-header {
+            background: var(--header-green);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .app-header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent-cyan);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #00838f;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--header-green);
+        }
+
+        .btn-secondary:hover {
+            background: #f0f0f0;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100vh - 60px);
+        }
+
+        .sidebar {
+            width: 300px;
+            background: var(--surface-white);
+            border-right: 1px solid #e5e7eb;
+            overflow-y: auto;
+        }
+
+        .search-box {
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .filter-tabs {
+            display: flex;
+            padding: 0.5rem;
+            gap: 0.25rem;
+            border-bottom: 1px solid #e5e7eb;
+            overflow-x: auto;
+        }
+
+        .filter-tab {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        .filter-tab.active {
+            background: var(--accent-cyan);
+            color: white;
+        }
+
+        .order-list {
+            list-style: none;
+        }
+
+        .order-item {
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .order-item:hover {
+            background: #f9fafb;
+        }
+
+        .order-item.active {
+            background: #e0f2f1;
+            border-left: 3px solid var(--accent-cyan);
+        }
+
+        .order-ref {
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .order-deceased {
+            font-size: 0.9rem;
+            color: #6b7280;
+            margin-bottom: 0.25rem;
+        }
+
+        .order-status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: white;
+        }
+
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+
+        .order-header {
+            background: var(--surface-white);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .order-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .order-meta {
+            display: flex;
+            gap: 2rem;
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+        .form-section {
+            background: var(--surface-white);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--header-green);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+            color: #374151;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .status-selector {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .status-option {
+            padding: 0.5rem 1rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .status-option.active {
+            color: white;
+            border-color: transparent;
+        }
+
+        .price-display {
+            background: #f9fafb;
+            padding: 1rem;
+            border-radius: 6px;
+            border-left: 4px solid var(--accent-cyan);
+        }
+
+        .price-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.25rem 0;
+            font-size: 0.9rem;
+        }
+
+        .price-total {
+            font-size: 1.25rem;
+            font-weight: 600;
+            border-top: 2px solid #d1d5db;
+            padding-top: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .file-upload-area {
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .file-upload-area:hover {
+            border-color: var(--accent-cyan);
+            background: #f9fafb;
+        }
+
+        .file-list {
+            list-style: none;
+            margin-top: 1rem;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: #f9fafb;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+        }
+
+        .activity-log {
+            list-style: none;
+        }
+
+        .activity-item {
+            padding: 1rem;
+            border-left: 3px solid #e5e7eb;
+            margin-bottom: 0.5rem;
+            background: #f9fafb;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .activity-time {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-bottom: 0.25rem;
+        }
+
+        .activity-text {
+            font-size: 0.9rem;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .close-modal {
+            font-size: 1.5rem;
+            border: none;
+            background: none;
+            cursor: pointer;
+            color: #6b7280;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #6b7280;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #6b7280;
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+        }
+
+        @media print {
+            .app-header,
+            .sidebar,
+            .action-buttons {
+                display: none;
+            }
+            
+            .main-container {
+                height: auto;
+            }
+            
+            .content-area {
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-header">
+        <h1>DC&S Headstone Order Tracker</h1>
+        <div class="header-actions">
+            <button class="btn btn-primary" onclick="showNewOrderModal()">+ New Order</button>
+            <button class="btn btn-secondary" onclick="refreshOrders()">🔄 Refresh</button>
+            <button class="btn btn-secondary" onclick="testConnection()">🔍 Test Connection</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search orders..." oninput="filterOrders()">
+            </div>
+            
+            <div class="filter-tabs">
+                <button class="filter-tab active" data-filter="all" onclick="setFilter('all')">All</button>
+                <button class="filter-tab" data-filter="Enquiry" onclick="setFilter('Enquiry')">Enquiry</button>
+                <button class="filter-tab" data-filter="Quoted" onclick="setFilter('Quoted')">Quoted</button>
+                <button class="filter-tab" data-filter="Confirmed" onclick="setFilter('Confirmed')">Confirmed</button>
+                <button class="filter-tab" data-filter="In Design" onclick="setFilter('In Design')">Design</button>
+                <button class="filter-tab" data-filter="Production" onclick="setFilter('Production')">Production</button>
+                <button class="filter-tab" data-filter="Ready" onclick="setFilter('Ready')">Ready</button>
+                <button class="filter-tab" data-filter="Installed" onclick="setFilter('Installed')">Installed</button>
+            </div>
+
+            <ul class="order-list" id="orderList">
+                <li class="loading">Loading orders...</li>
+            </ul>
+        </div>
+
+        <div class="content-area" id="contentArea">
+            <div class="empty-state">
+                <div class="empty-state-icon">📋</div>
+                <h2>Select an order to view details</h2>
+                <p>or create a new order to get started</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- New/Edit Order Modal -->
+    <div class="modal" id="orderModal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">New Order</h2>
+                <button class="close-modal" onclick="closeOrderModal()">×</button>
+            </div>
+            <div id="modalBody">
+                <!-- Form will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+       const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxrWdkZr1Zjl9aGADeL54Q2vabJIcD90ZmfO68AcGg12Rhn_nxfBwsKDLiwm900yhIa/exec';
+        const SHEET_ID = '1zLOSUsLgwglGkQkKa9x11EEIB04s2EOy1cBLBllkbRE';
+        const DRIVE_FOLDER_ID = '1nAxdUKug-s3pEQnX9RCps86crK--Vd4k';
+        
+        // BeepMate WhatsApp Configuration
+        const BEEPMATE_CONFIG = {
+            apiKey: 'hpOMtOkD7gxw',
+            groupId: '120363425383353139', // Memorials group
+            baseUrl: 'https://beepmate.io/send'
+        };
+
+        // Send message to BeepMate WhatsApp
+        async function sendToWhatsApp(message) {
+            try {
+                const url = `${BEEPMATE_CONFIG.baseUrl}?key=${BEEPMATE_CONFIG.apiKey}&id=${BEEPMATE_CONFIG.groupId}&msg=${encodeURIComponent(message)}`;
+                
+                // Send message
+                const response = await fetch(url, {
+                    mode: 'no-cors'
+                });
+                
+                console.log('WhatsApp message sent:', message);
+                return true;
+            } catch (error) {
+                console.error('Error sending WhatsApp message:', error);
+                return false;
+            }
+        }
+
+        // Status colors
+        const STATUS_COLORS = {
+            'Enquiry': '#94a3b8',
+            'Quoted': '#f59e0b',
+            'Confirmed': '#3b82f6',
+            'In Design': '#8b5cf6',
+            'Production': '#f97316',
+            'Ready': '#10b981',
+            'Installed': '#059669'
+        };
+
+        // Global state
+        let allOrders = [];
+        let priceBook = {};
+        let currentFilter = 'all';
+        let currentOrder = null;
+        let editingOrderId = null;
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', () => {
+            loadPriceBook();
+            loadOrders();
+        });
+
+        // Load price book from Google Sheets
+        async function loadPriceBook() {
+            try {
+                const tabs = ['Headstones', 'Surrounds', 'Stones', 'Accessories', 'Cemetery_Fees', 'New_Inscriptions', 'Additional_Inscriptions'];
+                
+                for (const tab of tabs) {
+                    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${tab}`;
+                    const response = await fetch(url);
+                    const csv = await response.text();
+                    priceBook[tab] = parseCSV(csv);
+                }
+                
+                console.log('Price book loaded:', priceBook);
+            } catch (error) {
+                console.error('Error loading price book:', error);
+            }
+        }
+
+        // Parse CSV
+        function parseCSV(csv) {
+            const lines = csv.trim().split('\n');
+            const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
+                const row = {};
+                headers.forEach((header, index) => {
+                    row[header] = values[index];
+                });
+                data.push(row);
+            }
+            
+            return data;
+        }
+
+        // Load orders from Google Sheets
+        async function loadOrders() {
+            try {
+                // Use JSONP to avoid CORS issues
+                const callbackName = 'handleOrders_' + Date.now();
+                
+                window[callbackName] = function(data) {
+                    allOrders = data.orders || [];
+                    if (data.priceBook) {
+                        priceBook = data.priceBook;
+                        console.log('Price book loaded from Apps Script:', priceBook);
+                    }
+                    renderOrderList();
+                    delete window[callbackName];
+                };
+                
+                const script = document.createElement('script');
+                script.src = SCRIPT_URL + '?callback=' + callbackName;
+                script.onerror = function() {
+                    console.error('Error loading orders from Google Sheets');
+                    document.getElementById('orderList').innerHTML = `
+                        <li class="loading" style="color: #ef4444; padding: 1rem;">
+                            <strong>Error loading orders</strong><br>
+                            <small>Make sure your Google Apps Script is deployed and accessible.</small><br>
+                            <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="loadOrders()">Retry</button>
+                        </li>
+                    `;
+                    delete window[callbackName];
+                };
+                
+                document.head.appendChild(script);
+                
+                // Clean up script tag after execution
+                setTimeout(() => {
+                    if (script.parentNode) {
+                        script.parentNode.removeChild(script);
+                    }
+                }, 5000);
+                
+            } catch (error) {
+                console.error('Error loading orders:', error);
+                document.getElementById('orderList').innerHTML = `
+                    <li class="loading" style="color: #ef4444; padding: 1rem;">
+                        <strong>Error: ${error.message}</strong><br>
+                        <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="loadOrders()">Retry</button>
+                    </li>
+                `;
+            }
+        }
+
+        // Map Google Sheet field names to app field names
+        // === Data is now mapped by Apps Script - these functions are no longer needed === //
+
+        // JSONP callback (for compatibility)
+        function handleOrders(data) {
+    if (!data || !data.orders) {
+        console.error('No orders data received');
+        allOrders = [];
+        renderOrderList();
+        return;
+    }
+    
+    // Store price book globally
+    if (data.priceBook) {
+        priceBook = data.priceBook;
+        console.log('Price book loaded:', priceBook);
+    }
+    
+    // Data is already mapped by Apps Script - use directly!
+    allOrders = data.orders;
+    
+    console.log('Loaded', allOrders.length, 'orders from Apps Script');
+    if (allOrders.length > 0) {
+        console.log('Sample order:', allOrders[0]);
+    }
+    
+    renderOrderList();
+}
+
+        // Refresh orders
+        function refreshOrders() {
+            loadOrders();
+        }
+
+        // Filter orders
+        function setFilter(status) {
+            currentFilter = status;
+            
+            // Update active tab
+            document.querySelectorAll('.filter-tab').forEach(tab => {
+                tab.classList.remove('active');
+                if (tab.dataset.filter === status) {
+                    tab.classList.add('active');
+                }
+            });
+            
+            filterOrders();
+        }
+
+        // Filter and search orders
+        function filterOrders() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            renderOrderList(searchTerm);
+        }
+
+        // Render order list
+        function renderOrderList(searchTerm = '') {
+            const orderList = document.getElementById('orderList');
+            
+            let filtered = allOrders.filter(order => {
+                const matchesFilter = currentFilter === 'all' || order.status === currentFilter;
+                const matchesSearch = !searchTerm || 
+                    order.orderRef?.toLowerCase().includes(searchTerm) ||
+                    order.customerName?.toLowerCase().includes(searchTerm) ||
+                    order.deceasedName?.toLowerCase().includes(searchTerm);
+                return matchesFilter && matchesSearch;
+            });
+
+            console.log('Rendering order list. Filtered orders:', filtered.length);
+            console.log('Sample order:', filtered[0]);
+
+            if (filtered.length === 0) {
+                orderList.innerHTML = '<li class="empty-state"><p>No orders found</p></li>';
+                return;
+            }
+
+            orderList.innerHTML = filtered.map((order, index) => {
+                // Generate orderId if it doesn't exist
+                if (!order.orderId) {
+                    // Try to use other unique fields or create one from index
+                    order.orderId = order.id || order.ID || order.Order_ID || order.orderRef || `order_${index}_${Date.now()}`;
+                }
+                
+                // Debug: log what we're rendering
+                console.log('Rendering order item:', {
+                    orderId: order.orderId,
+                    orderRef: order.orderRef,
+                    deceasedName: order.deceasedName,
+                    status: order.status,
+                    allKeys: Object.keys(order)
+                });
+                
+                // Escape orderId to prevent injection
+                const safeOrderId = String(order.orderId || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                
+                return `
+                    <li class="order-item ${currentOrder?.orderId === order.orderId ? 'active' : ''}" 
+                        data-order-id="${safeOrderId}"
+                        data-order-index="${index}"
+                        style="cursor: pointer;">
+                        <div class="order-ref">${order.orderRef || order.OrderRef || order.Order_Ref || 'No Ref'}</div>
+                        <div class="order-deceased">${order.deceasedName || order.DeceasedName || order.Deceased_Name || 'Unknown'}</div>
+                        <span class="order-status-badge" style="background: ${STATUS_COLORS[order.status || order.Status] || '#94a3b8'}">
+                            ${order.status || order.Status || 'Enquiry'}
+                        </span>
+                    </li>
+                `;
+            }).join('');
+            
+            // Add click handlers after rendering
+            document.querySelectorAll('.order-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const orderId = this.getAttribute('data-order-id');
+                    const orderIndex = parseInt(this.getAttribute('data-order-index'));
+                    
+                    console.log('Clicked order with ID:', orderId, 'Index:', orderIndex);
+                    
+                    // Try to find by orderId first, then fall back to index
+                    if (orderId && orderId !== 'undefined') {
+                        selectOrder(orderId);
+                    } else if (!isNaN(orderIndex)) {
+                        selectOrderByIndex(orderIndex);
+                    }
+                });
+            });
+        }
+
+        // Select order
+        function selectOrder(orderId) {
+            console.log('Selecting order:', orderId);
+            currentOrder = allOrders.find(o => o.orderId === orderId || o.id === orderId || o.ID === orderId);
+            console.log('Found order:', currentOrder);
+            console.log('All orders:', allOrders);
+            
+            if (!currentOrder) {
+                console.error('Order not found!');
+                return;
+            }
+            
+            renderOrderList();
+            renderOrderDetails();
+        }
+
+        // Select order by array index (fallback)
+        function selectOrderByIndex(index) {
+            console.log('Selecting order by index:', index);
+            currentOrder = allOrders[index];
+            console.log('Found order:', currentOrder);
+            
+            if (!currentOrder) {
+                console.error('Order not found at index:', index);
+                return;
+            }
+            
+            renderOrderList();
+            renderOrderDetails();
+        }
+
+        // Render order details
+        function renderOrderDetails() {
+            if (!currentOrder) {
+                console.error('renderOrderDetails called but currentOrder is null');
+                return;
+            }
+
+            console.log('Rendering details for order:', currentOrder);
+
+            const total = calculateTotal(currentOrder);
+            
+            const contentArea = document.getElementById('contentArea');
+            
+            if (!contentArea) {
+                console.error('Content area element not found!');
+                return;
+            }
+            
+            contentArea.innerHTML = `
+                <div class="order-header">
+                    <div class="order-title">${currentOrder.orderRef || currentOrder.orderId || 'New Order'}</div>
+                    <div class="order-meta">
+                        <span>📅 ${currentOrder.orderDate || 'Not set'}</span>
+                        <span>👤 ${currentOrder.customerName || 'Unknown'}</span>
+                        <span>💷 £${total.toFixed(2)}</span>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">⚙️ Order Status</div>
+                    <div class="status-selector">
+                        ${Object.keys(STATUS_COLORS).map(status => `
+                            <div class="status-option ${currentOrder.status === status ? 'active' : ''}" 
+                                 style="${currentOrder.status === status ? 'background: ' + STATUS_COLORS[status] : ''}"
+                                 onclick="updateStatus('${status}')">
+                                ${status}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">👤 Customer Details</div>
+                    <div class="form-grid">
+                        <div><strong>Name:</strong> ${currentOrder.customerName || '-'}</div>
+                        <div><strong>Phone:</strong> ${currentOrder.phone || '-'}</div>
+                        <div><strong>Email:</strong> ${currentOrder.email || '-'}</div>
+                        <div style="grid-column: 1 / -1;"><strong>Address:</strong> ${currentOrder.address || '-'}</div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">🕊️ Deceased Details</div>
+                    <div class="form-grid">
+                        <div><strong>Name:</strong> ${currentOrder.deceasedName || '-'}</div>
+                        <div><strong>DOB:</strong> ${currentOrder.deceasedDob || '-'}</div>
+                        <div><strong>DOD:</strong> ${currentOrder.deceasedDod || '-'}</div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">🪨 Headstone Specification</div>
+                    <div class="form-grid">
+                        <div><strong>Type:</strong> ${currentOrder.hsType || '-'}</div>
+                        <div><strong>Size:</strong> ${currentOrder.hsSize || '-'}</div>
+                        <div><strong>Colour:</strong> ${currentOrder.hsColour || '-'}</div>
+                        <div><strong>Finish:</strong> ${currentOrder.hsFinish || '-'}</div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">✍️ Inscription</div>
+                    <div><strong>Type:</strong> ${currentOrder.inscriptionType || 'new'}</div>
+                    <div><strong>Lines:</strong> ${currentOrder.inscriptionLines || 0}</div>
+                    <div><strong>Style:</strong> ${currentOrder.inscriptionStyle || '-'}</div>
+                    <div><strong>Colour:</strong> ${currentOrder.inscriptionColour || '-'}</div>
+                    ${currentOrder.inscriptionText ? `<div style="margin-top: 1rem; white-space: pre-wrap; background: #f9fafb; padding: 1rem; border-radius: 6px;">${currentOrder.inscriptionText}</div>` : ''}
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">💰 Pricing Breakdown</div>
+                    <div class="price-display">
+                        ${renderPriceBreakdown(currentOrder, total)}
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">📁 Files</div>
+                    ${renderFiles(currentOrder)}
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">📝 Activity Log</div>
+                    ${renderActivityLog(currentOrder)}
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="editOrder()">✏️ Edit Order</button>
+                    <button class="btn btn-secondary" onclick="generateEstimate()">📄 Generate Estimate</button>
+                    <button class="btn btn-secondary" onclick="generateMasonJobCard()">🔨 Mason Job Card</button>
+                    <button class="btn btn-secondary" onclick="generateInvoice()">🧾 Generate Invoice</button>
+                    <button class="btn btn-danger" onclick="deleteOrder()" style="margin-left: auto;">🗑️ Delete</button>
+                </div>
+            `;
+            
+            console.log('Order details rendered successfully');
+        }
+
+        // Calculate total
+        function calculateTotal(order) {
+            let total = 0;
+
+            // Headstone
+            const headstone = priceBook.Headstones?.find(h => 
+                h.type === order.hsType && h.size === order.hsSize
+            );
+            if (headstone) {
+                total += parseFloat(headstone.sell || 0);
+            }
+
+            // Colour adjustment
+            if (order.hsColourAdj) {
+                total += parseFloat(order.hsColourAdj);
+            }
+
+            // Surround
+            const surround = priceBook.Surrounds?.find(s => s.type === order.surroundType);
+            if (surround) {
+                total += parseFloat(surround.baseSell || 0);
+                if (order.surroundGranite) {
+                    total += parseFloat(surround.graniteSellAdd || 0);
+                }
+            }
+
+            // Stone
+            const stone = priceBook.Stones?.find(s => s.type === order.stoneType);
+            if (stone) {
+                const stonePrice = order.surroundType ?
+                    parseFloat(stone.withSurroundCost || 0) :
+                    parseFloat(stone.standaloneCost || 0);
+                total += stonePrice;
+            }
+
+            // Accessories
+            if (order.accessories && Array.isArray(order.accessories)) {
+                order.accessories.forEach(acc => {
+                    const accessory = priceBook.Accessories?.find(a => a.name === acc);
+                    if (accessory) {
+                        total += parseFloat(accessory.sell || 0);
+                    }
+                });
+            }
+
+            // Cemetery fee
+            const cemetery = priceBook.Cemetery_Fees?.find(c => c.location === order.cemetery);
+            if (cemetery) {
+                total += parseFloat(cemetery.fee || 0);
+            }
+
+            // Inscription lines
+            const inscriptionLines = parseInt(order.inscriptionLines || 0);
+            const inscriptionPpl = parseFloat(order.inscriptionPpl || 35);
+            total += inscriptionLines * inscriptionPpl;
+
+            // Letter charge
+            const letters = countLetters(order.inscriptionText || '');
+            if (order.inscriptionType === 'additional') {
+                const letterCharge = Math.max(200, letters * 5);
+                total += letterCharge;
+            } else {
+                if (letters > 100) {
+                    total += (letters - 100) * 4;
+                }
+            }
+
+            // Extra charges
+            if (order.extraCharges && Array.isArray(order.extraCharges)) {
+                order.extraCharges.forEach(charge => {
+                    total += parseFloat(charge.amount || 0);
+                });
+            }
+
+            return total;
+        }
+
+        // Count letters (letters and numbers, not spaces or punctuation)
+        function countLetters(text) {
+            if (!text) return 0;
+            return text.replace(/[^a-zA-Z0-9]/g, '').length;
+        }
+
+        // Render price breakdown
+        function renderPriceBreakdown(order, total) {
+            let html = '';
+
+            const headstone = priceBook.Headstones?.find(h => 
+                h.type === order.hsType && h.size === order.hsSize
+            );
+            if (headstone) {
+                html += `<div class="price-row"><span>Headstone (${order.hsType} - ${order.hsSize})</span><span>£${parseFloat(headstone.sell).toFixed(2)}</span></div>`;
+            }
+
+            if (order.hsColourAdj) {
+                html += `<div class="price-row"><span>Colour Adjustment</span><span>£${parseFloat(order.hsColourAdj).toFixed(2)}</span></div>`;
+            }
+
+            const surround = priceBook.Surrounds?.find(s => s.type === order.surroundType);
+            if (surround) {
+                html += `<div class="price-row"><span>Surround (${order.surroundType})</span><span>£${parseFloat(surround.baseSell).toFixed(2)}</span></div>`;
+                if (order.surroundGranite) {
+                    html += `<div class="price-row"><span>Granite Upgrade</span><span>£${parseFloat(surround.graniteSellAdd).toFixed(2)}</span></div>`;
+                }
+            }
+
+            const stone = priceBook.Stones?.find(s => s.type === order.stoneType);
+            if (stone) {
+                const stonePrice = order.surroundType ?
+                    parseFloat(stone.withSurroundCost || 0) :
+                    parseFloat(stone.standaloneCost || 0);
+                html += `<div class="price-row"><span>Stone (${order.stoneType})</span><span>£${stonePrice.toFixed(2)}</span></div>`;
+            }
+
+            if (order.accessories && Array.isArray(order.accessories)) {
+                order.accessories.forEach(acc => {
+                    const accessory = priceBook.Accessories?.find(a => a.name === acc);
+                    if (accessory) {
+                        html += `<div class="price-row"><span>${acc}</span><span>£${parseFloat(accessory.sell).toFixed(2)}</span></div>`;
+                    }
+                });
+            }
+
+            const cemetery = priceBook.Cemetery_Fees?.find(c => c.location === order.cemetery);
+            if (cemetery) {
+                html += `<div class="price-row"><span>Cemetery Fee (${order.cemetery})</span><span>£${parseFloat(cemetery.fee).toFixed(2)}</span></div>`;
+            }
+
+            const inscriptionLines = parseInt(order.inscriptionLines || 0);
+            const inscriptionPpl = parseFloat(order.inscriptionPpl || 35);
+            if (inscriptionLines > 0) {
+                html += `<div class="price-row"><span>Inscription (${inscriptionLines} lines @ £${inscriptionPpl})</span><span>£${(inscriptionLines * inscriptionPpl).toFixed(2)}</span></div>`;
+            }
+
+            const letters = countLetters(order.inscriptionText || '');
+            if (order.inscriptionType === 'additional') {
+                const letterCharge = Math.max(200, letters * 5);
+                html += `<div class="price-row"><span>Additional Inscription (${letters} letters)</span><span>£${letterCharge.toFixed(2)}</span></div>`;
+            } else {
+                if (letters > 100) {
+                    const extraLetters = letters - 100;
+                    html += `<div class="price-row"><span>Extra Letters (${extraLetters} @ £4)</span><span>£${(extraLetters * 4).toFixed(2)}</span></div>`;
+                }
+            }
+
+            if (order.extraCharges && Array.isArray(order.extraCharges)) {
+                order.extraCharges.forEach(charge => {
+                    html += `<div class="price-row"><span>${charge.label}</span><span>£${parseFloat(charge.amount).toFixed(2)}</span></div>`;
+                });
+            }
+
+            html += `<div class="price-row price-total"><span>Total</span><span>£${total.toFixed(2)}</span></div>`;
+
+            if (order.depositPaid) {
+                const deposit = parseFloat(order.depositPaid);
+                html += `<div class="price-row"><span>Deposit Paid</span><span>-£${deposit.toFixed(2)}</span></div>`;
+                html += `<div class="price-row" style="font-weight: 600;"><span>Balance Outstanding</span><span>£${(total - deposit).toFixed(2)}</span></div>`;
+            }
+
+            return html;
+        }
+
+        // Render files
+        function renderFiles(order) {
+            if (!order.files || order.files.length === 0) {
+                return '<p style="color: #6b7280;">No files attached</p>';
+            }
+
+            return `
+                <ul class="file-list">
+                    ${order.files.map(file => `
+                        <li class="file-item">
+                            <span>📎 ${file.name} (${file.type})</span>
+                            ${file.driveUrl ? `<a href="${file.driveUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">View</a>` : ''}
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+        }
+
+        // Render activity log
+        function renderActivityLog(order) {
+            if (!order.log || order.log.length === 0) {
+                return '<p style="color: #6b7280;">No activity recorded</p>';
+            }
+
+            const sortedLog = [...order.log].sort((a, b) => new Date(b.ts) - new Date(a.ts));
+
+            return `
+                <ul class="activity-log">
+                    ${sortedLog.map(entry => `
+                        <li class="activity-item">
+                            <div class="activity-time">${new Date(entry.ts).toLocaleString()} - ${entry.author}</div>
+                            <div class="activity-text">${entry.text}</div>
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+        }
+
+        // Update status
+        async function updateStatus(newStatus) {
+            if (!currentOrder) return;
+
+            currentOrder.status = newStatus;
+            
+            // Add to activity log
+            if (!currentOrder.log) currentOrder.log = [];
+            currentOrder.log.push({
+                id: Date.now().toString(),
+                ts: new Date().toISOString(),
+                author: 'User',
+                text: `Status changed to ${newStatus}`
+            });
+
+            await saveOrder(currentOrder);
+            renderOrderDetails();
+        }
+
+        // Edit order
+        function editOrder() {
+            if (!currentOrder) return;
+            editingOrderId = currentOrder.orderId;
+            showOrderForm(currentOrder);
+        }
+
+        // Show new order modal
+        function showNewOrderModal() {
+            editingOrderId = null;
+            showOrderForm({
+                orderId: 'ORD' + Date.now(),
+                orderRef: 'HS' + new Date().getFullYear() + '-' + String(allOrders.length + 1).padStart(4, '0'),
+                status: 'Enquiry',
+                orderDate: new Date().toISOString().split('T')[0],
+                inscriptionType: 'new',
+                inscriptionPpl: 35,
+                log: [],
+                files: [],
+                accessories: [],
+                extraCharges: [],
+                masonCharges: []
+            });
+        }
+
+        // Show order form
+        function showOrderForm(order) {
+            document.getElementById('modalTitle').textContent = editingOrderId ? 'Edit Order' : 'New Order';
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <form id="orderForm" onsubmit="saveOrderForm(event)">
+                    <!-- Customer Details -->
+                    <div class="form-section">
+                        <div class="section-title">👤 Customer Details</div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Customer Name *</label>
+                                <input type="text" name="customerName" value="${order.customerName || ''}" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Phone</label>
+                                <input type="tel" name="phone" value="${order.phone || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label>Email</label>
+                                <input type="email" name="email" value="${order.email || ''}">
+                            </div>
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label>Address</label>
+                                <input type="text" name="address" value="${order.address || ''}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Deceased Details -->
+                    <div class="form-section">
+                        <div class="section-title">🕊️ Deceased Details</div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Deceased Name *</label>
+                                <input type="text" name="deceasedName" value="${order.deceasedName || ''}" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Date of Birth</label>
+                                <input type="date" name="deceasedDob" value="${order.deceasedDob || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label>Date of Death</label>
+                                <input type="date" name="deceasedDod" value="${order.deceasedDod || ''}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Headstone Details -->
+                    <div class="form-section">
+                        <div class="section-title">🪨 Headstone Specification</div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Type</label>
+                                <select name="hsType">
+                                    <option value="">Select type</option>
+                                    ${getUniqueValues(priceBook.Headstones, 'type').map(type => 
+                                        `<option value="${type}" ${order.hsType === type ? 'selected' : ''}>${type}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Size</label>
+                                <select name="hsSize">
+                                    <option value="">Select size</option>
+                                    ${getUniqueValues(priceBook.Headstones, 'size').map(size => 
+                                        `<option value="${size}" ${order.hsSize === size ? 'selected' : ''}>${size}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Colour</label>
+                                <select name="hsColour">
+                                    <option value="">Select colour</option>
+                                    <option value="Black" ${order.hsColour === 'Black' ? 'selected' : ''}>Black</option>
+                                    <option value="SA Impala" ${order.hsColour === 'SA Impala' ? 'selected' : ''}>SA Impala (+£50)</option>
+                                    <option value="Bahamas" ${order.hsColour === 'Bahamas' ? 'selected' : ''}>Bahamas</option>
+                                    <option value="Grey" ${order.hsColour === 'Grey' ? 'selected' : ''}>Grey (-£50)</option>
+                                    <option value="Other" ${order.hsColour === 'Other' ? 'selected' : ''}>Other</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Finish</label>
+                                <select name="hsFinish">
+                                    <option value="">Select finish</option>
+                                    <option value="Polished" ${order.hsFinish === 'Polished' ? 'selected' : ''}>Polished</option>
+                                    <option value="Honed" ${order.hsFinish === 'Honed' ? 'selected' : ''}>Honed</option>
+                                    <option value="Flamed" ${order.hsFinish === 'Flamed' ? 'selected' : ''}>Flamed</option>
+                                    <option value="Sandblasted" ${order.hsFinish === 'Sandblasted' ? 'selected' : ''}>Sandblasted</option>
+                                    <option value="Natural" ${order.hsFinish === 'Natural' ? 'selected' : ''}>Natural</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Inscription -->
+                    <div class="form-section">
+                        <div class="section-title">✍️ Inscription</div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Type</label>
+                                <select name="inscriptionType">
+                                    <option value="new" ${order.inscriptionType === 'new' ? 'selected' : ''}>New</option>
+                                    <option value="additional" ${order.inscriptionType === 'additional' ? 'selected' : ''}>Additional</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Number of Lines</label>
+                                <input type="number" name="inscriptionLines" value="${order.inscriptionLines || 0}" min="0" max="8">
+                            </div>
+                            <div class="form-group">
+                                <label>Style</label>
+                                <input type="text" name="inscriptionStyle" value="${order.inscriptionStyle || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label>Colour</label>
+                                <select name="inscriptionColour">
+                                    <option value="">Select colour</option>
+                                    <option value="Silver" ${order.inscriptionColour === 'Silver' ? 'selected' : ''}>Silver</option>
+                                    <option value="Gold" ${order.inscriptionColour === 'Gold' ? 'selected' : ''}>Gold</option>
+                                    <option value="White" ${order.inscriptionColour === 'White' ? 'selected' : ''}>White</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label>Inscription Text</label>
+                                <textarea name="inscriptionText" rows="5">${order.inscriptionText || ''}</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cemetery -->
+                    <div class="form-section">
+                        <div class="section-title">⛪ Cemetery Details</div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Cemetery</label>
+                                <select name="cemetery">
+                                    <option value="">Select cemetery</option>
+                                    ${(priceBook.Cemetery_Fees || []).map(c =>
+                                        `<option value="${c.location}" ${order.cemetery === c.location ? 'selected' : ''}>${c.location}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Grave Number</label>
+                                <input type="text" name="graveNumber" value="${order.graveNumber || ''}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="form-section">
+                        <div class="section-title">📝 Notes</div>
+                        <div class="form-group">
+                            <label>General Notes</label>
+                            <textarea name="notes" rows="3">${order.notes || ''}</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Mason Notes (Job Card only)</label>
+                            <textarea name="masonNotes" rows="3">${order.masonNotes || ''}</textarea>
+                        </div>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button type="submit" class="btn btn-primary">💾 Save Order</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeOrderModal()">Cancel</button>
+                    </div>
+                </form>
+            `;
+
+            document.getElementById('orderModal').classList.add('active');
+        }
+
+        // Get unique values from price book
+        function getUniqueValues(items, field) {
+            if (!items) return [];
+            const values = items.map(item => item[field]).filter(Boolean);
+            return [...new Set(values)];
+        }
+
+        // Save order form
+        async function saveOrderForm(event) {
+            event.preventDefault();
+            
+            const formData = new FormData(event.target);
+            const orderData = editingOrderId ? {...currentOrder} : {
+                orderId: 'ORD' + Date.now(),
+                orderRef: 'HS' + new Date().getFullYear() + '-' + String(allOrders.length + 1).padStart(4, '0'),
+                status: 'Enquiry',
+                orderDate: new Date().toISOString().split('T')[0],
+                log: [],
+                files: [],
+                accessories: [],
+                extraCharges: [],
+                masonCharges: []
+            };
+
+            // Update order data from form
+            for (let [key, value] of formData.entries()) {
+                orderData[key] = value;
+            }
+
+            // Add activity log entry
+            if (!orderData.log) orderData.log = [];
+            orderData.log.push({
+                id: Date.now().toString(),
+                ts: new Date().toISOString(),
+                author: 'User',
+                text: editingOrderId ? 'Order updated' : 'Order created'
+            });
+
+            await saveOrder(orderData);
+            closeOrderModal();
+        }
+
+        // Save order to Google Sheets
+        async function saveOrder(orderData) {
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'upsert',
+                        order: orderData
+                    })
+                });
+
+                // Refresh orders
+                setTimeout(() => loadOrders(), 1000);
+                
+                alert('Order saved successfully!');
+            } catch (error) {
+                console.error('Error saving order:', error);
+                alert('Error saving order. Please try again.');
+            }
+        }
+
+        // Delete order
+        async function deleteOrder() {
+            if (!currentOrder) return;
+            
+            if (!confirm(`Are you sure you want to delete order ${currentOrder.orderRef}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'delete',
+                        orderId: currentOrder.orderId
+                    })
+                });
+
+                setTimeout(() => {
+                    loadOrders();
+                    currentOrder = null;
+                    document.getElementById('contentArea').innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📋</div>
+                            <h2>Select an order to view details</h2>
+                            <p>or create a new order to get started</p>
+                        </div>
+                    `;
+                }, 1000);
+                
+                alert('Order deleted successfully!');
+            } catch (error) {
+                console.error('Error deleting order:', error);
+                alert('Error deleting order. Please try again.');
+            }
+        }
+
+        // Close modal
+        function closeOrderModal() {
+            document.getElementById('orderModal').classList.remove('active');
+        }
+
+        // Test connection to Google Sheets
+        function testConnection() {
+            const modalId = 'testConnectionModal_' + Date.now();
+            const modal = `
+                <div id="${modalId}" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 10000; max-width: 600px;">
+                    <h2 style="margin-bottom: 1rem;">Connection Test</h2>
+                    <div id="testResults_${modalId}" style="margin-bottom: 1rem;">
+                        <p>Testing connection to Google Sheets...</p>
+                        <p><strong>Apps Script URL:</strong><br><small>${SCRIPT_URL}</small></p>
+                        <p><strong>Sheet ID:</strong><br><small>${SHEET_ID}</small></p>
+                        <div style="margin-top: 1rem; padding: 1rem; background: #f9fafb; border-radius: 6px;">
+                            <p style="margin: 0; color: #6b7280;">Attempting to load data...</p>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary" onclick="closeTestModal('${modalId}')">Close</button>
+                </div>
+                <div id="${modalId}_backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999;" onclick="closeTestModal('${modalId}')"></div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modal);
+            
+            // Test the connection
+            const callbackName = 'testCallback_' + Date.now();
+            window[callbackName] = function(data) {
+                const testResults = document.getElementById('testResults_' + modalId);
+                if (testResults) {
+                    const orderCount = data.orders ? data.orders.length : 0;
+                    testResults.innerHTML = `
+                        <p>✅ <strong style="color: #10b981;">Connection successful!</strong></p>
+                        <p><strong>Apps Script URL:</strong><br><small>${SCRIPT_URL}</small></p>
+                        <p><strong>Sheet ID:</strong><br><small>${SHEET_ID}</small></p>
+                        <div style="margin-top: 1rem; padding: 1rem; background: #d1fae5; border-radius: 6px; border-left: 4px solid #10b981;">
+                            <p style="margin: 0; color: #065f46;"><strong>Found ${orderCount} orders in database</strong></p>
+                            ${orderCount > 0 ? `<p style="margin: 0.5rem 0 0 0; color: #065f46; font-size: 0.9rem;">First order: ${data.orders[0].orderRef || 'No ref'} - ${data.orders[0].deceasedName || 'Unknown'}</p>` : ''}
+                        </div>
+                    `;
+                }
+                delete window[callbackName];
+            };
+            
+            const script = document.createElement('script');
+            script.src = SCRIPT_URL + '?callback=' + callbackName;
+            script.onerror = function() {
+                const testResults = document.getElementById('testResults_' + modalId);
+                if (testResults) {
+                    testResults.innerHTML = `
+                        <p>❌ <strong style="color: #ef4444;">Connection failed!</strong></p>
+                        <p><strong>Apps Script URL:</strong><br><small>${SCRIPT_URL}</small></p>
+                        <p><strong>Sheet ID:</strong><br><small>${SHEET_ID}</small></p>
+                        <div style="margin-top: 1rem; padding: 1rem; background: #fee2e2; border-radius: 6px; border-left: 4px solid #ef4444;">
+                            <p style="margin: 0; color: #991b1b;"><strong>Possible issues:</strong></p>
+                            <ul style="margin: 0.5rem 0 0 1.5rem; color: #991b1b; font-size: 0.9rem;">
+                                <li>Apps Script not deployed as web app</li>
+                                <li>Apps Script access not set to "Anyone"</li>
+                                <li>Wrong URL or Sheet ID</li>
+                                <li>Network/firewall blocking the request</li>
+                            </ul>
+                        </div>
+                        <div style="margin-top: 1rem; padding: 1rem; background: #fef3c7; border-radius: 6px; border-left: 4px solid #f59e0b;">
+                            <p style="margin: 0; color: #92400e; font-size: 0.9rem;"><strong>To fix:</strong></p>
+                            <ol style="margin: 0.5rem 0 0 1.5rem; color: #92400e; font-size: 0.9rem;">
+                                <li>Open your Google Apps Script</li>
+                                <li>Click "Deploy" → "New deployment"</li>
+                                <li>Set "Execute as" to "Me"</li>
+                                <li>Set "Who has access" to "Anyone"</li>
+                                <li>Copy the new Web App URL and update SCRIPT_URL in the code</li>
+                            </ol>
+                        </div>
+                    `;
+                }
+                delete window[callbackName];
+            };
+            
+            document.head.appendChild(script);
+        }
+
+        // Close test modal
+        function closeTestModal(modalId) {
+            const modal = document.getElementById(modalId);
+            const backdrop = document.getElementById(modalId + '_backdrop');
+            if (modal) modal.remove();
+            if (backdrop) backdrop.remove();
+        }
+
+        // PDF Generation Functions
+        
+
+        // ============================================================
+        // COST/RETAIL CALCULATION FUNCTIONS
+        // ============================================================
+
+        function calculateHeadstonePricing(order) {
+    if (!order.hsType || !order.hsSize) {
+        return { cost: 0, sell: 0, margin: 0 };
+    }
+    
+    // Find base headstone price
+    const headstone = priceBook.Headstones?.find(h => 
+        h.type === order.hsType && h.size === order.hsSize
+    );
+    
+    if (!headstone) {
+        console.warn('Headstone not found in price book:', order.hsType, order.hsSize);
+        return { cost: 0, sell: 0, margin: 0 };
+    }
+    
+    let cost = headstone.cost;
+    let sell = headstone.sell;
+    
+    // Apply colour adjustment if present
+    if (order.hsColour && order.hsColour !== 'Black') {
+        const colour = priceBook.Colours?.find(c => c.name === order.hsColour);
+        if (colour) {
+            cost += colour.costAdj;
+            sell += colour.sellAdj;
+        }
+    }
+    
+    return {
+        cost: cost,
+        sell: sell,
+        margin: sell - cost
+    };
+}
+
+        function calculateSurroundPricing(order) {
+    if (!order.surroundType) {
+        return { cost: 0, sell: 0, margin: 0 };
+    }
+    
+    const surround = priceBook.Surrounds?.find(s => 
+        s.type === order.surroundType
+    );
+    
+    if (!surround) {
+        console.warn('Surround not found in price book:', order.surroundType);
+        return { cost: 0, sell: 0, margin: 0 };
+    }
+    
+    let cost = surround.baseCost;
+    let sell = surround.baseSell;
+    
+    // Add granite upgrade if selected
+    if (order.surroundGranite) {
+        cost += surround.graniteCostAdd;
+        sell += surround.graniteSellAdd;
+    }
+    
+    return {
+        cost: cost,
+        sell: sell,
+        margin: sell - cost
+    };
+}
+
+        function calculateStonePricing(order) {
+    if (!order.stoneType || order.stoneType === 'None') {
+        return { cost: 0, sell: 0, margin: 0 };
+    }
+    
+    const stone = priceBook.Stones?.find(s => s.type === order.stoneType);
+    
+    if (!stone) {
+        console.warn('Stone not found in price book:', order.stoneType);
+        return { cost: 0, sell: 0, margin: 0 };
+    }
+    
+    // Use "with surround" cost if they have a surround
+    const cost = order.surroundType ? stone.withSurroundCost : stone.standaloneCost;
+    const sell = stone.sell;
+    
+    return {
+        cost: cost,
+        sell: sell,
+        margin: sell - cost
+    };
+}
+
+        function calculateInscriptionPricing(order) {
+    if (!order.inscriptionText) {
+        return { cost: 0, sell: 0, margin: 0 };
+    }
+    
+    // Count letters (excluding spaces and punctuation)
+    const letterCount = (order.inscriptionText.match(/[a-zA-Z0-9]/g) || []).length;
+    
+    let cost = 0;
+    let sell = 0;
+    
+    if (order.inscriptionType === 'new') {
+        // NEW inscription: First 100 free, then £2 cost / £3 sell per letter
+        if (letterCount > 100) {
+            const extraLetters = letterCount - 100;
+            cost = extraLetters * priceBook.NewInscription.costPerLetterAfter100;
+            sell = extraLetters * priceBook.NewInscription.sellPerLetterAfter100;
+        }
+    } else {
+        // ADDITIONAL inscription: £150/£250 base for 50 letters, then £3/£4.50 per letter
+        if (letterCount <= 50) {
+            cost = priceBook.AdditionalInscription.baseCost;
+            sell = priceBook.AdditionalInscription.baseSell;
+        } else {
+            const extraLetters = letterCount - 50;
+            cost = priceBook.AdditionalInscription.baseCost + 
+                   (extraLetters * priceBook.AdditionalInscription.costPerLetterAfter50);
+            sell = priceBook.AdditionalInscription.baseSell + 
+                   (extraLetters * priceBook.AdditionalInscription.sellPerLetterAfter50);
+        }
+    }
+    
+    return {
+        cost: cost,
+        sell: sell,
+        margin: sell - cost,
+        letterCount: letterCount
+    };
+}
+
+        function calculateOrderTotals(order) {
+    const headstone = calculateHeadstonePricing(order);
+    const surround = calculateSurroundPricing(order);
+    const stone = calculateStonePricing(order);
+    const inscription = calculateInscriptionPricing(order);
+    
+    // Cemetery fee (pass-through, no margin)
+    const cemeteryFee = parseFloat(order.cemeteryFee) || 0;
+    
+    // Accessories (if present)
+    let accessoriesCost = 0;
+    let accessoriesSell = 0;
+    if (order.accessories && order.accessories.length > 0) {
+        order.accessories.forEach(accName => {
+            const acc = priceBook.Accessories?.find(a => a.name === accName);
+            if (acc) {
+                accessoriesCost += acc.cost;
+                accessoriesSell += acc.sell;
+            }
+        });
+    }
+    
+    const totalCost = headstone.cost + surround.cost + stone.cost + 
+                     inscription.cost + cemeteryFee + accessoriesCost;
+    
+    const totalSell = headstone.sell + surround.sell + stone.sell + 
+                     inscription.sell + cemeteryFee + accessoriesSell;
+    
+    const profitMargin = totalSell - totalCost;
+    const marginPercentage = totalSell > 0 ? (profitMargin / totalSell) * 100 : 0;
+    
+    return {
+        breakdown: {
+            headstone,
+            surround,
+            stone,
+            inscription,
+            cemeteryFee,
+            accessories: { cost: accessoriesCost, sell: accessoriesSell, margin: accessoriesSell - accessoriesCost }
+        },
+        totalCost,
+        totalSell,
+        profitMargin,
+        marginPercentage
+    };
+}
+
+        function generateEstimate() {
+    if (!currentOrder) {
+        alert('Please select an order first');
+        return;
+    }
+    
+    const totals = calculateOrderTotals(currentOrder);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // DC&S Header
+    doc.setFillColor(102, 157, 53);
+    doc.rect(0, 0, 210, 35, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ESTIMATE', 105, 15, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('David Crymble & Sons Funeral Directors', 105, 22, { align: 'center' });
+    doc.text('Woodstock Road & Finaghy, Belfast', 105, 28, { align: 'center' });
+    
+    doc.setTextColor(0, 0, 0);
+    
+    let yPos = 45;
+    
+    // Estimate details
+    doc.setFontSize(10);
+    doc.text(`Estimate #: ${currentOrder.orderRef || currentOrder.orderId}`, 20, yPos);
+    doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 140, yPos);
+    yPos += 10;
+    
+    // Customer details
+    doc.setFont('helvetica', 'bold');
+    doc.text('PREPARED FOR:', 20, yPos);
+    yPos += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.text(currentOrder.customerName || 'Unknown', 20, yPos);
+    yPos += 5;
+    if (currentOrder.address) {
+        const addressLines = doc.splitTextToSize(currentOrder.address, 80);
+        addressLines.forEach(line => {
+            doc.text(line, 20, yPos);
+            yPos += 5;
+        });
+    }
+    if (currentOrder.phone) {
+        doc.text(`Phone: ${currentOrder.phone}`, 20, yPos);
+        yPos += 5;
+    }
+    
+    yPos += 5;
+    doc.setDrawColor(200, 200, 200);
+    doc.line(20, yPos, 190, yPos);
+    yPos += 10;
+    
+    // Items
+    doc.setFont('helvetica', 'bold');
+    doc.text('ITEM DESCRIPTION', 20, yPos);
+    doc.text('AMOUNT', 190, yPos, { align: 'right' });
+    yPos += 2;
+    doc.line(20, yPos, 190, yPos);
+    yPos += 8;
+    
+    doc.setFont('helvetica', 'normal');
+    
+    // Headstone
+    if (totals.breakdown.headstone.sell > 0) {
+        const hsDesc = `${currentOrder.hsType} ${currentOrder.hsSize} Headstone`;
+        const hsColour = currentOrder.hsColour && currentOrder.hsColour !== 'Black' 
+            ? ` - ${currentOrder.hsColour}` 
+            : '';
+        doc.text(hsDesc + hsColour, 20, yPos);
+        doc.text(`£${totals.breakdown.headstone.sell.toFixed(2)}`, 190, yPos, { align: 'right' });
+        yPos += 6;
+    }
+    
+    // Surround
+    if (totals.breakdown.surround.sell > 0) {
+        const surDesc = `${currentOrder.surroundType}`;
+        const granite = currentOrder.surroundGranite ? ' with 6" Granite Foundation' : '';
+        doc.text(surDesc + granite, 20, yPos);
+        doc.text(`£${totals.breakdown.surround.sell.toFixed(2)}`, 190, yPos, { align: 'right' });
+        yPos += 6;
+    }
+    
+    // Stone
+    if (totals.breakdown.stone.sell > 0) {
+        doc.text(`${currentOrder.stoneType} Chippings`, 20, yPos);
+        doc.text(`£${totals.breakdown.stone.sell.toFixed(2)}`, 190, yPos, { align: 'right' });
+        yPos += 6;
+    }
+    
+    // Accessories
+    if (totals.breakdown.accessories.sell > 0 && currentOrder.accessories) {
+        currentOrder.accessories.forEach(accName => {
+            const acc = priceBook.Accessories?.find(a => a.name === accName);
+            if (acc) {
+                doc.text(accName, 20, yPos);
+                doc.text(`£${acc.sell.toFixed(2)}`, 190, yPos, { align: 'right' });
+                yPos += 6;
+            }
+        });
+    }
+    
+    // Inscription
+    if (totals.breakdown.inscription.sell > 0) {
+        const inscType = currentOrder.inscriptionType === 'new' ? 'New Inscription' : 'Additional Inscription';
+        const letterCount = totals.breakdown.inscription.letterCount;
+        doc.text(`${inscType} (${letterCount} letters)`, 20, yPos);
+        doc.text(`£${totals.breakdown.inscription.sell.toFixed(2)}`, 190, yPos, { align: 'right' });
+        yPos += 6;
+    }
+    
+    // Cemetery Fee
+    if (totals.breakdown.cemeteryFee > 0) {
+        doc.text(`Cemetery Fee - ${currentOrder.cemetery}`, 20, yPos);
+        doc.text(`£${totals.breakdown.cemeteryFee.toFixed(2)}`, 190, yPos, { align: 'right' });
+        yPos += 6;
+    }
+    
+    yPos += 5;
+    doc.setLineWidth(0.5);
+    doc.line(20, yPos, 190, yPos);
+    yPos += 8;
+    
+    // Total
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL:', 20, yPos);
+    doc.text(`£${totals.totalSell.toFixed(2)}`, 190, yPos, { align: 'right' });
+    
+    yPos += 15;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'italic');
+    doc.text('This is an estimate. Final pricing confirmed upon order acceptance.', 20, yPos);
+    doc.text('Valid for 30 days from date of issue.', 20, yPos + 5);
+    
+    // Footer
+    doc.setFontSize(8);
+    doc.setTextColor(128, 128, 128);
+    doc.text('David Crymble & Sons | Woodstock Road & Finaghy | 028 9066 7784 | www.dcfs.co.uk', 105, 290, { align: 'center' });
+    
+    // Save
+    const filename = `Estimate_${currentOrder.orderRef || currentOrder.orderId}_${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(filename);
+    
+    addActivityLog('Generated Estimate (Total: £' + totals.totalSell.toFixed(2) + ')');
+    
+    sendWhatsAppNotification('estimate', {
+        customer: currentOrder.customerName,
+        deceased: currentOrder.deceasedName,
+        reference: currentOrder.orderRef || currentOrder.orderId,
+        total: totals.totalSell.toFixed(2)
+    });
+}
+
+        
+        function generateInvoice() {
+            if (!currentOrder) return;
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            addLetterhead(doc);
+            
+            // Title
+            doc.setFontSize(16);
+            doc.setFont(undefined, 'bold');
+            doc.text('INVOICE', 105, 60, { align: 'center' });
+            
+            // Reference and date
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Reference: ${currentOrder.orderRef || currentOrder.orderId}`, 150, 70);
+            doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 150, 75);
+            
+            // Customer details
+            doc.text(`To: ${currentOrder.customerName || 'Customer'}`, 20, 85);
+            doc.text(`For: The late ${currentOrder.deceasedName}`, 20, 92);
+            
+            // Line items
+            let y = 105;
+            const total = calculateTotal(currentOrder);
+            const items = getPriceLineItems(currentOrder);
+            
+            items.forEach(item => {
+                doc.text(item.label, 20, y);
+                doc.text(`£${item.amount.toFixed(2)}`, 180, y, { align: 'right' });
+                y += 7;
+            });
+            
+            // Total
+            doc.setFont(undefined, 'bold');
+            doc.text('TOTAL', 20, y + 5);
+            doc.text(`£${total.toFixed(2)}`, 180, y + 5, { align: 'right' });
+            
+            // Deposit and balance
+            if (currentOrder.depositPaid) {
+                const deposit = parseFloat(currentOrder.depositPaid);
+                doc.setFont(undefined, 'normal');
+                doc.text('Deposit Paid', 20, y + 12);
+                doc.text(`-£${deposit.toFixed(2)}`, 180, y + 12, { align: 'right' });
+                
+                doc.setFont(undefined, 'bold');
+                doc.text('BALANCE OUTSTANDING', 20, y + 19);
+                doc.text(`£${(total - deposit).toFixed(2)}`, 180, y + 19, { align: 'right' });
+            }
+            
+            addFooter(doc);
+            
+            // Save PDF
+            const filename = `Invoice_${currentOrder.orderRef || currentOrder.orderId}.pdf`;
+            doc.save(filename);
+            
+            // Send WhatsApp notification
+            const balance = currentOrder.depositPaid ? total - parseFloat(currentOrder.depositPaid) : total;
+            const message = `🧾 *INVOICE GENERATED*\n\n` +
+                `Customer: ${currentOrder.customerName}\n` +
+                `Deceased: ${currentOrder.deceasedName}\n` +
+                `Reference: ${currentOrder.orderRef || currentOrder.orderId}\n` +
+                `Total: £${total.toFixed(2)}\n` +
+                (currentOrder.depositPaid ? `Deposit Paid: £${parseFloat(currentOrder.depositPaid).toFixed(2)}\n` : '') +
+                `Balance Due: £${balance.toFixed(2)}\n\n` +
+                `Invoice has been downloaded and is ready to send to customer.`;
+            
+            sendToWhatsApp(message).then(success => {
+                if (success) {
+                    // Update activity log
+                    if (!currentOrder.log) currentOrder.log = [];
+                    currentOrder.log.push({
+                        id: Date.now().toString(),
+                        ts: new Date().toISOString(),
+                        author: 'SYSTEM',
+                        text: 'Invoice generated and WhatsApp notification sent'
+                    });
+                    
+                    alert('✅ Invoice generated and notification sent to WhatsApp!');
+                }
+            });
+        }
+
+        // ============================================================
+        // MASON JOB CARD PDF GENERATOR
+        // ============================================================
+
+        function generateMasonJobCard() {
+    if (!currentOrder) {
+        alert('Please select an order first');
+        return;
+    }
+    
+    const totals = calculateOrderTotals(currentOrder);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // DC&S Header
+    doc.setFillColor(102, 157, 53); // #669d35
+    doc.rect(0, 0, 210, 35, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('MASON JOB CARD', 105, 15, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('David Crymble & Sons Funeral Directors', 105, 22, { align: 'center' });
+    doc.text('Cost Prices Only - For Mason', 105, 28, { align: 'center' });
+    
+    // Reset text color
+    doc.setTextColor(0, 0, 0);
+    
+    let yPos = 45;
+    
+    // Order Reference
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Order Reference: ${currentOrder.orderRef || currentOrder.orderId}`, 20, yPos);
+    yPos += 8;
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 20, yPos);
+    yPos += 10;
+    
+    // Customer/Deceased Info
+    doc.setFont('helvetica', 'bold');
+    doc.text('Customer:', 20, yPos);
+    doc.setFont('helvetica', 'normal');
+    doc.text(currentOrder.customerName || 'Unknown', 50, yPos);
+    yPos += 6;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('Deceased:', 20, yPos);
+    doc.setFont('helvetica', 'normal');
+    doc.text(currentOrder.deceasedName || 'Unknown', 50, yPos);
+    yPos += 6;
+    
+    if (currentOrder.cemetery) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Cemetery:', 20, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(currentOrder.cemetery, 50, yPos);
+        yPos += 6;
+    }
+    
+    yPos += 5;
+    
+    // Divider line
+    doc.setDrawColor(200, 200, 200);
+    doc.line(20, yPos, 190, yPos);
+    yPos += 8;
+    
+    // Items Section
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ITEMS & COSTS', 20, yPos);
+    yPos += 8;
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    // Headstone
+    if (totals.breakdown.headstone.cost > 0) {
+        const hsLine = `Headstone: ${currentOrder.hsType} ${currentOrder.hsSize}`;
+        const hsColour = currentOrder.hsColour && currentOrder.hsColour !== 'Black' 
+            ? ` (${currentOrder.hsColour})` 
+            : '';
+        doc.text(hsLine + hsColour, 20, yPos);
+        doc.text(`£${totals.breakdown.headstone.cost.toFixed(2)}`, 190, yPos, { align: 'right' });
+        yPos += 6;
+    }
+    
+    // Surround
+    if (totals.breakdown.surround.cost > 0) {
+        const surLine = `Surround: ${currentOrder.surroundType}`;
+        const granite = currentOrder.surroundGranite ? ' (6" Granite)' : '';
+        doc.text(surLine + granite, 20, yPos);
+        doc.text(`£${totals.breakdown.surround.cost.toFixed(2)}`, 190, yPos, { align: 'right' });
+        yPos += 6;
+    }
+    
+    // Stone/Chippings
+    if (totals.breakdown.stone.cost > 0) {
+        doc.text(`Stone: ${currentOrder.stoneType}`, 20, yPos);
+        doc.text(`£${totals.breakdown.stone.cost.toFixed(2)}`, 190, yPos, { align: 'right' });
+        yPos += 6;
+    }
+    
+    // Accessories
+    if (totals.breakdown.accessories.cost > 0 && currentOrder.accessories) {
+        currentOrder.accessories.forEach(accName => {
+            const acc = priceBook.Accessories?.find(a => a.name === accName);
+            if (acc) {
+                doc.text(`Accessory: ${accName}`, 20, yPos);
+                doc.text(`£${acc.cost.toFixed(2)}`, 190, yPos, { align: 'right' });
+                yPos += 6;
+            }
+        });
+    }
+    
+    // Inscription
+    if (totals.breakdown.inscription.cost > 0) {
+        const inscType = currentOrder.inscriptionType === 'new' ? 'New Inscription' : 'Additional Inscription';
+        const letterCount = totals.breakdown.inscription.letterCount;
+        doc.text(`${inscType} (${letterCount} letters)`, 20, yPos);
+        doc.text(`£${totals.breakdown.inscription.cost.toFixed(2)}`, 190, yPos, { align: 'right' });
+        yPos += 6;
+    }
+    
+    // Cemetery Fee
+    if (totals.breakdown.cemeteryFee > 0) {
+        doc.text(`Cemetery Fee: ${currentOrder.cemetery}`, 20, yPos);
+        doc.text(`£${totals.breakdown.cemeteryFee.toFixed(2)}`, 190, yPos, { align: 'right' });
+        yPos += 6;
+    }
+    
+    yPos += 5;
+    
+    // Total line
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(20, yPos, 190, yPos);
+    yPos += 8;
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL TO MASON:', 20, yPos);
+    doc.text(`£${totals.totalCost.toFixed(2)}`, 190, yPos, { align: 'right' });
+    yPos += 10;
+    
+    // Inscription Text (if present)
+    if (currentOrder.inscriptionText) {
+        yPos += 5;
+        doc.setDrawColor(200, 200, 200);
+        doc.line(20, yPos, 190, yPos);
+        yPos += 8;
+        
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('INSCRIPTION TEXT:', 20, yPos);
+        yPos += 8;
+        
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        
+        // Word wrap inscription text
+        const lines = doc.splitTextToSize(currentOrder.inscriptionText, 170);
+        lines.forEach(line => {
+            if (yPos > 270) {
+                doc.addPage();
+                yPos = 20;
+            }
+            doc.text(line, 20, yPos);
+            yPos += 5;
+        });
+    }
+    
+    // Notes (if present)
+    if (currentOrder.masonNotes) {
+        yPos += 5;
+        doc.setDrawColor(200, 200, 200);
+        doc.line(20, yPos, 190, yPos);
+        yPos += 8;
+        
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('MASON NOTES:', 20, yPos);
+        yPos += 8;
+        
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        
+        const noteLines = doc.splitTextToSize(currentOrder.masonNotes, 170);
+        noteLines.forEach(line => {
+            if (yPos > 270) {
+                doc.addPage();
+                yPos = 20;
+            }
+            doc.text(line, 20, yPos);
+            yPos += 5;
+        });
+    }
+    
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(128, 128, 128);
+        doc.text(`David Crymble & Sons | Woodstock Road & Finaghy | 028 9066 7784`, 105, 290, { align: 'center' });
+        doc.text(`Page ${i} of ${pageCount}`, 190, 290, { align: 'right' });
+    }
+    
+    // Save PDF
+    const filename = `Mason_JobCard_${currentOrder.orderRef || currentOrder.orderId}_${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(filename);
+    
+    // Log activity
+    addActivityLog('Generated Mason Job Card (Cost: £' + totals.totalCost.toFixed(2) + ')');
+    
+    // Send WhatsApp notification
+    sendWhatsAppNotification('job_card', {
+        customer: currentOrder.customerName,
+        deceased: currentOrder.deceasedName,
+        reference: currentOrder.orderRef || currentOrder.orderId,
+        total: totals.totalCost.toFixed(2)
+    });
+}
+
+
+        function generateJobCard() {
+            if (!currentOrder) return;
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            addLetterhead(doc);
+            
+            // Title
+            doc.setFontSize(16);
+            doc.setFont(undefined, 'bold');
+            doc.text('JOB CARD FOR STONE MASON', 105, 60, { align: 'center' });
+            
+            // Reference
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Reference: ${currentOrder.orderRef || currentOrder.orderId}`, 150, 70);
+            
+            // Customer and deceased
+            doc.setFont(undefined, 'bold');
+            doc.text('Customer:', 20, 85);
+            doc.setFont(undefined, 'normal');
+            doc.text(currentOrder.customerName || '-', 50, 85);
+            
+            doc.setFont(undefined, 'bold');
+            doc.text('Deceased:', 20, 92);
+            doc.setFont(undefined, 'normal');
+            doc.text(currentOrder.deceasedName || '-', 50, 92);
+            
+            // Specification
+            let y = 105;
+            doc.setFont(undefined, 'bold');
+            doc.text('SPECIFICATION', 20, y);
+            y += 7;
+            
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(9);
+            
+            if (currentOrder.hsType) {
+                doc.text(`Headstone: ${currentOrder.hsType} - ${currentOrder.hsSize}`, 20, y);
+                y += 5;
+            }
+            if (currentOrder.hsColour) {
+                doc.text(`Colour: ${currentOrder.hsColour}`, 20, y);
+                y += 5;
+            }
+            if (currentOrder.hsFinish) {
+                doc.text(`Finish: ${currentOrder.hsFinish}`, 20, y);
+                y += 5;
+            }
+            if (currentOrder.inscriptionText) {
+                doc.text('Inscription:', 20, y);
+                y += 5;
+                const lines = currentOrder.inscriptionText.split('\n');
+                lines.forEach(line => {
+                    doc.text(line, 25, y);
+                    y += 5;
+                });
+            }
+            
+            // Mason notes
+            if (currentOrder.masonNotes) {
+                y += 5;
+                doc.setFillColor(255, 215, 0);
+                doc.rect(20, y - 3, 170, 20, 'F');
+                doc.setFont(undefined, 'bold');
+                doc.text('MASON NOTES:', 22, y + 2);
+                doc.setFont(undefined, 'normal');
+                doc.text(currentOrder.masonNotes, 22, y + 7);
+                y += 25;
+            }
+            
+            // Signature boxes
+            y += 10;
+            doc.text('Mason Signature: _______________________', 20, y);
+            doc.text('DC&S Signature: _______________________', 110, y);
+            
+            addFooter(doc);
+            
+            // Save PDF
+            const filename = `JobCard_${currentOrder.orderRef || currentOrder.orderId}.pdf`;
+            doc.save(filename);
+            
+            // Send WhatsApp notification
+            const message = `🔨 *JOB CARD GENERATED*\n\n` +
+                `Customer: ${currentOrder.customerName}\n` +
+                `Deceased: ${currentOrder.deceasedName}\n` +
+                `Reference: ${currentOrder.orderRef || currentOrder.orderId}\n` +
+                `Headstone: ${currentOrder.hsType || 'Not specified'}\n` +
+                `Size: ${currentOrder.hsSize || 'Not specified'}\n\n` +
+                `Job card has been downloaded and is ready to send to mason.`;
+            
+            sendToWhatsApp(message).then(success => {
+                if (success) {
+                    // Update activity log
+                    if (!currentOrder.log) currentOrder.log = [];
+                    currentOrder.log.push({
+                        id: Date.now().toString(),
+                        ts: new Date().toISOString(),
+                        author: 'SYSTEM',
+                        text: 'Job Card generated and WhatsApp notification sent'
+                    });
+                    
+                    alert('✅ Job Card generated and notification sent to WhatsApp!');
+                }
+            });
+        }
+
+        function getPriceLineItems(order) {
+            const items = [];
+            
+            const headstone = priceBook.Headstones?.find(h => 
+                h.type === order.hsType && h.size === order.hsSize
+            );
+            if (headstone) {
+                items.push({
+                    label: `Headstone (${order.hsType} - ${order.hsSize})`,
+                    amount: parseFloat(headstone.sell || 0)
+                });
+            }
+            
+            if (order.hsColourAdj) {
+                items.push({
+                    label: 'Colour Adjustment',
+                    amount: parseFloat(order.hsColourAdj)
+                });
+            }
+            
+            const surround = priceBook.Surrounds?.find(s => s.type === order.surroundType);
+            if (surround) {
+                items.push({
+                    label: `Surround (${order.surroundType})`,
+                    amount: parseFloat(surround.baseSell || 0)
+                });
+                if (order.surroundGranite) {
+                    items.push({
+                        label: 'Granite Upgrade',
+                        amount: parseFloat(surround.graniteSellAdd || 0)
+                    });
+                }
+            }
+
+            const stone = priceBook.Stones?.find(s => s.type === order.stoneType);
+            if (stone) {
+                const stonePrice = order.surroundType ?
+                    parseFloat(stone.withSurroundCost || 0) :
+                    parseFloat(stone.standaloneCost || 0);
+                items.push({
+                    label: `Stone (${order.stoneType})`,
+                    amount: stonePrice
+                });
+            }
+
+            if (order.accessories && Array.isArray(order.accessories)) {
+                order.accessories.forEach(acc => {
+                    const accessory = priceBook.Accessories?.find(a => a.name === acc);
+                    if (accessory) {
+                        items.push({
+                            label: acc,
+                            amount: parseFloat(accessory.sell || 0)
+                        });
+                    }
+                });
+            }
+
+            const cemetery = priceBook.Cemetery_Fees?.find(c => c.location === order.cemetery);
+            if (cemetery) {
+                items.push({
+                    label: `Cemetery Fee (${order.cemetery})`,
+                    amount: parseFloat(cemetery.fee || 0)
+                });
+            }
+            
+            const inscriptionLines = parseInt(order.inscriptionLines || 0);
+            const inscriptionPpl = parseFloat(order.inscriptionPpl || 35);
+            if (inscriptionLines > 0) {
+                items.push({
+                    label: `Inscription (${inscriptionLines} lines @ £${inscriptionPpl})`,
+                    amount: inscriptionLines * inscriptionPpl
+                });
+            }
+            
+            const letters = countLetters(order.inscriptionText || '');
+            if (order.inscriptionType === 'additional') {
+                const letterCharge = Math.max(200, letters * 5);
+                items.push({
+                    label: `Additional Inscription (${letters} letters)`,
+                    amount: letterCharge
+                });
+            } else {
+                if (letters > 100) {
+                    const extraLetters = letters - 100;
+                    items.push({
+                        label: `Extra Letters (${extraLetters} @ £4)`,
+                        amount: extraLetters * 4
+                    });
+                }
+            }
+            
+            if (order.extraCharges && Array.isArray(order.extraCharges)) {
+                order.extraCharges.forEach(charge => {
+                    items.push({
+                        label: charge.label,
+                        amount: parseFloat(charge.amount || 0)
+                    });
+                });
+            }
+            
+            return items;
+        }
+
+        function addActivityLog(text) {
+            if (!currentOrder) return;
+            if (!currentOrder.log) currentOrder.log = [];
+            currentOrder.log.push({
+                id: Date.now().toString(),
+                ts: new Date().toISOString(),
+                author: 'System',
+                text: text
+            });
+            saveOrder(currentOrder);
+        }
+
+        function sendWhatsAppNotification(type, data) {
+            const messages = {
+                estimate: `📄 *ESTIMATE GENERATED*\n\nCustomer: ${data.customer}\nDeceased: ${data.deceased}\nReference: ${data.reference}\nTotal: £${data.total}\n\nEstimate downloaded and ready to send.`,
+                job_card: `🔨 *MASON JOB CARD GENERATED*\n\nCustomer: ${data.customer}\nDeceased: ${data.deceased}\nReference: ${data.reference}\nMason Cost: £${data.total}\n\nJob card downloaded and ready for mason.`
+            };
+            const message = messages[type] || `Notification: ${type}`;
+            sendToWhatsApp(message);
+        }
+
+        function addLetterhead(doc) {
+            // Header
+            doc.setFontSize(18);
+            doc.setFont(undefined, 'bold');
+            doc.text('DAVID CRYMBLE & Sons', 105, 20, { align: 'center' });
+            
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            doc.text('FUNERAL DIRECTORS & MEMORIAL MASONS', 105, 27, { align: 'center' });
+        }
+
+        function addFooter(doc) {
+            doc.setFontSize(8);
+            doc.setFont(undefined, 'normal');
+            
+            const footerY = 280;
+            doc.text('T. 028 9066 7784  |  E. info@Crymbleandsons.com', 105, footerY, { align: 'center' });
+            doc.text('139 Upper Lisburn Road, Belfast, BT10 0LH  |  330-332 Woodstock Road, Belfast, BT6 9DP', 105, footerY + 4, { align: 'center' });
+            doc.text('AN INDEPENDENT FAMILY COMPANY — David, Joy & Andrew Crymble', 105, footerY + 8, { align: 'center' });
+            doc.setFont(undefined, 'italic');
+            doc.text('"Our God will take care of everything you need." Phil 4:19', 105, footerY + 12, { align: 'center' });
+        }
+    </script>
+</body>
+</html>
