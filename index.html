@@ -998,6 +998,91 @@
                     </div>
                 </div>` : ''}
 
+                <!-- Cost vs Retail Breakdown -->
+                ${(() => {
+                    const t = calculateOrderTotals(o);
+                    const b = t.breakdown;
+                    const rows = [];
+
+                    function bRow(label, sub, cost, sell) {
+                        if (sell <= 0 && cost <= 0) return '';
+                        const margin = sell - cost;
+                        const pct = sell > 0 ? ((margin / sell) * 100).toFixed(1) : '0.0';
+                        const marginCol = margin >= 0 ? '#16a34a' : '#dc2626';
+                        return `<tr>
+                            <td style="padding:0.5rem 0.6rem;">
+                                <div style="font-size:0.82rem;font-weight:600;color:#111;">${label}</div>
+                                ${sub ? `<div style="font-size:0.72rem;color:#9ca3af;">${sub}</div>` : ''}
+                            </td>
+                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;color:#374151;">£${parseFloat(cost).toFixed(2)}</td>
+                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;font-weight:600;color:#111;">£${parseFloat(sell).toFixed(2)}</td>
+                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;font-weight:600;color:${marginCol};">£${parseFloat(margin).toFixed(2)}</td>
+                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:${marginCol};">${pct}%</td>
+                        </tr>`;
+                    }
+
+                    let tableRows = '';
+                    tableRows += bRow(`${o.hsType || 'Headstone'} — ${o.hsSize || ''}`,
+                        `${o.hsColour || 'Black'}${o.hsFinish ? ' · ' + o.hsFinish : ''}`,
+                        b.headstone.cost, b.headstone.sell);
+                    tableRows += bRow(o.surroundType || 'Surround',
+                        o.surroundGranite ? 'Incl. Granite Foundation' : '',
+                        b.surround.cost, b.surround.sell);
+                    tableRows += bRow(o.stoneType || 'Stone/Chippings', '', b.stone.cost, b.stone.sell);
+                    if (b.accessories.sell > 0 || b.accessories.cost > 0)
+                        tableRows += bRow('Accessories', (o.accessories||[]).join(', '), b.accessories.cost, b.accessories.sell);
+                    if (b.inscription.sell > 0 || b.inscription.cost > 0)
+                        tableRows += bRow(o.inscriptionType === 'new' ? 'New Inscription' : 'Additional Inscription',
+                            `${b.inscription.letterCount || ''} letters`, b.inscription.cost, b.inscription.sell);
+                    if (b.cemeteryFee > 0)
+                        tableRows += bRow('Cemetery Fee', o.cemetery || '', b.cemeteryFee, b.cemeteryFee);
+
+                    const dep = parseFloat(o.depositPaid) || 0;
+                    const bal = Math.max(0, t.totalSell - dep);
+                    const marginPct = t.marginPercentage.toFixed(1);
+                    const marginCol = t.profitMargin >= 0 ? '#16a34a' : '#dc2626';
+
+                    return `
+                    <div class="card detail-grid-wide" style="margin-bottom:0;">
+                        <div class="card-header">
+                            <span class="card-header-icon">📊</span>
+                            <span class="card-header-title">Cost vs Retail Breakdown</span>
+                            <span style="margin-left:auto;font-size:0.78rem;font-weight:700;color:${marginCol};">Profit: £${t.profitMargin.toFixed(2)} (${marginPct}%)</span>
+                        </div>
+                        <div class="card-body" style="padding:0;">
+                            <table style="width:100%;border-collapse:collapse;">
+                                <thead>
+                                    <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
+                                        <th style="padding:0.5rem 0.6rem;text-align:left;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Item</th>
+                                        <th style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Cost</th>
+                                        <th style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Retail</th>
+                                        <th style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Profit</th>
+                                        <th style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Margin</th>
+                                    </tr>
+                                </thead>
+                                <tbody style="border-bottom:1px solid #e5e7eb;">
+                                    ${tableRows || '<tr><td colspan="5" style="padding:1rem;text-align:center;color:#9ca3af;font-size:0.85rem;">No items priced yet</td></tr>'}
+                                </tbody>
+                                <tfoot>
+                                    <tr style="background:#f9fafb;border-top:2px solid #111;">
+                                        <td style="padding:0.6rem 0.6rem;font-size:0.85rem;font-weight:700;color:#111;">TOTAL</td>
+                                        <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:#374151;">£${t.totalCost.toFixed(2)}</td>
+                                        <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:#111;">£${t.totalSell.toFixed(2)}</td>
+                                        <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:${marginCol};">£${t.profitMargin.toFixed(2)}</td>
+                                        <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:${marginCol};">${marginPct}%</td>
+                                    </tr>
+                                    ${dep > 0 ? `
+                                    <tr style="background:#f0fdf4;">
+                                        <td colspan="2" style="padding:0.45rem 0.6rem;font-size:0.8rem;color:#374151;">Deposit Received</td>
+                                        <td style="padding:0.45rem 0.6rem;text-align:right;font-size:0.8rem;color:#16a34a;font-weight:600;">-£${dep.toFixed(2)}</td>
+                                        <td colspan="2" style="padding:0.45rem 0.6rem;text-align:right;font-size:0.8rem;font-weight:700;color:#15803d;">Balance: £${bal.toFixed(2)}</td>
+                                    </tr>` : ''}
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>`;
+                })()}
+
                 <!-- Action Bar -->
                 <div class="action-bar">
                     <button class="btn btn-outline" onclick="editOrder()">✏️ Edit Order</button>
