@@ -416,12 +416,22 @@
             .main-container { height: auto; }
             .content-area { padding: 0; }
         }
+
+        /* ── NOTES ── */
+        .note-entry { display:flex; gap:0.75rem; padding:0.75rem 0; border-bottom:1px solid var(--border); }
+        .note-entry:last-child { border-bottom:none; }
+        .note-avatar { width:32px; height:32px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:700; flex-shrink:0; }
+        .note-body { flex:1; min-width:0; }
+        .note-text { font-size:0.88rem; color:var(--text); line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+        .note-meta { font-size:0.72rem; color:var(--text-muted); margin-top:0.2rem; }
+        .note-add-row { display:flex; flex-direction:column; gap:0.5rem; padding-top:0.75rem; border-top:2px dashed var(--border); margin-top:0.75rem; }
     </style>
 </head>
 <body>
     <div class="app-header">
         <h1>DC&S Headstone Order Tracker</h1>
         <div class="header-actions">
+            <button id="userChip" onclick="toggleUserDropdown()" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:0.3rem;font-weight:600;">👤 <span id="userChipName">Andrew</span> ▾</button>
             <button class="btn btn-primary" onclick="showNewOrderModal()">+ New Order</button>
             <button class="btn btn-secondary" onclick="refreshOrders()">🔄 Refresh</button>
             <button class="btn btn-secondary" onclick="testConnection()">🔍 Test Connection</button>
@@ -580,6 +590,8 @@
         // Initialize app
         document.addEventListener('DOMContentLoaded', () => {
             loadOrders(); // priceBook is included in the Apps Script response
+            const chipName = document.getElementById('userChipName');
+            if (chipName) chipName.textContent = localStorage.getItem('dcs_current_user') || 'Andrew';
         });
 
         // Load price book from Google Sheets
@@ -936,20 +948,29 @@
                         </div>
                     </div>
 
-                    <!-- Notes (full width, only if present) -->
-                    ${(o.notes || o.masonNotes) ? `
-                    <div class="card detail-grid-wide">
+                    <!-- Order Notes (interactive, always visible) -->
+                    <div class="card detail-grid-wide" style="border-left:4px solid var(--cyan);">
                         <div class="card-header">
                             <span class="card-header-icon">📝</span>
-                            <span class="card-header-title">Notes</span>
+                            <span class="card-header-title">Order Notes</span>
+                            <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);">${(o.noteEntries||[]).length} note${(o.noteEntries||[]).length!==1?'s':''}</span>
                         </div>
                         <div class="card-body">
-                            <div class="data-grid">
-                                ${o.notes ? `<div class="data-row" style="grid-column:1/-1"><div class="data-label">General Notes</div><div class="data-value">${o.notes}</div></div>` : ''}
-                                ${o.masonNotes ? `<div class="data-row" style="grid-column:1/-1"><div class="data-label">Mason Notes</div><div class="data-value">${o.masonNotes}</div></div>` : ''}
-                            </div>
+                            ${renderOrderNotes(o)}
                         </div>
-                    </div>` : ''}
+                    </div>
+
+                    <!-- Mason Notes (interactive, always visible) -->
+                    <div class="card detail-grid-wide" style="border-left:4px solid #16a34a;">
+                        <div class="card-header" style="background:#f0fdf4;">
+                            <span class="card-header-icon">🔨</span>
+                            <span class="card-header-title" style="color:#15803d;">Mason Notes</span>
+                            <span style="margin-left:auto;font-size:0.72rem;background:#dcfce7;color:#15803d;padding:0.15rem 0.5rem;border-radius:4px;font-weight:600;">Printed on Job Card</span>
+                        </div>
+                        <div class="card-body">
+                            ${renderMasonNotes(o)}
+                        </div>
+                    </div>
 
                     <!-- Activity Log (full width) -->
                     <div class="card detail-grid-wide">
@@ -1542,6 +1563,133 @@
             `;
         }
 
+        // ── USER MANAGEMENT ──────────────────────────────────────────
+        function getCurrentUser() {
+            return localStorage.getItem('dcs_current_user') || 'Andrew';
+        }
+        function setCurrentUser(name) {
+            localStorage.setItem('dcs_current_user', name);
+            const el = document.getElementById('userChipName');
+            if (el) el.textContent = name;
+            const nl = document.getElementById('noteAuthorLabel');
+            if (nl) nl.textContent = name;
+            const mnl = document.getElementById('masonNoteAuthorLabel');
+            if (mnl) mnl.textContent = name;
+            const dd = document.getElementById('userDropdown');
+            if (dd) dd.remove();
+        }
+        function toggleUserDropdown() {
+            const existing = document.getElementById('userDropdown');
+            if (existing) { existing.remove(); return; }
+            const chip = document.getElementById('userChip');
+            const rect = chip.getBoundingClientRect();
+            const current = getCurrentUser();
+            const dd = document.createElement('div');
+            dd.id = 'userDropdown';
+            dd.style.cssText = `position:fixed;top:${rect.bottom+4}px;right:${window.innerWidth-rect.right}px;background:white;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.18);overflow:hidden;z-index:9999;min-width:150px;border:1px solid #e5e7eb;`;
+            ['Stephen','Andrew','Paul'].forEach(name => {
+                const btn = document.createElement('button');
+                btn.textContent = (name === current ? '✓ ' : '   ') + name;
+                btn.style.cssText = `display:block;width:100%;padding:0.7rem 1rem;text-align:left;border:none;background:${name===current?'#f0f7e6':'white'};color:${name===current?'#2e7d32':'#111'};font-size:0.9rem;font-weight:${name===current?'700':'400'};cursor:pointer;`;
+                btn.onmouseenter = () => { btn.style.background='#f0f7e6'; };
+                btn.onmouseleave = () => { btn.style.background=name===current?'#f0f7e6':'white'; };
+                btn.onclick = (e) => { e.stopPropagation(); setCurrentUser(name); };
+                dd.appendChild(btn);
+            });
+            document.body.appendChild(dd);
+            setTimeout(() => {
+                document.addEventListener('click', function closeDD(e) {
+                    if (!dd.contains(e.target) && e.target.id !== 'userChip') {
+                        dd.remove(); document.removeEventListener('click', closeDD);
+                    }
+                });
+            }, 50);
+        }
+
+        // ── ORDER NOTES ──────────────────────────────────────────────
+        const NOTE_AVATAR_COLOURS = { Stephen:'#7c3aed', Andrew:'#0891b2', Paul:'#16a34a' };
+
+        function renderNotesList(entries) {
+            if (!entries || entries.length === 0)
+                return '<p style="color:#9ca3af;font-size:0.85rem;padding:0.25rem 0 0.5rem;">No notes yet — add the first one below.</p>';
+            const sorted = [...entries].sort((a,b) => new Date(b.ts)-new Date(a.ts));
+            return sorted.map(e => {
+                const col = NOTE_AVATAR_COLOURS[e.author] || '#64748b';
+                const initials = e.author.slice(0,2).toUpperCase();
+                const safe = (e.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                return `<div class="note-entry">
+                    <div class="note-avatar" style="background:${col};">${initials}</div>
+                    <div class="note-body">
+                        <div class="note-text">${safe}</div>
+                        <div class="note-meta">${e.author} &middot; ${new Date(e.ts).toLocaleString('en-GB')}</div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderOrderNotes(order) {
+            return `
+                <div id="noteEntriesList">${renderNotesList(order.noteEntries)}</div>
+                <div class="note-add-row">
+                    <textarea id="noteInput" placeholder="Type a note..." rows="2" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.75rem;font-size:0.88rem;font-family:inherit;resize:vertical;" onkeydown="if(event.ctrlKey&&event.key==='Enter'){submitNote();}"></textarea>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">
+                        <span style="font-size:0.78rem;color:var(--text-muted);">Adding as: <strong id="noteAuthorLabel">${getCurrentUser()}</strong> &nbsp;·&nbsp; Ctrl+Enter to save</span>
+                        <button class="btn btn-cyan" onclick="submitNote()">💬 Add Note</button>
+                    </div>
+                </div>`;
+        }
+
+        function renderMasonNotes(order) {
+            const legacy = order.masonNotes
+                ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:0.6rem 0.8rem;font-size:0.85rem;color:#166534;margin-bottom:0.75rem;white-space:pre-wrap;">${(order.masonNotes||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`
+                : '';
+            return `
+                <div id="masonNoteEntriesList">${legacy}${renderNotesList(order.masonNoteEntries)}</div>
+                <div class="note-add-row">
+                    <textarea id="masonNoteInput" placeholder="Add instruction or note for the stone mason..." rows="2" style="width:100%;border:1px solid #86efac;border-radius:6px;padding:0.5rem 0.75rem;font-size:0.88rem;font-family:inherit;resize:vertical;" onkeydown="if(event.ctrlKey&&event.key==='Enter'){submitMasonNote();}"></textarea>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">
+                        <span style="font-size:0.78rem;color:#16a34a;">Adding as: <strong id="masonNoteAuthorLabel">${getCurrentUser()}</strong> &nbsp;·&nbsp; Printed on Job Card</span>
+                        <button class="btn btn-outline" style="background:#f0fdf4;border-color:#86efac;color:#15803d;" onclick="submitMasonNote()">🔨 Add Mason Note</button>
+                    </div>
+                </div>`;
+        }
+
+        async function submitNote() {
+            const input = document.getElementById('noteInput');
+            const text = (input?.value||'').trim();
+            if (!text || !currentOrder) return;
+            if (!currentOrder.noteEntries) currentOrder.noteEntries = [];
+            const entry = { id: Date.now().toString(), ts: new Date().toISOString(), author: getCurrentUser(), text };
+            currentOrder.noteEntries.push(entry);
+            if (!currentOrder.log) currentOrder.log = [];
+            currentOrder.log.push({ id: (Date.now()+1).toString(), ts: new Date().toISOString(), author: getCurrentUser(), text: `Note added: "${text.slice(0,80)}${text.length>80?'…':''}"` });
+            input.value = '';
+            // Re-render just the notes list (fast, no full re-render)
+            const list = document.getElementById('noteEntriesList');
+            if (list) list.innerHTML = renderNotesList(currentOrder.noteEntries);
+            await saveOrder(currentOrder);
+        }
+
+        async function submitMasonNote() {
+            const input = document.getElementById('masonNoteInput');
+            const text = (input?.value||'').trim();
+            if (!text || !currentOrder) return;
+            if (!currentOrder.masonNoteEntries) currentOrder.masonNoteEntries = [];
+            const entry = { id: Date.now().toString(), ts: new Date().toISOString(), author: getCurrentUser(), text };
+            currentOrder.masonNoteEntries.push(entry);
+            if (!currentOrder.log) currentOrder.log = [];
+            currentOrder.log.push({ id: (Date.now()+1).toString(), ts: new Date().toISOString(), author: getCurrentUser(), text: `Mason note added: "${text.slice(0,80)}${text.length>80?'…':''}"` });
+            input.value = '';
+            const list = document.getElementById('masonNoteEntriesList');
+            if (list) {
+                const legacy = currentOrder.masonNotes
+                    ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:0.6rem 0.8rem;font-size:0.85rem;color:#166534;margin-bottom:0.75rem;white-space:pre-wrap;">${(currentOrder.masonNotes||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`
+                    : '';
+                list.innerHTML = legacy + renderNotesList(currentOrder.masonNoteEntries);
+            }
+            await saveOrder(currentOrder);
+        }
+
         // Update status
         async function updateStatus(newStatus) {
             if (!currentOrder) return;
@@ -1553,7 +1701,7 @@
             currentOrder.log.push({
                 id: Date.now().toString(),
                 ts: new Date().toISOString(),
-                author: 'User',
+                author: getCurrentUser(),
                 text: `Status changed to ${newStatus}`
             });
 
@@ -3137,15 +3285,36 @@
                 y = iy + 8;  // track actual position
             }
 
-            // Mason notes
-            if (currentOrder.masonNotes) {
-                if (y > 230) { doc.addPage(); y = 20; }
-                doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60);
-                doc.text('MASON NOTES', 20, y); doc.setTextColor(0, 0, 0); y += 6;
-                const nl = doc.splitTextToSize(currentOrder.masonNotes, 165);
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-                nl.forEach(l => { if (y > 265) { doc.addPage(); y = 20; } doc.text(l, 22, y); y += 5; });
-                y += 5;
+            // Mason notes — show both legacy text notes and new timestamped entries
+            const hasMasonNotes = currentOrder.masonNotes || (currentOrder.masonNoteEntries && currentOrder.masonNoteEntries.length > 0);
+            if (hasMasonNotes) {
+                if (y > 220) { doc.addPage(); y = 20; }
+                doc.setFillColor(240, 253, 244); doc.setDrawColor(134, 239, 172); doc.setLineWidth(0.3);
+                doc.rect(20, y, 170, 7, 'FD');
+                doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(21, 128, 61);
+                doc.text('MASON NOTES', 24, y + 4.5);
+                doc.setTextColor(0, 0, 0); y += 11;
+
+                // Legacy plain text notes
+                if (currentOrder.masonNotes) {
+                    const nl = doc.splitTextToSize(currentOrder.masonNotes, 162);
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(0,0,0);
+                    nl.forEach(l => { if (y > 265) { doc.addPage(); y = 20; } doc.text(l, 22, y); y += 5; });
+                    y += 3;
+                }
+
+                // Timestamped note entries (newest first)
+                const masonEntries = [...(currentOrder.masonNoteEntries || [])].sort((a,b) => new Date(b.ts)-new Date(a.ts));
+                masonEntries.forEach(entry => {
+                    if (y > 255) { doc.addPage(); y = 20; }
+                    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(60, 60, 60);
+                    doc.text(`${entry.author} · ${new Date(entry.ts).toLocaleString('en-GB')}`, 22, y); y += 5;
+                    const el = doc.splitTextToSize(entry.text, 162);
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(0,0,0);
+                    el.forEach(l => { if (y > 265) { doc.addPage(); y = 20; } doc.text(l, 24, y); y += 5; });
+                    y += 3;
+                });
+                y += 2;
             }
 
             // Signature boxes
@@ -3287,7 +3456,7 @@
             currentOrder.log.push({
                 id: Date.now().toString(),
                 ts: new Date().toISOString(),
-                author: 'System',
+                author: getCurrentUser(),
                 text: text
             });
             saveOrder(currentOrder);
