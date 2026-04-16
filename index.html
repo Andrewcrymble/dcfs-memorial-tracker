@@ -3040,9 +3040,11 @@
 
         // Draw payment QR block into a jsPDF doc; returns new y position
         async function addPdfPaymentQR(doc, y, url) {
-            if (!url || y > 232) return y;
+            if (!url) return y;
             const qrDataUrl = await getPdfQRDataUrl(url);
             if (!qrDataUrl) return y;
+            // If not enough room, start a new page
+            if (y > 220) { doc.addPage(); y = 20; }
             y += 4;
             doc.setFillColor(245, 244, 255);
             doc.setDrawColor(99, 91, 255);
