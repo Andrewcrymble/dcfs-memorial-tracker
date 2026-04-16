@@ -14,7 +14,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 2rem 1rem;
+            padding: 2rem 1rem 7rem;
             color: #1e293b;
         }
         .card {
@@ -93,6 +93,75 @@
             margin-top: 2rem;
         }
         .company strong { color: #5a8f2e; }
+
+        /* ── STICKY BOTTOM BAR ── */
+        .bottom-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #15803d;
+            color: white;
+            z-index: 100;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
+        }
+        .bottom-bar-inner {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 0.75rem 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        .bottom-bar-label {
+            font-size: 0.75rem;
+            color: #bbf7d0;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.15rem;
+        }
+        .bottom-bar-amount {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: white;
+            line-height: 1;
+        }
+        .bottom-bar-right {
+            text-align: right;
+        }
+        .bottom-bar-bal-label {
+            font-size: 0.7rem;
+            color: #bbf7d0;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.15rem;
+        }
+        .bottom-bar-bal {
+            font-size: 1rem;
+            font-weight: 700;
+            color: white;
+        }
+        .bottom-bar-bal.clear {
+            color: #86efac;
+        }
+        .bottom-bar-divider {
+            width: 1px;
+            height: 40px;
+            background: rgba(255,255,255,0.25);
+            flex-shrink: 0;
+        }
+        .bottom-bar-contact {
+            font-size: 0.78rem;
+            color: #bbf7d0;
+            text-align: center;
+            padding: 0.4rem 1rem 0.6rem;
+            border-top: 1px solid rgba(255,255,255,0.15);
+        }
+        .bottom-bar-contact a {
+            color: white;
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -103,18 +172,21 @@
 
         <div id="refBadge" class="ref-badge" style="display:none;"></div>
 
-        <div class="summary-box" id="summaryBox" style="display:none;">
+        <div class="summary-box" id="summaryBox">
             <div class="summary-row" id="rowName" style="display:none;">
                 <span class="label">In Memory Of</span>
                 <span class="value" id="valName"></span>
             </div>
-            <div class="summary-row">
+            <div class="summary-row" id="rowAmt" style="display:none;">
                 <span class="label">Amount Paid</span>
                 <span class="value paid" id="valAmt">—</span>
             </div>
-            <div class="summary-row" id="rowBal">
+            <div class="summary-row" id="rowBal" style="display:none;">
                 <span class="label">Remaining Balance</span>
                 <span class="value balance" id="valBal">—</span>
+            </div>
+            <div class="summary-row" id="rowGeneric">
+                <span class="label" style="color:#15803d;font-weight:600;">✓ Your payment has been successfully processed</span>
             </div>
         </div>
 
@@ -126,6 +198,24 @@
         <div class="company">
             <strong>David Crymble &amp; Sons</strong><br>
             Memorial Masons
+        </div>
+    </div>
+
+    <!-- Sticky bottom bar — always visible -->
+    <div class="bottom-bar">
+        <div class="bottom-bar-inner">
+            <div>
+                <div class="bottom-bar-label">Amount Paid</div>
+                <div class="bottom-bar-amount" id="barAmt">Confirmed ✓</div>
+            </div>
+            <div class="bottom-bar-divider" id="barDivider" style="display:none;"></div>
+            <div class="bottom-bar-right" id="barBalSection" style="display:none;">
+                <div class="bottom-bar-bal-label">Remaining Balance</div>
+                <div class="bottom-bar-bal" id="barBal">—</div>
+            </div>
+        </div>
+        <div class="bottom-bar-contact">
+            Questions? Call us on <a href="tel:07719593390">07719 593390</a>
         </div>
     </div>
 
@@ -147,9 +237,9 @@
                 badge.style.display = 'inline-block';
             }
 
-            // Summary box
             if (amt > 0) {
-                document.getElementById('summaryBox').style.display = 'block';
+                // Hide generic row, show real data
+                document.getElementById('rowGeneric').style.display = 'none';
 
                 // Deceased name
                 if (name) {
@@ -157,16 +247,16 @@
                     document.getElementById('valName').textContent = name;
                 }
 
-                // Amount paid
+                // Amount paid row
+                document.getElementById('rowAmt').style.display = 'flex';
                 document.getElementById('valAmt').textContent = fmt(amt);
 
-                // Balance
-                const rowBal = document.getElementById('rowBal');
+                // Balance row
+                document.getElementById('rowBal').style.display = 'flex';
                 const valBal = document.getElementById('valBal');
                 if (bal <= 0) {
                     valBal.textContent = 'Paid in Full';
                     valBal.className = 'value clear';
-                    // Update subtitle
                     document.getElementById('subtitle').textContent =
                         cust ? 'Thank you, ' + cust + '. Your account is now fully paid.' :
                                'Your account is now fully paid.';
@@ -175,6 +265,21 @@
                     document.getElementById('subtitle').textContent =
                         cust ? 'Thank you, ' + cust + '.' : 'Thank you for your payment.';
                 }
+
+                // Bottom bar — with amounts
+                document.getElementById('barAmt').textContent = fmt(amt);
+                document.getElementById('barDivider').style.display = 'block';
+                document.getElementById('barBalSection').style.display = 'block';
+                const barBal = document.getElementById('barBal');
+                if (bal <= 0) {
+                    barBal.textContent = 'Paid in Full ✓';
+                    barBal.className = 'bottom-bar-bal clear';
+                } else {
+                    barBal.textContent = fmt(bal);
+                }
+            } else {
+                // No params — bottom bar shows generic confirmation
+                document.getElementById('barAmt').textContent = 'Payment Confirmed ✓';
             }
         })();
     </script>
