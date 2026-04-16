@@ -982,7 +982,7 @@
                     <div class="card-header" style="background:#f5f4ff;">
                         <span class="card-header-icon">💳</span>
                         <span class="card-header-title" style="color:#635bff;">Stripe Payment Link</span>
-                        <span style="margin-left:auto;font-size:0.78rem;color:#635bff;font-weight:600;">Balance Due: £${(Math.max(0, total - (parseFloat(o.depositPaid)||0))).toFixed(2)}</span>
+                        <span style="margin-left:auto;font-size:0.78rem;color:#635bff;font-weight:600;">${o.stripePaymentLabel || 'Payment'}: £${o.stripePaymentAmount ? parseFloat(o.stripePaymentAmount).toFixed(2) : (Math.max(0, total - (parseFloat(o.depositPaid)||0))).toFixed(2)}</span>
                     </div>
                     <div class="card-body" style="display:flex;gap:2rem;align-items:flex-start;flex-wrap:wrap;">
                         <div id="qrcode_display" style="flex-shrink:0;"></div>
@@ -2935,26 +2935,115 @@
         }
 
         // ── STRIPE PAYMENT LINK ──────────────────────────────────
-        async function createPaymentLink() {
+        function createPaymentLink() {
             if (!currentOrder) return;
 
             const total = parseFloat(currentOrder.totalSellPrice || 0);
             const deposit = parseFloat(currentOrder.depositPaid || 0);
             const balance = Math.max(0, total - deposit);
 
-            if (balance <= 0) {
-                alert('Balance is £0 — nothing to charge.');
-                return;
-            }
+            if (balance <= 0) { alert('Balance is £0 — nothing to charge.'); return; }
 
-            // If link already exists ask if they want a new one
-            if (currentOrder.stripePaymentUrl) {
-                if (!confirm(`A payment link already exists for this order.\n\nCreate a new one for £${balance.toFixed(2)}?`)) return;
-            }
+            const half = (balance / 2).toFixed(2);
+            const full = balance.toFixed(2);
+            const ref  = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
 
-            const btn = event.target;
-            btn.textContent = '⏳ Creating…';
-            btn.disabled = true;
+            // Show payment option modal
+            const existing = document.getElementById('paymentOptionModal');
+            if (existing) existing.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'paymentOptionModal';
+            modal.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;`;
+            modal.innerHTML = `
+              <div style="background:#fff;border-radius:12px;padding:2rem;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;">
+                  <span style="font-size:1.5rem;">💳</span>
+                  <div>
+                    <div style="font-weight:700;font-size:1rem;color:#111;">Create Payment Link</div>
+                    <div style="font-size:0.8rem;color:#6b7280;">Ref: ${ref} · ${currentOrder.customerName}</div>
+                  </div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:0.75rem;margin-bottom:1.5rem;">
+                  <label id="plOpt_full" onclick="selectPayOpt('full')" style="cursor:pointer;border:2px solid #635bff;border-radius:8px;padding:0.9rem 1rem;display:flex;justify-content:space-between;align-items:center;background:#f5f4ff;">
+                    <div>
+                      <div style="font-weight:600;color:#635bff;">Full Payment</div>
+                      <div style="font-size:0.78rem;color:#6b7280;">Customer pays balance in full</div>
+                    </div>
+                    <div style="font-size:1.2rem;font-weight:700;color:#635bff;">£${full}</div>
+                  </label>
+
+                  <label id="plOpt_half" onclick="selectPayOpt('half')" style="cursor:pointer;border:2px solid #e5e7eb;border-radius:8px;padding:0.9rem 1rem;display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                      <div style="font-weight:600;color:#374151;">50% Deposit</div>
+                      <div style="font-size:0.78rem;color:#6b7280;">Secure the order with half now</div>
+                    </div>
+                    <div style="font-size:1.2rem;font-weight:700;color:#374151;">£${half}</div>
+                  </label>
+
+                  <label id="plOpt_custom" onclick="selectPayOpt('custom')" style="cursor:pointer;border:2px solid #e5e7eb;border-radius:8px;padding:0.9rem 1rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                      <div>
+                        <div style="font-weight:600;color:#374151;">Custom Amount</div>
+                        <div style="font-size:0.78rem;color:#6b7280;">Enter any amount</div>
+                      </div>
+                    </div>
+                    <input id="plCustomAmt" type="number" min="1" max="${full}" step="0.01" placeholder="Enter amount £"
+                      style="width:100%;padding:0.45rem 0.75rem;border:1px solid #d1d5db;border-radius:6px;font-size:0.95rem;display:none;"
+                      onclick="event.stopPropagation();selectPayOpt('custom')"
+                      oninput="selectPayOpt('custom')">
+                  </label>
+                </div>
+
+                <div style="display:flex;gap:0.75rem;">
+                  <button onclick="document.getElementById('paymentOptionModal').remove()"
+                    style="flex:1;padding:0.65rem;background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;font-size:0.9rem;cursor:pointer;font-weight:600;">
+                    Cancel
+                  </button>
+                  <button id="plCreateBtn" onclick="doCreatePaymentLink()"
+                    style="flex:2;padding:0.65rem;background:#635bff;color:white;border:none;border-radius:8px;font-size:0.9rem;cursor:pointer;font-weight:700;">
+                    Create Payment Link
+                  </button>
+                </div>
+              </div>`;
+            document.body.appendChild(modal);
+            modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+            window._payOpt = 'full';
+            window._payBalance = balance;
+        }
+
+        function selectPayOpt(opt) {
+            window._payOpt = opt;
+            ['full','half','custom'].forEach(o => {
+                const el = document.getElementById('plOpt_' + o);
+                if (!el) return;
+                el.style.borderColor = o === opt ? '#635bff' : '#e5e7eb';
+                el.style.background  = o === opt ? '#f5f4ff' : '';
+            });
+            const customInput = document.getElementById('plCustomAmt');
+            if (customInput) customInput.style.display = opt === 'custom' ? 'block' : 'none';
+        }
+
+        async function doCreatePaymentLink() {
+            if (!currentOrder) return;
+            const balance = window._payBalance || 0;
+            const opt = window._payOpt || 'full';
+            let amount = balance;
+            if (opt === 'half') amount = balance / 2;
+            if (opt === 'custom') {
+                const val = parseFloat(document.getElementById('plCustomAmt')?.value);
+                if (!val || val <= 0) { alert('Please enter a valid amount.'); return; }
+                amount = val;
+            }
+            amount = Math.round(amount * 100) / 100;
+
+            const modal = document.getElementById('paymentOptionModal');
+            const btn = document.getElementById('plCreateBtn');
+            if (btn) { btn.textContent = '⏳ Creating…'; btn.disabled = true; }
+
+            const label = opt === 'full' ? 'Full Payment' : opt === 'half' ? '50% Deposit' : 'Payment';
+            const ref = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
 
             try {
                 const resp = await fetch(SCRIPT_URL, {
@@ -2965,30 +3054,30 @@
                         orderRef: currentOrder.orderRef || currentOrder.orderId,
                         customerName: currentOrder.customerName,
                         deceasedName: currentOrder.deceasedName,
-                        amountPence: Math.round(balance * 100),
-                        description: `Memorial headstone — ${currentOrder.deceasedName || 'order'} (Ref: ${(currentOrder.orderRef||'').slice(-8).toUpperCase()})`
+                        amountPence: Math.round(amount * 100),
+                        description: `${label} — ${currentOrder.deceasedName || 'Memorial'} (Ref: ${ref})`
                     })
                 });
 
                 const result = await resp.json();
 
                 if (result.success && result.url) {
+                    if (modal) modal.remove();
                     currentOrder.stripePaymentUrl = result.url;
                     currentOrder.stripeLinkId = result.linkId;
+                    currentOrder.stripePaymentLabel = label;
+                    currentOrder.stripePaymentAmount = amount;
                     await saveOrder(currentOrder);
                     renderOrderDetails();
-                    // Render QR after DOM update
                     setTimeout(() => renderQRCode(result.url), 200);
-                    // Send to WhatsApp automatically
                     sendPaymentLinkWhatsApp();
                 } else {
                     alert('Failed to create payment link: ' + (result.message || 'Unknown error'));
+                    if (btn) { btn.textContent = 'Create Payment Link'; btn.disabled = false; }
                 }
             } catch (err) {
                 alert('Error: ' + err.message);
-            } finally {
-                btn.textContent = '💳 Payment Link';
-                btn.disabled = false;
+                if (btn) { btn.textContent = 'Create Payment Link'; btn.disabled = false; }
             }
         }
 
