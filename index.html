@@ -1253,13 +1253,11 @@
                                 <label>Surround Type</label>
                                 <select name="surroundType" id="f_surroundType" onchange="updateFormPrices()">
                                     <option value="">No surround</option>
-                                    <option value="Full Kerb" ${order.surroundType === 'Full Kerb' ? 'selected' : ''}>Full Kerb</option>
-                                    <option value="Half Kerb" ${order.surroundType === 'Half Kerb' ? 'selected' : ''}>Half Kerb</option>
-                                    <option value="Cremation Kerb" ${order.surroundType === 'Cremation Kerb' ? 'selected' : ''}>Cremation Kerb</option>
-                                    <option value="Vase Kerb" ${order.surroundType === 'Vase Kerb' ? 'selected' : ''}>Vase Kerb</option>
-                                    ${getUniqueValues(priceBook.Surrounds, 'type').filter(t => !['Full Kerb','Half Kerb','Cremation Kerb','Vase Kerb'].includes(t)).map(t =>
-                                        `<option value="${t}" ${order.surroundType === t ? 'selected' : ''}>${t}</option>`
-                                    ).join('')}
+                                    ${(() => {
+                                        const fromBook = getUniqueValues(priceBook.Surrounds, 'type');
+                                        const opts = fromBook.length > 0 ? fromBook : ['Full Kerb', 'Half Kerb', 'Cremation Kerb', 'Vase Kerb'];
+                                        return opts.map(t => `<option value="${t}" ${order.surroundType === t ? 'selected' : ''}>${t}</option>`).join('');
+                                    })()}
                                 </select>
                                 <div class="price-indicator" id="pi_surround"></div>
                             </div>
@@ -1275,14 +1273,11 @@
                                 <label>Stone / Chippings</label>
                                 <select name="stoneType" id="f_stoneType" onchange="updateFormPrices()">
                                     <option value="">None</option>
-                                    <option value="White Marble" ${order.stoneType === 'White Marble' ? 'selected' : ''}>White Marble</option>
-                                    <option value="Black Granite" ${order.stoneType === 'Black Granite' ? 'selected' : ''}>Black Granite</option>
-                                    <option value="Grey Granite" ${order.stoneType === 'Grey Granite' ? 'selected' : ''}>Grey Granite</option>
-                                    <option value="Pea Gravel" ${order.stoneType === 'Pea Gravel' ? 'selected' : ''}>Pea Gravel</option>
-                                    <option value="Slate" ${order.stoneType === 'Slate' ? 'selected' : ''}>Slate</option>
-                                    ${getUniqueValues(priceBook.Stones, 'type').filter(t => !['White Marble','Black Granite','Grey Granite','Pea Gravel','Slate'].includes(t)).map(t =>
-                                        `<option value="${t}" ${order.stoneType === t ? 'selected' : ''}>${t}</option>`
-                                    ).join('')}
+                                    ${(() => {
+                                        const fromBook = getUniqueValues(priceBook.Stones, 'type');
+                                        const opts = fromBook.length > 0 ? fromBook : ['White Marble', 'Black Granite', 'Grey Granite', 'Pea Gravel', 'Slate'];
+                                        return opts.map(t => `<option value="${t}" ${order.stoneType === t ? 'selected' : ''}>${t}</option>`).join('');
+                                    })()}
                                 </select>
                                 <div class="price-indicator" id="pi_stone"></div>
                             </div>
