@@ -374,14 +374,22 @@
         /* ── LIVE PRICE INDICATORS (form) ── */
         .price-indicator {
             display: flex;
-            gap: 0.6rem;
-            align-items: center;
-            margin-top: 0.3rem;
-            font-size: 0.78rem;
+            flex-direction: column;
+            gap: 0.15rem;
+            margin-top: 0.35rem;
             min-height: 1.3em;
-            flex-wrap: wrap;
         }
-        .pi-cost { color: var(--text-muted); }
+        .pi-retail-big {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--green);
+            line-height: 1.2;
+        }
+        .pi-cost-small {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+        .pi-cost { color: var(--text-muted); font-size: 0.75rem; }
         .pi-retail { color: var(--green); font-weight: 700; }
         .pi-profit { color: var(--cyan); font-size: 0.72rem; }
         .pi-sep { color: var(--border); }
@@ -1383,18 +1391,26 @@
                     </div>
 
                     <!-- Live Totals -->
-                    <div class="live-totals" id="liveTotals">
-                        <div class="lt-col">
-                            <div class="lt-label">Mason Cost</div>
-                            <div class="lt-value" id="lt_cost">£0.00</div>
+                    <div style="background:var(--green);color:white;border-radius:8px;overflow:hidden;margin:1rem 0;">
+                        <div style="padding:0.6rem 1.5rem;background:rgba(0,0,0,0.15);font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">
+                            Order Summary
                         </div>
-                        <div class="lt-col">
-                            <div class="lt-label">Customer Total</div>
-                            <div class="lt-value" id="lt_sell">£0.00</div>
-                        </div>
-                        <div class="lt-col">
-                            <div class="lt-label">Your Profit</div>
-                            <div class="lt-value" id="lt_profit">£0.00</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid rgba(255,255,255,0.15);">
+                            <div style="padding:1rem 1.5rem;border-right:1px solid rgba(255,255,255,0.15);">
+                                <div style="font-size:0.7rem;opacity:0.75;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.3rem;">Customer Retail</div>
+                                <div style="font-size:1.8rem;font-weight:700;line-height:1;" id="lt_sell">£0.00</div>
+                                <div style="font-size:0.72rem;opacity:0.7;margin-top:0.2rem;">what customer pays</div>
+                            </div>
+                            <div style="padding:1rem 1.5rem;border-right:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.1);">
+                                <div style="font-size:0.7rem;opacity:0.75;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.3rem;">Mason Cost</div>
+                                <div style="font-size:1.8rem;font-weight:700;line-height:1;" id="lt_cost">£0.00</div>
+                                <div style="font-size:0.72rem;opacity:0.7;margin-top:0.2rem;">what you pay mason</div>
+                            </div>
+                            <div style="padding:1rem 1.5rem;">
+                                <div style="font-size:0.7rem;opacity:0.75;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.3rem;">Your Profit</div>
+                                <div style="font-size:1.8rem;font-weight:700;line-height:1;" id="lt_profit">£0.00</div>
+                                <div style="font-size:0.72rem;opacity:0.7;margin-top:0.2rem;">retail minus cost</div>
+                            </div>
                         </div>
                     </div>
 
@@ -1446,13 +1462,10 @@
         function showPI(id, cost, sell) {
             const el = document.getElementById(id);
             if (!el) return;
-            if (!cost && !sell) { el.innerHTML = ''; return; }
-            const profit = sell - cost;
+            if (!sell && !cost) { el.innerHTML = ''; return; }
             el.innerHTML =
-                `<span class="pi-cost">Cost £${cost.toFixed(2)}</span>` +
-                `<span class="pi-sep">|</span>` +
-                `<span class="pi-retail">Retail £${sell.toFixed(2)}</span>` +
-                (profit > 0 ? `<span class="pi-profit">(+£${profit.toFixed(2)})</span>` : '');
+                `<span class="pi-retail-big">£${sell.toFixed(2)}</span>` +
+                `<span class="pi-cost-small">Mason cost: £${cost.toFixed(2)}</span>`;
         }
 
         function updateFormPrices() {
