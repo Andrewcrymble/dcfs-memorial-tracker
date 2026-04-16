@@ -499,14 +499,17 @@
 
         // Upload PDF to Drive then send WhatsApp with link
         async function sendPdfToWhatsApp(doc, docType, filename, summaryLines) {
+            const emoji = docType === 'Estimate' ? '📄' : docType === 'Invoice' ? '🧾' : '🔨';
+
             try {
                 // Convert PDF to base64
                 const base64 = doc.output('datauristring').split(',')[1];
 
-                // Upload to the order's Google Drive folder
+                // Upload to the order's Google Drive folder.
+                // IMPORTANT: no Content-Type header — keeps this a "simple" CORS request
+                // so the browser doesn't preflight and Apps Script can reply with the link.
                 const resp = await fetch(SCRIPT_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'uploadFile',
                         orderId: currentOrder.orderId,
@@ -519,27 +522,31 @@
                     })
                 });
 
-                const result = await resp.json();
+                let result = {};
+                try { result = await resp.json(); } catch(e) { console.warn('JSON parse error on upload response', e); }
 
                 if (result.success && result.viewUrl) {
-                    // Rich WhatsApp message with Drive link
-                    const emoji = docType === 'Estimate' ? '📄' : docType === 'Invoice' ? '🧾' : '🔨';
                     const msg = `${emoji} *${docType.toUpperCase()}*\n\n` +
                         summaryLines.join('\n') +
                         `\n\n📎 *View PDF:*\n${result.viewUrl}`;
                     await sendToWhatsApp(msg);
                     console.log('PDF uploaded and WhatsApp sent:', result.viewUrl);
                 } else {
-                    // Drive upload failed — send text-only notification
-                    const emoji = docType === 'Estimate' ? '📄' : docType === 'Invoice' ? '🧾' : '🔨';
-                    await sendToWhatsApp(`${emoji} *${docType.toUpperCase()}*\n\n` + summaryLines.join('\n') + '\n\n(PDF saved to device — Drive upload failed)');
+                    console.warn('Drive upload returned no viewUrl:', result);
+                    await sendToWhatsApp(
+                        `${emoji} *${docType.toUpperCase()}*\n\n` +
+                        summaryLines.join('\n') +
+                        '\n\n(PDF saved to your device)'
+                    );
                 }
             } catch (err) {
                 console.warn('sendPdfToWhatsApp error:', err);
-                // Still send a text notification as fallback
+                // Fallback — send text-only so at least the group is notified
                 try {
-                    const emoji = docType === 'Estimate' ? '📄' : docType === 'Invoice' ? '🧾' : '🔨';
-                    await sendToWhatsApp(`${emoji} *${docType.toUpperCase()} GENERATED*\n\n` + summaryLines.join('\n'));
+                    await sendToWhatsApp(
+                        `${emoji} *${docType.toUpperCase()} GENERATED*\n\n` +
+                        summaryLines.join('\n')
+                    );
                 } catch(e) {}
             }
         }
