@@ -810,15 +810,17 @@
 
             console.log('Rendering details for order:', currentOrder);
 
-            const total = calculateTotal(currentOrder);
-            
+            // Use stored total from sheet; fall back to recalculation if 0
+            const storedTotal = parseFloat(currentOrder.totalSellPrice) || 0;
+            const total = storedTotal > 0 ? storedTotal : calculateTotal(currentOrder);
+
             const contentArea = document.getElementById('contentArea');
-            
+
             if (!contentArea) {
                 console.error('Content area element not found!');
                 return;
             }
-            
+
             contentArea.innerHTML = `
                 <div class="order-header">
                     <div class="order-title">${currentOrder.orderRef || currentOrder.orderId || 'New Order'}</div>
