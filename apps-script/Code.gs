@@ -6,7 +6,7 @@
 const SHEET_NAME = "Orders";
 const SHEET_ID = "1ExWjciizjHCvVdbgkQVvk4qyCvtFraWs2qKZHgldJ3Y";
 const DRIVE_FOLDER_ID = "1nAxdUKug-s3pEQnX9RCps86crK--Vd4k";
-const PRICE_BOOK_ID = "1ik2L8fxI2PcPZa1GuQQ6jVzFpZXINpqEzesWlyCWXR8"; // Separate pricing sheet
+const PRICE_BOOK_ID = SHEET_ID; // Same sheet as orders — pricing tabs live here too
 
 const HEADERS = [
   "Order ID", "Created", "Last Updated", "Status", "Payment Status",
@@ -189,7 +189,6 @@ function getOrCreateSheet() {
 
 // ── PRICE BOOK LOADING ──
 function loadPriceBook() {
-  // Read from the dedicated pricing sheet
   const ss = SpreadsheetApp.openById(PRICE_BOOK_ID);
   const priceBook = {};
   
