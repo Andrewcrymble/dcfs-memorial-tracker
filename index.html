@@ -3098,8 +3098,7 @@
             else if (currentOrder.inscriptionText)
                 row('New Inscription', 'Included (within 100 letters)', null);
 
-            if (totals.breakdown.cemeteryFee > 0)
-                row('Cemetery Fee', currentOrder.cemetery, totals.breakdown.cemeteryFee);
+            // Cemetery fee is a pass-through — paid directly to cemetery, not the mason — excluded from job card
 
             // Extra charges (mason-facing only)
             (totals.breakdown.extraCharges || []).forEach(ec => {
@@ -3109,11 +3108,12 @@
                 row(label, ec.type === 'discount' ? 'Applied discount' : 'Additional charge', sign * ec.amount);
             });
 
-            // Total to mason
+            // Total to mason (cemetery fee is a pass-through — not included)
+            const masonTotal = totals.totalCost - (totals.breakdown.cemeteryFee || 0);
             y += 2;
             doc.setDrawColor(0,0,0); doc.setLineWidth(0.5); doc.line(20, y, 190, y); y += 5;
             doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(0,0,0);
-            doc.text('TOTAL TO MASON', 23, y); doc.text(`£${totals.totalCost.toFixed(2)}`, 188, y, { align: 'right' });
+            doc.text('TOTAL TO MASON', 23, y); doc.text(`£${masonTotal.toFixed(2)}`, 188, y, { align: 'right' });
             doc.setLineWidth(0.5); doc.line(20, y + 4, 190, y + 4);
             y += 14;
 
