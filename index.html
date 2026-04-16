@@ -898,7 +898,7 @@
                             <div class="data-grid-3">
                                 <div class="data-row"><div class="data-label">Type</div>${val(o.hsType)}</div>
                                 <div class="data-row"><div class="data-label">Size</div>${val(o.hsSize)}</div>
-                                <div class="data-row"><div class="data-label">Colour</div>${val(o.hsColour)}</div>
+                                <div class="data-row"><div class="data-label">Colour</div>${val(colourDisplayName(o.hsColour, false) || o.hsColour)}</div>
                                 <div class="data-row"><div class="data-label">Finish</div>${val(o.hsFinish)}</div>
                                 <div class="data-row"><div class="data-label">Surround</div>${val(o.surroundType)}</div>
                                 <div class="data-row"><div class="data-label">Stone/Chippings</div>${val(o.stoneType)}</div>
@@ -998,6 +998,44 @@
                     </div>
                 </div>` : ''}
 
+                <!-- Additional Charges & Discounts (if any) -->
+                ${(o.extraCharges && o.extraCharges.length > 0) ? `
+                <div class="card detail-grid-wide" style="margin-bottom:0;">
+                    <div class="card-header">
+                        <span class="card-header-icon">➕</span>
+                        <span class="card-header-title">Additional Charges & Discounts</span>
+                    </div>
+                    <div class="card-body" style="padding:0;">
+                        <table style="width:100%;border-collapse:collapse;">
+                            <thead>
+                                <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
+                                    <th style="padding:0.5rem 0.6rem;text-align:left;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;">Description</th>
+                                    <th style="padding:0.5rem 0.6rem;text-align:center;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;">Type</th>
+                                    <th style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;">Amount</th>
+                                    <th style="padding:0.5rem 0.6rem;text-align:center;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;">Applies To</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${o.extraCharges.map(ec => {
+                                    const sign = ec.type === 'discount' ? -1 : 1;
+                                    const amt = sign * (parseFloat(ec.amount) || 0);
+                                    const typeTag = ec.type === 'discount'
+                                        ? `<span style="background:#fef9c3;color:#854d0e;padding:0.1rem 0.5rem;border-radius:4px;font-size:0.75rem;font-weight:600;">▼ Discount</span>`
+                                        : `<span style="background:#fce7f3;color:#9d174d;padding:0.1rem 0.5rem;border-radius:4px;font-size:0.75rem;font-weight:600;">▲ Charge</span>`;
+                                    const custBadge = (ec.applyToCustomer !== false) ? `<span style="background:#e0f2fe;color:#0369a1;padding:0.1rem 0.4rem;border-radius:4px;font-size:0.72rem;font-weight:600;">Customer</span>` : '';
+                                    const masonBadge = ec.applyToMason ? `<span style="background:#dcfce7;color:#15803d;padding:0.1rem 0.4rem;border-radius:4px;font-size:0.72rem;font-weight:600;">Mason</span>` : '';
+                                    return `<tr style="border-bottom:1px solid #f3f4f6;">
+                                        <td style="padding:0.5rem 0.6rem;font-size:0.85rem;font-weight:600;">${ec.description}</td>
+                                        <td style="padding:0.5rem 0.6rem;text-align:center;">${typeTag}</td>
+                                        <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:${amt < 0 ? '#16a34a' : '#dc2626'};">${amt < 0 ? '-' : '+'}£${Math.abs(amt).toFixed(2)}</td>
+                                        <td style="padding:0.5rem 0.6rem;text-align:center;display:flex;gap:0.3rem;justify-content:center;flex-wrap:wrap;">${custBadge} ${masonBadge}</td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>` : ''}
+
                 <!-- Cost vs Retail Breakdown -->
                 ${(() => {
                     const t = calculateOrderTotals(o);
@@ -1023,7 +1061,7 @@
 
                     let tableRows = '';
                     tableRows += bRow(`${o.hsType || 'Headstone'} — ${o.hsSize || ''}`,
-                        `${o.hsColour || 'Black'}${o.hsFinish ? ' · ' + o.hsFinish : ''}`,
+                        `${colourDisplayName(o.hsColour, false) || 'Black'}${o.hsFinish ? ' · ' + o.hsFinish : ''}`,
                         b.headstone.cost, b.headstone.sell);
                     tableRows += bRow(o.surroundType || 'Surround',
                         o.surroundGranite ? 'Incl. Granite Foundation' : '',
@@ -1036,6 +1074,18 @@
                             `${b.inscription.letterCount || ''} letters`, b.inscription.cost, b.inscription.sell);
                     if (b.cemeteryFee > 0)
                         tableRows += bRow('Cemetery Fee', o.cemetery || '', b.cemeteryFee, b.cemeteryFee);
+
+                    (b.extraCharges || []).forEach(ec => {
+                        const sign = ec.type === 'discount' ? -1 : 1;
+                        const custAmt = ec.applyToCustomer ? sign * ec.amount : 0;
+                        const masonAmt = ec.applyToMason ? sign * ec.amount : 0;
+                        const applies = [ec.applyToCustomer ? 'Customer' : '', ec.applyToMason ? 'Mason' : ''].filter(Boolean).join(' & ');
+                        tableRows += bRow(
+                            `${ec.type === 'discount' ? '▼ Discount' : '▲ Charge'}: ${ec.description}`,
+                            `Applies to: ${applies}`,
+                            masonAmt, custAmt
+                        );
+                    });
 
                     const dep = parseFloat(o.depositPaid) || 0;
                     const bal = Math.max(0, t.totalSell - dep);
@@ -1164,10 +1214,13 @@
                 }
             }
 
-            // Extra charges
+            // Extra charges (customer-facing only in this legacy total)
             if (order.extraCharges && Array.isArray(order.extraCharges)) {
                 order.extraCharges.forEach(charge => {
-                    total += parseFloat(charge.amount || 0);
+                    if (charge.applyToCustomer !== false) {
+                        const sign = charge.type === 'discount' ? -1 : 1;
+                        total += sign * (parseFloat(charge.amount) || 0);
+                    }
                 });
             }
 
@@ -1178,6 +1231,16 @@
         function countLetters(text) {
             if (!text) return 0;
             return text.replace(/[^a-zA-Z0-9]/g, '').length;
+        }
+
+        // Return display name for headstone colour
+        // forMason=true → Bahama Blue; forMason=false → Visac Blue
+        function colourDisplayName(colour, forMason) {
+            if (!colour) return '';
+            if (colour === 'Visac Blue' || colour === 'Bahamas Blue' || colour === 'Bahamas Blue (Visac Blue)') {
+                return forMason ? 'Bahama Blue' : 'Visac Blue';
+            }
+            return colour;
         }
 
         // Render price breakdown — supports both old and new Apps Script field names
@@ -1226,7 +1289,10 @@
 
             if (order.extraCharges && Array.isArray(order.extraCharges)) {
                 order.extraCharges.forEach(charge => {
-                    html += `<div class="price-line"><span class="price-line-label">${charge.label}</span><span class="price-line-amount">£${parseFloat(charge.amount).toFixed(2)}</span></div>`;
+                    const sign = charge.type === 'discount' ? -1 : 1;
+                    const amt = sign * (parseFloat(charge.amount) || 0);
+                    const label = charge.type === 'discount' ? `Discount: ${charge.description}` : `Additional Charge: ${charge.description}`;
+                    html += `<div class="price-line"><span class="price-line-label">${label}</span><span class="price-line-amount" style="color:${amt < 0 ? '#16a34a' : 'inherit'};">${amt < 0 ? '-' : ''}£${Math.abs(amt).toFixed(2)}</span></div>`;
                 });
             }
 
@@ -1582,7 +1648,7 @@
                                     <option value="">Select colour</option>
                                     <option value="Black" ${order.hsColour === 'Black' ? 'selected' : ''}>Black (standard)</option>
                                     <option value="SA Impala" ${order.hsColour === 'SA Impala' ? 'selected' : ''}>SA Impala (+£50)</option>
-                                    <option value="Bahamas Blue" ${order.hsColour === 'Bahamas Blue' ? 'selected' : ''}>Bahamas Blue (+£100)</option>
+                                    <option value="Visac Blue" ${(order.hsColour === 'Visac Blue' || order.hsColour === 'Bahamas Blue') ? 'selected' : ''}>Visac Blue (+£100)</option>
                                     <option value="Grey" ${order.hsColour === 'Grey' ? 'selected' : ''}>Grey (-£50)</option>
                                     <option value="Ruby Red" ${order.hsColour === 'Ruby Red' ? 'selected' : ''}>Ruby Red (+£150)</option>
                                     <option value="Other" ${order.hsColour === 'Other' ? 'selected' : ''}>Other</option>
@@ -1748,6 +1814,35 @@
                         </div>
                     </div>
 
+                    <!-- Additional Charges & Discounts -->
+                    <div class="form-section">
+                        <div class="section-title">➕ Additional Charges & Discounts</div>
+                        <div id="extraChargesList" style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem;">
+                            ${(order.extraCharges || []).map((c, i) => `
+                            <div class="extra-charge-row" data-id="${c.id || 'ec_'+i}" style="display:grid;grid-template-columns:1fr 110px 90px auto auto auto;gap:0.4rem;align-items:center;background:white;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.6rem;">
+                                <input type="text" placeholder="Description e.g. Rush fee, Loyalty discount" value="${c.description || ''}" class="ec-desc" oninput="updateFormPrices()" style="border:1px solid #d1d5db;border-radius:4px;padding:0.3rem 0.5rem;font-size:0.85rem;">
+                                <select class="ec-type" onchange="updateFormPrices()" style="border:1px solid #d1d5db;border-radius:4px;padding:0.3rem 0.4rem;font-size:0.82rem;">
+                                    <option value="charge" ${(c.type||'charge')==='charge' ? 'selected' : ''}>▲ Charge</option>
+                                    <option value="discount" ${c.type==='discount' ? 'selected' : ''}>▼ Discount</option>
+                                </select>
+                                <div style="display:flex;align-items:center;gap:0.2rem;">
+                                    <span style="color:#6b7280;font-size:0.85rem;">£</span>
+                                    <input type="number" placeholder="0.00" value="${c.amount || ''}" class="ec-amount" min="0" step="0.01" oninput="updateFormPrices()" style="width:100%;border:1px solid #d1d5db;border-radius:4px;padding:0.3rem 0.4rem;font-size:0.85rem;">
+                                </div>
+                                <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.8rem;cursor:pointer;white-space:nowrap;padding:0.2rem 0.4rem;background:#e0f7fa;border-radius:4px;">
+                                    <input type="checkbox" class="ec-customer" ${c.applyToCustomer !== false ? 'checked' : ''} onchange="updateFormPrices()" style="accent-color:#0891b2;">
+                                    Customer
+                                </label>
+                                <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.8rem;cursor:pointer;white-space:nowrap;padding:0.2rem 0.4rem;background:#f0fdf4;border-radius:4px;">
+                                    <input type="checkbox" class="ec-mason" ${c.applyToMason ? 'checked' : ''} onchange="updateFormPrices()" style="accent-color:#16a34a;">
+                                    Mason
+                                </label>
+                                <button type="button" onclick="removeExtraChargeRow(this)" style="background:#fff1f2;border:1px solid #fca5a5;border-radius:4px;padding:0.25rem 0.5rem;font-size:0.85rem;cursor:pointer;color:#dc2626;">🗑</button>
+                            </div>`).join('')}
+                        </div>
+                        <button type="button" onclick="addExtraChargeRow()" style="padding:0.4rem 1rem;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;font-size:0.85rem;font-weight:600;cursor:pointer;">+ Add Charge / Discount</button>
+                    </div>
+
                     <!-- Notes -->
                     <div class="form-section">
                         <div class="section-title">📝 Notes</div>
@@ -1794,6 +1889,51 @@
 
             document.getElementById('orderModal').classList.add('active');
             setTimeout(updateFormPrices, 50);
+        }
+
+        // ── Extra charges form helpers ──────────────────────────────
+        function addExtraChargeRow() {
+            const list = document.getElementById('extraChargesList');
+            if (!list) return;
+            const id = 'ec_' + Date.now();
+            const row = document.createElement('div');
+            row.className = 'extra-charge-row';
+            row.dataset.id = id;
+            row.style.cssText = 'display:grid;grid-template-columns:1fr 110px 90px auto auto auto;gap:0.4rem;align-items:center;background:white;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.6rem;';
+            row.innerHTML = `
+                <input type="text" placeholder="Description e.g. Rush fee, Loyalty discount" class="ec-desc" oninput="updateFormPrices()" style="border:1px solid #d1d5db;border-radius:4px;padding:0.3rem 0.5rem;font-size:0.85rem;">
+                <select class="ec-type" onchange="updateFormPrices()" style="border:1px solid #d1d5db;border-radius:4px;padding:0.3rem 0.4rem;font-size:0.82rem;">
+                    <option value="charge">▲ Charge</option>
+                    <option value="discount">▼ Discount</option>
+                </select>
+                <div style="display:flex;align-items:center;gap:0.2rem;">
+                    <span style="color:#6b7280;font-size:0.85rem;">£</span>
+                    <input type="number" placeholder="0.00" class="ec-amount" min="0" step="0.01" oninput="updateFormPrices()" style="width:100%;border:1px solid #d1d5db;border-radius:4px;padding:0.3rem 0.4rem;font-size:0.85rem;">
+                </div>
+                <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.8rem;cursor:pointer;white-space:nowrap;padding:0.2rem 0.4rem;background:#e0f7fa;border-radius:4px;">
+                    <input type="checkbox" class="ec-customer" checked onchange="updateFormPrices()" style="accent-color:#0891b2;"> Customer
+                </label>
+                <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.8rem;cursor:pointer;white-space:nowrap;padding:0.2rem 0.4rem;background:#f0fdf4;border-radius:4px;">
+                    <input type="checkbox" class="ec-mason" onchange="updateFormPrices()" style="accent-color:#16a34a;"> Mason
+                </label>
+                <button type="button" onclick="removeExtraChargeRow(this)" style="background:#fff1f2;border:1px solid #fca5a5;border-radius:4px;padding:0.25rem 0.5rem;font-size:0.85rem;cursor:pointer;color:#dc2626;">🗑</button>`;
+            list.appendChild(row);
+        }
+
+        function removeExtraChargeRow(btn) {
+            btn.closest('.extra-charge-row').remove();
+            updateFormPrices();
+        }
+
+        function getExtraChargesFromForm() {
+            return Array.from(document.querySelectorAll('.extra-charge-row')).map(row => ({
+                id: row.dataset.id || ('ec_' + Date.now()),
+                description: row.querySelector('.ec-desc')?.value?.trim() || '',
+                type: row.querySelector('.ec-type')?.value || 'charge',
+                amount: parseFloat(row.querySelector('.ec-amount')?.value) || 0,
+                applyToCustomer: row.querySelector('.ec-customer')?.checked ?? true,
+                applyToMason: row.querySelector('.ec-mason')?.checked ?? false
+            })).filter(c => c.description && c.amount > 0);
         }
 
         // Get unique values from price book with hardcoded fallbacks
@@ -1886,7 +2026,11 @@
             // Colour adjustment
             const hsColour = val('f_hsColour');
             if (hsColour && priceBook.Headstone_Colours) {
-                const col = priceBook.Headstone_Colours.find(c => c.name === hsColour || c.colour === hsColour);
+                const col = priceBook.Headstone_Colours.find(c =>
+                    c.name === hsColour || c.colour === hsColour ||
+                    (hsColour === 'Visac Blue' && (c.name || '').toLowerCase().includes('bahamas')) ||
+                    (hsColour === 'Bahamas Blue' && (c.name || '').toLowerCase().includes('visac'))
+                );
                 if (col) { hsCost += parseFloat(col.costAdj || col.cost_adj || 0); hsSell += parseFloat(col.sellAdj || col.sell_adj || 0); }
             }
             showPI('pi_headstone', hsCost, hsSell);
@@ -1989,6 +2133,14 @@
                 }
             });
 
+            // — Extra charges / discounts —
+            getExtraChargesFromForm().forEach(c => {
+                const sign = c.type === 'discount' ? -1 : 1;
+                const amt = parseFloat(c.amount) || 0;
+                if (c.applyToCustomer !== false) totalSell += sign * amt;
+                if (c.applyToMason) totalCost += sign * amt;
+            });
+
             // — Update totals bar —
             const profit = totalSell - totalCost;
             if (g('lt_cost')) g('lt_cost').textContent = '£' + totalCost.toFixed(2);
@@ -2023,6 +2175,7 @@
                 if (key !== 'accessories') orderData[key] = value;
             }
             orderData.accessories = accessories;
+            orderData.extraCharges = getExtraChargesFromForm();
 
             // Calculate and store prices from price book (safe — won't block save if it fails)
             try {
@@ -2371,10 +2524,17 @@
     let cost = parseFloat(headstone.cost) || 0;
     let sell = parseFloat(headstone.sell) || 0;
     if (order.hsColour && order.hsColour !== 'Black') {
-        const colour = priceBook.Colours?.find(c => c.name === order.hsColour);
+        const colourBook = priceBook.Headstone_Colours || priceBook.Colours || [];
+        const lookupName = order.hsColour;
+        const colour = colourBook.find(c =>
+            c.name === lookupName || c.colour === lookupName ||
+            // Handle Visac Blue ↔ Bahamas Blue alias
+            (lookupName === 'Visac Blue' && (c.name || '').toLowerCase().includes('bahamas')) ||
+            (lookupName === 'Bahamas Blue' && (c.name || '').toLowerCase().includes('visac'))
+        );
         if (colour) {
-            cost += parseFloat(colour.costAdj) || 0;
-            sell += parseFloat(colour.sellAdj) || 0;
+            cost += parseFloat(colour.costAdj || colour.cost_adj) || 0;
+            sell += parseFloat(colour.sellAdj || colour.sell_adj) || 0;
         }
     }
     return { cost, sell, margin: sell - cost };
@@ -2491,15 +2651,28 @@
         });
     }
     
-    const totalCost = headstone.cost + surround.cost + stone.cost + 
-                     inscription.cost + cemeteryFee + accessoriesCost;
-    
-    const totalSell = headstone.sell + surround.sell + stone.sell + 
-                     inscription.sell + cemeteryFee + accessoriesSell;
-    
+    // Extra charges / discounts
+    let extraCost = 0, extraSell = 0;
+    const extraChargesBreakdown = [];
+    (order.extraCharges || []).forEach(c => {
+        const sign = c.type === 'discount' ? -1 : 1;
+        const amt = parseFloat(c.amount) || 0;
+        const sellAmt = (c.applyToCustomer !== false) ? sign * amt : 0;
+        const costAmt = c.applyToMason ? sign * amt : 0;
+        extraSell += sellAmt;
+        extraCost += costAmt;
+        extraChargesBreakdown.push({ description: c.description, type: c.type, amount: amt, applyToCustomer: c.applyToCustomer !== false, applyToMason: !!c.applyToMason, sellEffect: sellAmt, costEffect: costAmt });
+    });
+
+    const totalCost = headstone.cost + surround.cost + stone.cost +
+                     inscription.cost + cemeteryFee + accessoriesCost + extraCost;
+
+    const totalSell = headstone.sell + surround.sell + stone.sell +
+                     inscription.sell + cemeteryFee + accessoriesSell + extraSell;
+
     const profitMargin = totalSell - totalCost;
     const marginPercentage = totalSell > 0 ? (profitMargin / totalSell) * 100 : 0;
-    
+
     return {
         breakdown: {
             headstone,
@@ -2507,7 +2680,8 @@
             stone,
             inscription,
             cemeteryFee,
-            accessories: { cost: accessoriesCost, sell: accessoriesSell, margin: accessoriesSell - accessoriesCost }
+            accessories: { cost: accessoriesCost, sell: accessoriesSell, margin: accessoriesSell - accessoriesCost },
+            extraCharges: extraChargesBreakdown
         },
         totalCost,
         totalSell,
@@ -2559,7 +2733,7 @@
 
             if (totals.breakdown.headstone.sell > 0)
                 row(`${currentOrder.hsType} Headstone — ${currentOrder.hsSize}`,
-                    `Colour: ${currentOrder.hsColour || 'Black'}${currentOrder.hsFinish ? ' · ' + currentOrder.hsFinish : ''}`,
+                    `Colour: ${colourDisplayName(currentOrder.hsColour, false) || 'Black'}${currentOrder.hsFinish ? ' · ' + currentOrder.hsFinish : ''}`,
                     totals.breakdown.headstone.sell);
 
             if (totals.breakdown.surround.sell > 0)
@@ -2581,6 +2755,14 @@
 
             if (totals.breakdown.cemeteryFee > 0)
                 row('Cemetery / Churchyard Fee', currentOrder.cemetery, totals.breakdown.cemeteryFee);
+
+            // Extra charges (customer-facing only)
+            (totals.breakdown.extraCharges || []).forEach(ec => {
+                if (!ec.applyToCustomer) return;
+                const sign = ec.type === 'discount' ? -1 : 1;
+                const label = ec.type === 'discount' ? `Discount: ${ec.description}` : `Additional Charge: ${ec.description}`;
+                row(label, ec.type === 'discount' ? 'Applied discount' : 'Additional charge', sign * ec.amount);
+            });
 
             // Divider + total
             y += 2;
@@ -2693,7 +2875,7 @@
 
             if (totals.breakdown.headstone.sell > 0)
                 row(`${currentOrder.hsType} Headstone — ${currentOrder.hsSize}`,
-                    `Colour: ${currentOrder.hsColour || 'Black'}${currentOrder.hsFinish ? ' · ' + currentOrder.hsFinish : ''}`,
+                    `Colour: ${colourDisplayName(currentOrder.hsColour, false) || 'Black'}${currentOrder.hsFinish ? ' · ' + currentOrder.hsFinish : ''}`,
                     totals.breakdown.headstone.sell);
 
             if (totals.breakdown.surround.sell > 0)
@@ -2715,6 +2897,14 @@
 
             if (totals.breakdown.cemeteryFee > 0)
                 row('Cemetery / Churchyard Fee', currentOrder.cemetery, totals.breakdown.cemeteryFee);
+
+            // Extra charges (customer-facing only)
+            (totals.breakdown.extraCharges || []).forEach(ec => {
+                if (!ec.applyToCustomer) return;
+                const sign = ec.type === 'discount' ? -1 : 1;
+                const label = ec.type === 'discount' ? `Discount: ${ec.description}` : `Additional Charge: ${ec.description}`;
+                row(label, ec.type === 'discount' ? 'Applied discount' : 'Additional charge', sign * ec.amount);
+            });
 
             // Totals section
             y += 2;
@@ -2860,7 +3050,7 @@
 
             if (currentOrder.hsType || currentOrder.hsSize)
                 row(`${currentOrder.hsType || ''} Headstone — ${currentOrder.hsSize || ''}`,
-                    `Colour: ${currentOrder.hsColour || 'Black'}${currentOrder.hsFinish ? ' · ' + currentOrder.hsFinish : ''}`,
+                    `Colour: ${colourDisplayName(currentOrder.hsColour, true) || 'Black'}${currentOrder.hsFinish ? ' · ' + currentOrder.hsFinish : ''}`,
                     totals.breakdown.headstone.cost > 0 ? totals.breakdown.headstone.cost : null);
 
             if (totals.breakdown.surround.cost > 0)
@@ -2882,6 +3072,14 @@
 
             if (totals.breakdown.cemeteryFee > 0)
                 row('Cemetery Fee', currentOrder.cemetery, totals.breakdown.cemeteryFee);
+
+            // Extra charges (mason-facing only)
+            (totals.breakdown.extraCharges || []).forEach(ec => {
+                if (!ec.applyToMason) return;
+                const sign = ec.type === 'discount' ? -1 : 1;
+                const label = ec.type === 'discount' ? `Discount: ${ec.description}` : `Additional Charge: ${ec.description}`;
+                row(label, ec.type === 'discount' ? 'Applied discount' : 'Additional charge', sign * ec.amount);
+            });
 
             // Total to mason
             y += 2;
