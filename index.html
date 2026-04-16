@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DC&S Headstone Order Tracker</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -975,16 +976,40 @@
 
                 </div>
 
+                <!-- Payment card (shown when payment link exists) -->
+                ${o.stripePaymentUrl ? `
+                <div class="card detail-grid-wide" style="border:2px solid #635bff;">
+                    <div class="card-header" style="background:#f5f4ff;">
+                        <span class="card-header-icon">💳</span>
+                        <span class="card-header-title" style="color:#635bff;">Stripe Payment Link</span>
+                        <span style="margin-left:auto;font-size:0.78rem;color:#635bff;font-weight:600;">Balance Due: £${(Math.max(0, total - (parseFloat(o.depositPaid)||0))).toFixed(2)}</span>
+                    </div>
+                    <div class="card-body" style="display:flex;gap:2rem;align-items:flex-start;flex-wrap:wrap;">
+                        <div id="qrcode_display" style="flex-shrink:0;"></div>
+                        <div style="flex:1;min-width:200px;">
+                            <div style="font-size:0.85rem;color:#374151;margin-bottom:0.75rem;">Share this link or QR code with the customer to collect payment via card, Apple Pay or Google Pay.</div>
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                <a href="${o.stripePaymentUrl}" target="_blank" style="padding:0.45rem 1rem;background:#635bff;color:white;border-radius:6px;text-decoration:none;font-size:0.85rem;font-weight:600;">🔗 Open Payment Page</a>
+                                <button onclick="navigator.clipboard.writeText('${o.stripePaymentUrl}').then(()=>alert('Link copied!'))" style="padding:0.45rem 1rem;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;font-size:0.85rem;font-weight:600;cursor:pointer;">📋 Copy Link</button>
+                                <button onclick="sendPaymentLinkWhatsApp()" style="padding:0.45rem 1rem;background:#25d366;color:white;border:none;border-radius:6px;font-size:0.85rem;font-weight:600;cursor:pointer;">💬 Send via WhatsApp</button>
+                            </div>
+                            <div style="margin-top:0.75rem;font-size:0.75rem;color:#9ca3af;word-break:break-all;">${o.stripePaymentUrl}</div>
+                        </div>
+                    </div>
+                </div>` : ''}
+
                 <!-- Action Bar -->
                 <div class="action-bar">
                     <button class="btn btn-outline" onclick="editOrder()">✏️ Edit Order</button>
                     <button class="btn btn-cyan" onclick="generateEstimate()">📄 Estimate</button>
                     <button class="btn btn-cyan" onclick="generateMasonJobCard()">🔨 Job Card</button>
                     <button class="btn btn-cyan" onclick="generateInvoice()">🧾 Invoice</button>
+                    <button class="btn" style="background:#635bff;color:white;" onclick="createPaymentLink()">💳 Payment Link</button>
                     <div class="spacer"></div>
                     <button class="btn btn-danger" onclick="deleteOrder()">🗑️ Delete</button>
                 </div>
             `;
+            maybeRenderQR();
         }
 
         // Calculate total
@@ -1644,7 +1669,7 @@
             `;
 
             document.getElementById('orderModal').classList.add('active');
-            updateFormPrices();
+            setTimeout(updateFormPrices, 50);
         }
 
         // Get unique values from price book with hardcoded fallbacks
@@ -2897,6 +2922,104 @@
                 text: text
             });
             saveOrder(currentOrder);
+        }
+
+        // ── STRIPE PAYMENT LINK ──────────────────────────────────
+        async function createPaymentLink() {
+            if (!currentOrder) return;
+
+            const total = parseFloat(currentOrder.totalSellPrice || 0);
+            const deposit = parseFloat(currentOrder.depositPaid || 0);
+            const balance = Math.max(0, total - deposit);
+
+            if (balance <= 0) {
+                alert('Balance is £0 — nothing to charge.');
+                return;
+            }
+
+            // If link already exists ask if they want a new one
+            if (currentOrder.stripePaymentUrl) {
+                if (!confirm(`A payment link already exists for this order.\n\nCreate a new one for £${balance.toFixed(2)}?`)) return;
+            }
+
+            const btn = event.target;
+            btn.textContent = '⏳ Creating…';
+            btn.disabled = true;
+
+            try {
+                const resp = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'createPaymentLink',
+                        orderId: currentOrder.orderId,
+                        orderRef: currentOrder.orderRef || currentOrder.orderId,
+                        customerName: currentOrder.customerName,
+                        deceasedName: currentOrder.deceasedName,
+                        amountPence: Math.round(balance * 100),
+                        description: `Memorial headstone — ${currentOrder.deceasedName || 'order'} (Ref: ${(currentOrder.orderRef||'').slice(-8).toUpperCase()})`
+                    })
+                });
+
+                const result = await resp.json();
+
+                if (result.success && result.url) {
+                    currentOrder.stripePaymentUrl = result.url;
+                    currentOrder.stripeLinkId = result.linkId;
+                    await saveOrder(currentOrder);
+                    renderOrderDetails();
+                    // Render QR after DOM update
+                    setTimeout(() => renderQRCode(result.url), 200);
+                    // Send to WhatsApp automatically
+                    sendPaymentLinkWhatsApp();
+                } else {
+                    alert('Failed to create payment link: ' + (result.message || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            } finally {
+                btn.textContent = '💳 Payment Link';
+                btn.disabled = false;
+            }
+        }
+
+        function renderQRCode(url) {
+            const el = document.getElementById('qrcode_display');
+            if (!el || !url) return;
+            el.innerHTML = '';
+            try {
+                new QRCode(el, {
+                    text: url,
+                    width: 120,
+                    height: 120,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            } catch(e) {
+                el.innerHTML = `<a href="${url}" target="_blank" style="font-size:0.75rem;">View payment page</a>`;
+            }
+        }
+
+        // Called after renderOrderDetails to draw QR if link exists
+        function maybeRenderQR() {
+            if (currentOrder && currentOrder.stripePaymentUrl) {
+                setTimeout(() => renderQRCode(currentOrder.stripePaymentUrl), 100);
+            }
+        }
+
+        function sendPaymentLinkWhatsApp() {
+            if (!currentOrder || !currentOrder.stripePaymentUrl) return;
+            const total = parseFloat(currentOrder.totalSellPrice || 0);
+            const deposit = parseFloat(currentOrder.depositPaid || 0);
+            const balance = Math.max(0, total - deposit);
+            const ref = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
+            const msg = `💳 *PAYMENT REQUEST — DC&S Memorials*\n\n` +
+                `Customer: ${currentOrder.customerName}\n` +
+                `In Memory Of: ${currentOrder.deceasedName}\n` +
+                `Ref: ${ref}\n` +
+                `Amount Due: £${balance.toFixed(2)}\n\n` +
+                `Pay securely online (card, Apple Pay, Google Pay):\n${currentOrder.stripePaymentUrl}`;
+            sendToWhatsApp(msg);
         }
 
         function sendWhatsAppNotification(type, data) {

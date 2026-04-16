@@ -8,6 +8,13 @@ const SHEET_ID = "1_pbyhKL1IElgneBZHFIWG76Cv6hNKdUw0fgSHQjMN6M";
 const DRIVE_FOLDER_ID = "1nAxdUKug-s3pEQnX9RCps86crK--Vd4k";
 const PRICE_BOOK_ID = SHEET_ID; // Same sheet as orders — pricing tabs live here too
 
+// ── STRIPE ── Paste your full secret key here (never commit to GitHub)
+// ── STRIPE KEY stored securely in Apps Script Script Properties ──
+// In Apps Script editor: Project Settings → Script Properties → Add:
+//   Property name:  STRIPE_SECRET_KEY
+//   Value:          sk_live_51IbRP0C4Szi9DdRC...  (your full key)
+const STRIPE_SECRET_KEY = PropertiesService.getScriptProperties().getProperty('STRIPE_SECRET_KEY') || '';
+
 const HEADERS = [
   "Order ID", "Created", "Last Updated", "Status", "Payment Status",
   "Customer Name", "Phone", "Email", "Address",
@@ -554,10 +561,11 @@ function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
     const action = data.action || "upsert";
-    if (action === "upsert")      return upsertOrder(data.order);
-    if (action === "delete")      return deleteOrder(data.orderId);
-    if (action === "uploadFile")  return uploadFileToDrive(data);
-    if (action === "deleteFile")  return deleteFileFromDrive(data.fileId);
+    if (action === "upsert")             return upsertOrder(data.order);
+    if (action === "delete")             return deleteOrder(data.orderId);
+    if (action === "uploadFile")         return uploadFileToDrive(data);
+    if (action === "deleteFile")         return deleteFileFromDrive(data.fileId);
+    if (action === "createPaymentLink")  return handleCreatePaymentLink(data);
     return respond(false, "Unknown action");
   } catch (err) {
     return respond(false, err.toString());
@@ -951,4 +959,80 @@ function respond(success, message, data) {
   return ContentService
     .createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ============================================================
+// STRIPE PAYMENT LINK
+// ============================================================
+function handleCreatePaymentLink(data) {
+  try {
+    const { orderId, customerName, deceasedName, orderRef, amountPence, description } = data;
+
+    if (!STRIPE_SECRET_KEY || STRIPE_SECRET_KEY.startsWith("PASTE_")) {
+      return respond(false, "Stripe secret key not configured in Code.gs");
+    }
+    if (!amountPence || amountPence < 100) {
+      return respond(false, "Amount must be at least £1.00");
+    }
+
+    const auth = "Basic " + Utilities.base64Encode(STRIPE_SECRET_KEY + ":");
+
+    // 1 — Create a one-time Product for this order
+    const productPayload = {
+      "name": "DC\u0026S Memorial \u2014 " + (deceasedName || "Order") + " #" + (orderRef || orderId).slice(-8).toUpperCase(),
+      "description": description || ("Memorial headstone order for " + (customerName || "Customer"))
+    };
+    const productResp = UrlFetchApp.fetch("https://api.stripe.com/v1/products", {
+      method: "post",
+      headers: { "Authorization": auth, "Content-Type": "application/x-www-form-urlencoded" },
+      payload: encodeStripePayload(productPayload),
+      muteHttpExceptions: true
+    });
+    const product = JSON.parse(productResp.getContentText());
+    if (!product.id) return respond(false, "Stripe product error: " + productResp.getContentText());
+
+    // 2 — Create a Price for that product
+    const pricePayload = {
+      "unit_amount": String(Math.round(amountPence)),
+      "currency": "gbp",
+      "product": product.id
+    };
+    const priceResp = UrlFetchApp.fetch("https://api.stripe.com/v1/prices", {
+      method: "post",
+      headers: { "Authorization": auth, "Content-Type": "application/x-www-form-urlencoded" },
+      payload: encodeStripePayload(pricePayload),
+      muteHttpExceptions: true
+    });
+    const price = JSON.parse(priceResp.getContentText());
+    if (!price.id) return respond(false, "Stripe price error: " + priceResp.getContentText());
+
+    // 3 — Create the Payment Link
+    const linkPayload = {
+      "line_items[0][price]": price.id,
+      "line_items[0][quantity]": "1",
+      "after_completion[type]": "redirect",
+      "after_completion[redirect][url]": "https://andrewcrymble.github.io/dcfs-memorial-tracker/?paid=1"
+    };
+    const linkResp = UrlFetchApp.fetch("https://api.stripe.com/v1/payment_links", {
+      method: "post",
+      headers: { "Authorization": auth, "Content-Type": "application/x-www-form-urlencoded" },
+      payload: encodeStripePayload(linkPayload),
+      muteHttpExceptions: true
+    });
+    const link = JSON.parse(linkResp.getContentText());
+    if (!link.url) return respond(false, "Stripe link error: " + linkResp.getContentText());
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: true, url: link.url, linkId: link.id }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return respond(false, "Stripe error: " + err.toString());
+  }
+}
+
+function encodeStripePayload(obj) {
+  return Object.keys(obj).map(k =>
+    encodeURIComponent(k) + "=" + encodeURIComponent(obj[k])
+  ).join("&");
 }
