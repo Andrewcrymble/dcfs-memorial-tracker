@@ -603,7 +603,16 @@
                     allOrders = data.orders || [];
                     if (data.priceBook) {
                         priceBook = data.priceBook;
-                        console.log('Price book loaded from Apps Script:', priceBook);
+                    }
+                    // DEBUG — remove after fixing
+                    if (allOrders.length > 0) {
+                        const o = allOrders[0];
+                        console.log('=== DEBUG FIRST ORDER ===');
+                        console.log('totalSellPrice:', o.totalSellPrice);
+                        console.log('hsSellPrice:', o.hsSellPrice);
+                        console.log('inscriptionSellPrice:', o.inscriptionSellPrice);
+                        console.log('cemeteryFee:', o.cemeteryFee);
+                        console.log('Full order:', JSON.stringify(o));
                     }
                     renderOrderList();
                     delete window[callbackName];
