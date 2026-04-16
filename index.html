@@ -2969,7 +2969,7 @@
                   <label id="plOpt_full" onclick="selectPayOpt('full')" style="cursor:pointer;border:2px solid #635bff;border-radius:8px;padding:0.9rem 1rem;display:flex;justify-content:space-between;align-items:center;background:#f5f4ff;">
                     <div>
                       <div style="font-weight:600;color:#635bff;">Full Payment</div>
-                      <div style="font-size:0.78rem;color:#6b7280;">Customer pays balance in full</div>
+                      <div style="font-size:0.78rem;color:#6b7280;">Full balance paid upfront</div>
                     </div>
                     <div style="font-size:1.2rem;font-weight:700;color:#635bff;">£${full}</div>
                   </label>
@@ -2977,22 +2977,9 @@
                   <label id="plOpt_half" onclick="selectPayOpt('half')" style="cursor:pointer;border:2px solid #e5e7eb;border-radius:8px;padding:0.9rem 1rem;display:flex;justify-content:space-between;align-items:center;">
                     <div>
                       <div style="font-weight:600;color:#374151;">50% Deposit</div>
-                      <div style="font-size:0.78rem;color:#6b7280;">Secure the order with half now</div>
+                      <div style="font-size:0.78rem;color:#6b7280;max-width:240px;">50% required upon order — remainder to be paid within 7 days of completion</div>
                     </div>
-                    <div style="font-size:1.2rem;font-weight:700;color:#374151;">£${half}</div>
-                  </label>
-
-                  <label id="plOpt_custom" onclick="selectPayOpt('custom')" style="cursor:pointer;border:2px solid #e5e7eb;border-radius:8px;padding:0.9rem 1rem;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
-                      <div>
-                        <div style="font-weight:600;color:#374151;">Custom Amount</div>
-                        <div style="font-size:0.78rem;color:#6b7280;">Enter any amount</div>
-                      </div>
-                    </div>
-                    <input id="plCustomAmt" type="number" min="1" max="${full}" step="0.01" placeholder="Enter amount £"
-                      style="width:100%;padding:0.45rem 0.75rem;border:1px solid #d1d5db;border-radius:6px;font-size:0.95rem;display:none;"
-                      onclick="event.stopPropagation();selectPayOpt('custom')"
-                      oninput="selectPayOpt('custom')">
+                    <div style="font-size:1.2rem;font-weight:700;color:#374151;margin-left:1rem;">£${half}</div>
                   </label>
                 </div>
 
@@ -3015,14 +3002,12 @@
 
         function selectPayOpt(opt) {
             window._payOpt = opt;
-            ['full','half','custom'].forEach(o => {
+            ['full','half'].forEach(o => {
                 const el = document.getElementById('plOpt_' + o);
                 if (!el) return;
                 el.style.borderColor = o === opt ? '#635bff' : '#e5e7eb';
                 el.style.background  = o === opt ? '#f5f4ff' : '';
             });
-            const customInput = document.getElementById('plCustomAmt');
-            if (customInput) customInput.style.display = opt === 'custom' ? 'block' : 'none';
         }
 
         async function doCreatePaymentLink() {
@@ -3031,18 +3016,13 @@
             const opt = window._payOpt || 'full';
             let amount = balance;
             if (opt === 'half') amount = balance / 2;
-            if (opt === 'custom') {
-                const val = parseFloat(document.getElementById('plCustomAmt')?.value);
-                if (!val || val <= 0) { alert('Please enter a valid amount.'); return; }
-                amount = val;
-            }
             amount = Math.round(amount * 100) / 100;
 
             const modal = document.getElementById('paymentOptionModal');
             const btn = document.getElementById('plCreateBtn');
             if (btn) { btn.textContent = '⏳ Creating…'; btn.disabled = true; }
 
-            const label = opt === 'full' ? 'Full Payment' : opt === 'half' ? '50% Deposit' : 'Payment';
+            const label = opt === 'half' ? '50% Deposit' : 'Full Payment';
             const ref = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
 
             try {
@@ -3153,16 +3133,21 @@
 
         function sendPaymentLinkWhatsApp() {
             if (!currentOrder || !currentOrder.stripePaymentUrl) return;
-            const total = parseFloat(currentOrder.totalSellPrice || 0);
-            const deposit = parseFloat(currentOrder.depositPaid || 0);
-            const balance = Math.max(0, total - deposit);
             const ref = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
+            const label = currentOrder.stripePaymentLabel || 'Payment';
+            const amount = currentOrder.stripePaymentAmount
+                ? `£${parseFloat(currentOrder.stripePaymentAmount).toFixed(2)}`
+                : '';
+            const isDeposit = label === '50% Deposit';
+            const terms = isDeposit
+                ? `\n\n_50% deposit required to confirm your order. The remaining balance is due within 7 days of completion._`
+                : '';
             const msg = `💳 *PAYMENT REQUEST — DC&S Memorials*\n\n` +
                 `Customer: ${currentOrder.customerName}\n` +
                 `In Memory Of: ${currentOrder.deceasedName}\n` +
                 `Ref: ${ref}\n` +
-                `Amount Due: £${balance.toFixed(2)}\n\n` +
-                `Pay securely online (card, Apple Pay, Google Pay):\n${currentOrder.stripePaymentUrl}`;
+                `${label}${amount ? ': ' + amount : ''}\n\n` +
+                `Pay securely online (card, Apple Pay, Google Pay):\n${currentOrder.stripePaymentUrl}${terms}`;
             sendToWhatsApp(msg);
         }
 
