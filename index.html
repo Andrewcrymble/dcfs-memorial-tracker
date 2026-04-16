@@ -1227,6 +1227,7 @@
                     <button class="btn btn-cyan" onclick="generateMasonJobCard()">🔨 Job Card</button>
                     <button class="btn btn-cyan" onclick="generateInvoice()">🧾 Invoice</button>
                     <button class="btn" style="background:#635bff;color:white;" onclick="createPaymentLink()">💳 Payment Link</button>
+                    <button class="btn" style="background:#16a34a;color:white;" onclick="recordPaymentManual()">💰 Record Payment</button>
                     <div class="spacer"></div>
                     <button class="btn btn-danger" onclick="deleteOrder()">🗑️ Delete</button>
                 </div>
@@ -3501,6 +3502,111 @@
         }
 
         // ── STRIPE PAYMENT LINK ──────────────────────────────────
+        // ── RECORD PAYMENT MANUALLY ──────────────────────────────
+        function recordPaymentManual() {
+            if (!currentOrder) return;
+            const total   = parseFloat(currentOrder.totalSellPrice) || 0;
+            const deposit = parseFloat(currentOrder.depositPaid)    || 0;
+            const balance = Math.max(0, total - deposit);
+            const ref     = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
+
+            const existing = document.getElementById('recordPayModal');
+            if (existing) existing.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'recordPayModal';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            modal.innerHTML = `
+              <div style="background:#fff;border-radius:12px;padding:2rem;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;">
+                  <span style="font-size:1.5rem;">💰</span>
+                  <div>
+                    <div style="font-weight:700;font-size:1rem;color:#111;">Record Payment Received</div>
+                    <div style="font-size:0.8rem;color:#6b7280;">Ref: ${ref} · Balance outstanding: <strong>£${balance.toFixed(2)}</strong></div>
+                  </div>
+                </div>
+
+                <div style="margin-bottom:1rem;">
+                  <label style="font-size:0.82rem;font-weight:600;color:#374151;display:block;margin-bottom:0.4rem;">Amount Received (£)</label>
+                  <div style="display:flex;align-items:center;gap:0.5rem;border:2px solid #16a34a;border-radius:8px;padding:0.5rem 0.75rem;background:#f0fdf4;">
+                    <span style="font-weight:700;color:#15803d;font-size:1.1rem;">£</span>
+                    <input id="rp_amount" type="number" min="0.01" step="0.01" value="${balance > 0 ? balance.toFixed(2) : ''}"
+                      placeholder="0.00"
+                      style="border:none;outline:none;font-size:1.2rem;font-weight:700;color:#15803d;width:100%;background:transparent;">
+                  </div>
+                </div>
+
+                <div style="margin-bottom:1rem;">
+                  <label style="font-size:0.82rem;font-weight:600;color:#374151;display:block;margin-bottom:0.4rem;">Payment Method</label>
+                  <select id="rp_method" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:0.5rem 0.75rem;font-size:0.9rem;">
+                    <option>Bank Transfer</option>
+                    <option>Cash</option>
+                    <option>Cheque</option>
+                    <option>Stripe / Card</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+
+                <div style="margin-bottom:1.5rem;">
+                  <label style="font-size:0.82rem;font-weight:600;color:#374151;display:block;margin-bottom:0.4rem;">Note (optional)</label>
+                  <input id="rp_note" type="text" placeholder="e.g. deposit, final payment..."
+                    style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:0.5rem 0.75rem;font-size:0.9rem;">
+                </div>
+
+                <div style="display:flex;gap:0.75rem;">
+                  <button onclick="document.getElementById('recordPayModal').remove()"
+                    style="flex:1;padding:0.65rem;border:1px solid #e5e7eb;border-radius:8px;background:white;font-size:0.9rem;cursor:pointer;">Cancel</button>
+                  <button onclick="confirmRecordPayment()"
+                    style="flex:2;padding:0.65rem;border:none;border-radius:8px;background:#16a34a;color:white;font-size:0.9rem;font-weight:700;cursor:pointer;">✓ Save Payment</button>
+                </div>
+              </div>`;
+            document.body.appendChild(modal);
+            setTimeout(() => document.getElementById('rp_amount')?.focus(), 50);
+        }
+
+        async function confirmRecordPayment() {
+            const amtInput = document.getElementById('rp_amount');
+            const method   = document.getElementById('rp_method')?.value || 'Unknown';
+            const note     = document.getElementById('rp_note')?.value?.trim() || '';
+            const amt      = parseFloat(amtInput?.value) || 0;
+            if (amt <= 0) { alert('Please enter a valid amount.'); return; }
+
+            document.getElementById('recordPayModal').remove();
+
+            // Update order
+            const prevDeposit = parseFloat(currentOrder.depositPaid) || 0;
+            const newDeposit  = prevDeposit + amt;
+            const total       = parseFloat(currentOrder.totalSellPrice) || 0;
+            const newBalance  = Math.max(0, total - newDeposit);
+
+            currentOrder.depositPaid        = newDeposit;
+            currentOrder.balanceDue         = newBalance;
+            currentOrder.paymentStatus      = newBalance <= 0 ? 'Paid' : 'Part Paid';
+            currentOrder.stripePaymentDate  = new Date().toLocaleString('en-GB');
+            currentOrder.stripePaymentAmount = amt;
+            currentOrder.stripePaymentReceived = true;
+
+            if (!currentOrder.log) currentOrder.log = [];
+            const noteStr = note ? ` — ${note}` : '';
+            currentOrder.log.push({
+                id: Date.now().toString(),
+                ts: new Date().toISOString(),
+                author: getCurrentUser(),
+                text: `💰 Payment recorded: £${amt.toFixed(2)} via ${method}${noteStr}. New balance: £${newBalance.toFixed(2)}`
+            });
+
+            if (!currentOrder.noteEntries) currentOrder.noteEntries = [];
+            currentOrder.noteEntries.push({
+                id: (Date.now()+1).toString(),
+                ts: new Date().toISOString(),
+                author: getCurrentUser(),
+                text: `Payment received: £${amt.toFixed(2)} via ${method}${noteStr}`
+            });
+
+            await saveOrder(currentOrder);
+            renderOrderDetails();
+        }
+
         function createPaymentLink() {
             if (!currentOrder) return;
 
