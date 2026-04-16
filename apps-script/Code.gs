@@ -6,6 +6,7 @@
 const SHEET_NAME = "Orders";
 const SHEET_ID = "1ExWjciizjHCvVdbgkQVvk4qyCvtFraWs2qKZHgldJ3Y";
 const DRIVE_FOLDER_ID = "1nAxdUKug-s3pEQnX9RCps86crK--Vd4k";
+const PRICE_BOOK_ID = "1ik2L8fxI2PcPZa1GuQQ6jVzFpZXINpqEzesWlyCWXR8"; // Separate pricing sheet
 
 const HEADERS = [
   "Order ID", "Created", "Last Updated", "Status", "Payment Status",
@@ -28,6 +29,147 @@ const HEADERS = [
   "Log Entries"
 ];
 
+// ============================================================
+// RUN THIS ONCE to create all price book tabs in your Sheet
+// Open Apps Script editor → select setupPriceBook → click Run
+// ============================================================
+function setupPriceBook() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+
+  function getOrCreate(name) {
+    return ss.getSheetByName(name) || ss.insertSheet(name);
+  }
+
+  function writeTab(sheet, headers, rows) {
+    sheet.clearContents();
+    const allRows = [headers, ...rows];
+    sheet.getRange(1, 1, allRows.length, headers.length).setValues(allRows);
+    // Style header row
+    const hdr = sheet.getRange(1, 1, 1, headers.length);
+    hdr.setBackground('#1e3a5f');
+    hdr.setFontColor('#ffffff');
+    hdr.setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    sheet.autoResizeColumns(1, headers.length);
+  }
+
+  // ── Headstones ──
+  writeTab(
+    getOrCreate('Headstones'),
+    ['Type', 'Size', 'Cost (£)', 'Sell (£)', 'Margin (£)', 'Margin (%)'],
+    [
+      ['Ogee', '1.9ft (Base 2ft)',          750,  900,  150, 16.7],
+      ['Ogee', '2ft (Base 2.6ft)',          1000, 1150, 150, 13.0],
+      ['Ogee', '2.6ft (Base 3ft)',          1200, 1400, 200, 14.3],
+      ['Ogee', '3ft (Base 3.6ft)',          1400, 1600, 200, 12.5],
+      ['Ogee', '3.6ft (Base 4ft)',          1600, 1800, 200, 11.1],
+      ['G3',   '1.9ft (Base 2ft)',          750,  900,  150, 16.7],
+      ['G3',   '2ft (Base 2.6ft)',          1000, 1150, 150, 13.0],
+      ['G3',   '2.6ft (Base 3ft)',          1200, 1400, 200, 14.3],
+      ['G3',   '3ft (Base 3.6ft)',          1400, 1600, 200, 12.5],
+      ['G3',   '3.6ft (Base 4ft)',          1600, 1800, 200, 11.1],
+      ['Denmore',      '3ft (Base 3.6ft)',  1400, 1600, 200, 12.5],
+      ['Denmore',      '3.6ft (Base 4ft)',  1600, 1800, 200, 11.1],
+      ['Half Denmore', '2ft (Base 2.6ft)',  1000, 1150, 150, 13.0],
+      ['Half Denmore', '2.6ft (Base 3ft)',  1200, 1400, 200, 14.3],
+      ['Half Denmore', '3ft (Base 3.6ft)',  1400, 1600, 200, 12.5],
+      ['Murphy', '36"x30" / Base 42"x12"x5"', 1400, 2600, 1200, 46.2],
+    ]
+  );
+
+  // ── Headstone_Colours ──
+  writeTab(
+    getOrCreate('Headstone_Colours'),
+    ['Colour Name', 'Cost Adjustment (£)', 'Sell Adjustment (£)', 'Margin (£)', 'Notes'],
+    [
+      ['Black',                  0,    0,    0,    'Standard - no adjustment'],
+      ['G603 Light Grey',       -100,  0,   100,   'Mason discount, customer pays standard'],
+      ['Bahamas Blue (Visac Blue)', 0, 100,  100,  'Same cost as black, customer premium'],
+      ['SA Impala',              50,  150,   100,  'Premium granite'],
+    ]
+  );
+
+  // ── Surrounds ──
+  writeTab(
+    getOrCreate('Surrounds'),
+    ['Type', 'Base Cost (£)', 'Base Sell (£)', 'Granite Cost Add (£)', 'Granite Sell Add (£)', 'Base Margin (£)', 'With Granite Margin (£)'],
+    [
+      ['Full Surround', 1400, 1600, 300, 400, 200, 300],
+      ['Half Surround',  900, 1200, 300, 275, 300, 275],
+      ['Tree Surround', 1050, 1400, 300, 275, 350, 325],
+    ]
+  );
+
+  // ── Stones ──
+  writeTab(
+    getOrCreate('Stones'),
+    ['Type', 'Standalone Cost (£)', 'With Surround Cost (£)', 'Sell Price (£)', 'Standalone Margin (£)', 'With Surround Margin (£)'],
+    [
+      ['Grey',                  60,   0,  100, 40,  100],
+      ['White Quartz',         140,  40,  200, 60,  160],
+      ['Black Pebbles',        195,  95,  300, 105, 205],
+      ['White Pebbles',        195,  95,  300, 105, 205],
+      ['Green Pebbles',        210, 110,  300, 90,  190],
+      ['Blue Pebbles',         210, 110,  300, 90,  190],
+      ['Blue Glass Chippings', 210, 110,  300, 90,  190],
+      ['Green Glass Chippings',210, 110,  300, 90,  190],
+      ['Black Glass Chippings',210, 110,  300, 90,  190],
+    ]
+  );
+
+  // ── Accessories ──
+  writeTab(
+    getOrCreate('Accessories'),
+    ['Item Name', 'Size', 'Cost (£)', 'Sell (£)', 'Margin (£)', 'Margin (%)'],
+    [
+      ['Martin Vase',            'Standard',     160, 210, 50, 23.8],
+      ['Chamfered Top Vase',     'Standard',     150, 210, 60, 28.6],
+      ['Round Vase 4',           'Standard',     180, 210, 30, 14.3],
+      ['12" x 12" Splayed Vase', '12" x 12"',   160, 230, 70, 30.4],
+      ['18" x 12" Splayed Vase', '18" x 12"',   180, 250, 70, 28.0],
+      ['6" x 6" x 12" Rose Vase','6" x 6" x 12"',180,240, 60, 25.0],
+      ['10" x 10" Heart Vase',   '10" x 10"',   200, 250, 50, 20.0],
+      ['16" x 12" Book',         '16" x 12"',   180, 250, 70, 28.0],
+      ['15" x 15" Heart Plaque', '15" x 15"',   160, 210, 50, 23.8],
+    ]
+  );
+
+  // ── Cemetery_Fees ──
+  writeTab(
+    getOrCreate('Cemetery_Fees'),
+    ['Cemetery / Location', 'Fee (£)', 'Notes'],
+    [
+      ['None',        0,   'No cemetery fee'],
+      ['Roselawn',    300, ''],
+      ['Blaris',      200, ''],
+      ['Church Yard', 300, 'Varies - confirm with church before quoting'],
+    ]
+  );
+
+  // ── Additional_Services ──
+  writeTab(
+    getOrCreate('Additional_Services'),
+    ['Service Name', 'Cost (£)', 'Sell (£)', 'Margin (£)', 'Margin (%)', 'Notes'],
+    [
+      ['Reconcrete Full Grave', 120, 200, 80, 40.0, 'Full grave foundation'],
+    ]
+  );
+
+  SpreadsheetApp.getUi().alert(
+    '✅ Price book tabs created successfully!\n\n' +
+    'Tabs created:\n' +
+    '• Headstones (16 products)\n' +
+    '• Headstone_Colours (4 colours)\n' +
+    '• Surrounds (3 types)\n' +
+    '• Stones (9 types)\n' +
+    '• Accessories (9 items)\n' +
+    '• Cemetery_Fees (4 locations)\n' +
+    '• Additional_Services (1 service)\n\n' +
+    'You can now edit any prices directly in the tabs.\n' +
+    'Redeploy the Apps Script as a new version, then refresh the tracker.'
+  );
+}
+
 function getOrCreateSheet() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   let sheet = ss.getSheetByName(SHEET_NAME);
@@ -47,7 +189,8 @@ function getOrCreateSheet() {
 
 // ── PRICE BOOK LOADING ──
 function loadPriceBook() {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
+  // Read from the dedicated pricing sheet
+  const ss = SpreadsheetApp.openById(PRICE_BOOK_ID);
   const priceBook = {};
   
   // Load Headstones
