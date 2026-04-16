@@ -1865,8 +1865,81 @@
             if (backdrop) backdrop.remove();
         }
 
-        // PDF Generation Functions
-        
+        // ============================================================
+        // PDF SHARED HELPERS
+        // ============================================================
+
+        function dcsPdfHeader(doc, title, subtitle) {
+            doc.setFillColor(56, 118, 29);
+            doc.rect(0, 0, 210, 38, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(22);
+            doc.setFont('helvetica', 'bold');
+            doc.text(title, 105, 14, { align: 'center' });
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text('David Crymble & Sons', 105, 22, { align: 'center' });
+            doc.setFontSize(8);
+            doc.text(subtitle || 'Memorial Masons & Funeral Directors · Belfast', 105, 29, { align: 'center' });
+            doc.setTextColor(0, 0, 0);
+            return 45;
+        }
+
+        function dcsPdfFooter(doc) {
+            const pc = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pc; i++) {
+                doc.setPage(i);
+                doc.setFontSize(7.5);
+                doc.setTextColor(130, 130, 130);
+                doc.setFont('helvetica', 'normal');
+                doc.setDrawColor(180, 180, 180);
+                doc.setLineWidth(0.3);
+                doc.line(20, 282, 190, 282);
+                doc.text('David Crymble & Sons  |  139 Upper Lisburn Road, Belfast BT10 0LH  |  330–332 Woodstock Road, Belfast BT6 9DP', 105, 286, { align: 'center' });
+                doc.text('T: 028 9066 7784  |  E: info@crymbleandsons.com  |  www.dcfs.co.uk', 105, 290, { align: 'center' });
+                doc.setFont('helvetica', 'italic');
+                doc.text('"Our God will take care of everything you need."  Phil 4:19', 105, 294, { align: 'center' });
+                if (pc > 1) { doc.setFont('helvetica', 'normal'); doc.text(`Page ${i} of ${pc}`, 190, 294, { align: 'right' }); }
+                doc.setTextColor(0, 0, 0);
+            }
+        }
+
+        function dcsPdfCustomerBoxes(doc, order, y) {
+            doc.setFillColor(246, 251, 242);
+            doc.roundedRect(20, y, 82, 32, 2, 2, 'F');
+            doc.roundedRect(108, y, 82, 32, 2, 2, 'F');
+
+            // Customer
+            doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(56, 118, 29);
+            doc.text('PREPARED FOR', 24, y + 6);
+            doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+            doc.text(order.customerName || '—', 24, y + 13);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+            if (order.address) { const al = doc.splitTextToSize(order.address, 74); al.slice(0,2).forEach((l,i) => doc.text(l, 24, y+19+i*5)); }
+            if (order.phone) doc.text(`T: ${order.phone}`, 24, y + 29);
+
+            // Deceased
+            doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(56, 118, 29);
+            doc.text('IN MEMORY OF', 112, y + 6);
+            doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+            doc.text(order.deceasedName || '—', 112, y + 13);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+            if (order.deceasedDob) doc.text(`Born:   ${order.deceasedDob}`, 112, y + 19);
+            if (order.deceasedDod) doc.text(`Passed: ${order.deceasedDod}`, 112, y + 25);
+            if (order.cemetery)    doc.text(`Cemetery: ${order.cemetery}`, 112, y + 31);
+            return y + 38;
+        }
+
+        function dcsPdfTableHeader(doc, y, rightLabel) {
+            doc.setFillColor(40, 90, 18);
+            doc.rect(20, y, 170, 7, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+            doc.text('DESCRIPTION', 23, y + 4.5);
+            doc.text(rightLabel || 'AMOUNT', 188, y + 4.5, { align: 'right' });
+            doc.setTextColor(0, 0, 0);
+            return y + 11;
+        }
 
         // ============================================================
         // COST/RETAIL CALCULATION FUNCTIONS
@@ -2036,247 +2109,238 @@
 }
 
         function generateEstimate() {
-    if (!currentOrder) {
-        alert('Please select an order first');
-        return;
-    }
-    
-    const totals = calculateOrderTotals(currentOrder);
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    
-    // DC&S Header
-    doc.setFillColor(102, 157, 53);
-    doc.rect(0, 0, 210, 35, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(24);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ESTIMATE', 105, 15, { align: 'center' });
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('David Crymble & Sons Funeral Directors', 105, 22, { align: 'center' });
-    doc.text('Woodstock Road & Finaghy, Belfast', 105, 28, { align: 'center' });
-    
-    doc.setTextColor(0, 0, 0);
-    
-    let yPos = 45;
-    
-    // Estimate details
-    doc.setFontSize(10);
-    doc.text(`Estimate #: ${currentOrder.orderRef || currentOrder.orderId}`, 20, yPos);
-    doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 140, yPos);
-    yPos += 10;
-    
-    // Customer details
-    doc.setFont('helvetica', 'bold');
-    doc.text('PREPARED FOR:', 20, yPos);
-    yPos += 6;
-    doc.setFont('helvetica', 'normal');
-    doc.text(currentOrder.customerName || 'Unknown', 20, yPos);
-    yPos += 5;
-    if (currentOrder.address) {
-        const addressLines = doc.splitTextToSize(currentOrder.address, 80);
-        addressLines.forEach(line => {
-            doc.text(line, 20, yPos);
-            yPos += 5;
-        });
-    }
-    if (currentOrder.phone) {
-        doc.text(`Phone: ${currentOrder.phone}`, 20, yPos);
-        yPos += 5;
-    }
-    
-    yPos += 5;
-    doc.setDrawColor(200, 200, 200);
-    doc.line(20, yPos, 190, yPos);
-    yPos += 10;
-    
-    // Items
-    doc.setFont('helvetica', 'bold');
-    doc.text('ITEM DESCRIPTION', 20, yPos);
-    doc.text('AMOUNT', 190, yPos, { align: 'right' });
-    yPos += 2;
-    doc.line(20, yPos, 190, yPos);
-    yPos += 8;
-    
-    doc.setFont('helvetica', 'normal');
-    
-    // Headstone
-    if (totals.breakdown.headstone.sell > 0) {
-        const hsDesc = `${currentOrder.hsType} ${currentOrder.hsSize} Headstone`;
-        const hsColour = currentOrder.hsColour && currentOrder.hsColour !== 'Black' 
-            ? ` - ${currentOrder.hsColour}` 
-            : '';
-        doc.text(hsDesc + hsColour, 20, yPos);
-        doc.text(`£${totals.breakdown.headstone.sell.toFixed(2)}`, 190, yPos, { align: 'right' });
-        yPos += 6;
-    }
-    
-    // Surround
-    if (totals.breakdown.surround.sell > 0) {
-        const surDesc = `${currentOrder.surroundType}`;
-        const granite = currentOrder.surroundGranite ? ' with 6" Granite Foundation' : '';
-        doc.text(surDesc + granite, 20, yPos);
-        doc.text(`£${totals.breakdown.surround.sell.toFixed(2)}`, 190, yPos, { align: 'right' });
-        yPos += 6;
-    }
-    
-    // Stone
-    if (totals.breakdown.stone.sell > 0) {
-        doc.text(`${currentOrder.stoneType} Chippings`, 20, yPos);
-        doc.text(`£${totals.breakdown.stone.sell.toFixed(2)}`, 190, yPos, { align: 'right' });
-        yPos += 6;
-    }
-    
-    // Accessories
-    if (totals.breakdown.accessories.sell > 0 && currentOrder.accessories) {
-        currentOrder.accessories.forEach(accName => {
-            const acc = priceBook.Accessories?.find(a => a.name === accName);
-            if (acc) {
-                doc.text(accName, 20, yPos);
-                doc.text(`£${acc.sell.toFixed(2)}`, 190, yPos, { align: 'right' });
-                yPos += 6;
+            if (!currentOrder) { alert('Please select an order first'); return; }
+            const totals = calculateOrderTotals(currentOrder);
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            // Header
+            let y = dcsPdfHeader(doc, 'ESTIMATE', 'Memorial Estimate · Subject to Final Confirmation');
+
+            // Ref + date row
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(90, 90, 90);
+            doc.text(`Estimate Ref: ${(currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase()}`, 20, y);
+            doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 190, y, { align: 'right' });
+            doc.text('Valid for 30 days from date of issue', 190, y + 5, { align: 'right' });
+            doc.setTextColor(0, 0, 0); y += 12;
+
+            // Customer + Deceased boxes
+            y = dcsPdfCustomerBoxes(doc, currentOrder, y);
+
+            // Table header
+            y = dcsPdfTableHeader(doc, y, 'AMOUNT');
+
+            // Row helper
+            let alt = false;
+            function row(label, sub, amount) {
+                if (y > 248) { doc.addPage(); y = 20; }
+                if (alt) { doc.setFillColor(246, 251, 242); doc.rect(20, y - 4, 170, 8, 'F'); }
+                alt = !alt;
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+                doc.text(label, 23, y);
+                if (sub) {
+                    doc.setFontSize(7.5); doc.setTextColor(130, 130, 130);
+                    doc.text(sub, 23, y + 4); doc.setTextColor(0, 0, 0); y += 4;
+                }
+                if (amount !== null && amount !== undefined) {
+                    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+                    doc.text(`£${parseFloat(amount).toFixed(2)}`, 188, y, { align: 'right' });
+                }
+                y += 8;
             }
-        });
-    }
-    
-    // Inscription
-    if (totals.breakdown.inscription.sell > 0) {
-        const inscType = currentOrder.inscriptionType === 'new' ? 'New Inscription' : 'Additional Inscription';
-        const letterCount = totals.breakdown.inscription.letterCount;
-        doc.text(`${inscType} (${letterCount} letters)`, 20, yPos);
-        doc.text(`£${totals.breakdown.inscription.sell.toFixed(2)}`, 190, yPos, { align: 'right' });
-        yPos += 6;
-    }
-    
-    // Cemetery Fee
-    if (totals.breakdown.cemeteryFee > 0) {
-        doc.text(`Cemetery Fee - ${currentOrder.cemetery}`, 20, yPos);
-        doc.text(`£${totals.breakdown.cemeteryFee.toFixed(2)}`, 190, yPos, { align: 'right' });
-        yPos += 6;
-    }
-    
-    yPos += 5;
-    doc.setLineWidth(0.5);
-    doc.line(20, yPos, 190, yPos);
-    yPos += 8;
-    
-    // Total
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('TOTAL:', 20, yPos);
-    doc.text(`£${totals.totalSell.toFixed(2)}`, 190, yPos, { align: 'right' });
-    
-    yPos += 15;
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'italic');
-    doc.text('This is an estimate. Final pricing confirmed upon order acceptance.', 20, yPos);
-    doc.text('Valid for 30 days from date of issue.', 20, yPos + 5);
-    
-    // Footer
-    doc.setFontSize(8);
-    doc.setTextColor(128, 128, 128);
-    doc.text('David Crymble & Sons | Woodstock Road & Finaghy | 028 9066 7784 | www.dcfs.co.uk', 105, 290, { align: 'center' });
-    
-    // Save
-    const filename = `Estimate_${currentOrder.orderRef || currentOrder.orderId}_${new Date().toISOString().slice(0,10)}.pdf`;
-    doc.save(filename);
-    
-    addActivityLog('Generated Estimate (Total: £' + totals.totalSell.toFixed(2) + ')');
-    
-    sendWhatsAppNotification('estimate', {
-        customer: currentOrder.customerName,
-        deceased: currentOrder.deceasedName,
-        reference: currentOrder.orderRef || currentOrder.orderId,
-        total: totals.totalSell.toFixed(2)
-    });
-}
+
+            if (totals.breakdown.headstone.sell > 0)
+                row(`${currentOrder.hsType} Headstone — ${currentOrder.hsSize}`,
+                    `Colour: ${currentOrder.hsColour || 'Black'}${currentOrder.hsFinish ? ' · ' + currentOrder.hsFinish : ''}`,
+                    totals.breakdown.headstone.sell);
+
+            if (totals.breakdown.surround.sell > 0)
+                row(currentOrder.surroundType, `Grave surround${currentOrder.surroundGranite ? ' · Incl. 6" Granite Foundation' : ''}`, totals.breakdown.surround.sell);
+
+            if (totals.breakdown.stone.sell > 0)
+                row(currentOrder.stoneType, 'Stone / Chippings', totals.breakdown.stone.sell);
+
+            (currentOrder.accessories || []).forEach(accName => {
+                const acc = (priceBook.Accessories || []).find(a => a.name === accName);
+                if (acc && parseFloat(acc.sell) > 0) row(accName, 'Accessory', acc.sell);
+            });
+
+            if (totals.breakdown.inscription.sell > 0)
+                row(currentOrder.inscriptionType === 'new' ? 'New Inscription' : 'Additional Inscription',
+                    `${totals.breakdown.inscription.letterCount} letters`, totals.breakdown.inscription.sell);
+            else if (currentOrder.inscriptionText)
+                row('New Inscription', 'Included (within 100 letters)', 0);
+
+            if (totals.breakdown.cemeteryFee > 0)
+                row('Cemetery / Churchyard Fee', currentOrder.cemetery, totals.breakdown.cemeteryFee);
+
+            // Divider + total
+            y += 2;
+            doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3); doc.line(20, y, 190, y); y += 6;
+
+            doc.setFillColor(56, 118, 29); doc.roundedRect(110, y - 4, 80, 12, 2, 2, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+            doc.text('TOTAL', 115, y + 3.5);
+            doc.text(`£${totals.totalSell.toFixed(2)}`, 187, y + 3.5, { align: 'right' });
+            doc.setTextColor(0, 0, 0); y += 16;
+
+            if (parseFloat(currentOrder.depositPaid) > 0) {
+                const dep = parseFloat(currentOrder.depositPaid);
+                const bal = Math.max(0, totals.totalSell - dep);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+                doc.text('Deposit Received', 115, y); doc.text(`-£${dep.toFixed(2)}`, 188, y, { align: 'right' }); y += 6;
+                doc.setFont('helvetica', 'bold');
+                doc.text('Balance Due', 115, y); doc.text(`£${bal.toFixed(2)}`, 188, y, { align: 'right' }); y += 10;
+            }
+
+            // Inscription preview
+            if (currentOrder.inscriptionText && y < 225) {
+                doc.setDrawColor(200, 200, 200); doc.line(20, y, 190, y); y += 8;
+                doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60);
+                doc.text('INSCRIPTION TEXT — Please verify below is correct', 20, y); doc.setTextColor(0, 0, 0); y += 6;
+                const iLines = doc.splitTextToSize(currentOrder.inscriptionText, 162);
+                const bh = Math.max(14, iLines.length * 5.5 + 8);
+                doc.setDrawColor(160, 200, 130); doc.roundedRect(20, y, 170, bh, 2, 2);
+                doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5);
+                let iy = y + 7;
+                iLines.forEach(l => { if (iy > 265) { doc.addPage(); iy = 20; } doc.text(l, 26, iy); iy += 5.5; });
+                y += bh + 8;
+            }
+
+            // Terms
+            if (y < 260) {
+                y = Math.max(y + 4, 248);
+                doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(130, 130, 130);
+                doc.text('This is an estimate only. Prices confirmed upon order acceptance and may vary subject to cemetery requirements.', 20, y);
+                doc.text('A deposit is required to confirm your order. Payment in full due on or before installation date.', 20, y + 4.5);
+                doc.setTextColor(0, 0, 0);
+            }
+
+            dcsPdfFooter(doc);
+            doc.save(`Estimate_${(currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase()}_${new Date().toISOString().slice(0,10)}.pdf`);
+            addActivityLog(`Generated Estimate — Total: £${totals.totalSell.toFixed(2)}`);
+            sendWhatsAppNotification('estimate', { customer: currentOrder.customerName, deceased: currentOrder.deceasedName, reference: currentOrder.orderRef || currentOrder.orderId, total: totals.totalSell.toFixed(2) });
+        }
 
         
         function generateInvoice() {
-            if (!currentOrder) return;
-            
+            if (!currentOrder) { alert('Please select an order first'); return; }
+            const totals = calculateOrderTotals(currentOrder);
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            
-            addLetterhead(doc);
-            
-            // Title
-            doc.setFontSize(16);
-            doc.setFont(undefined, 'bold');
-            doc.text('INVOICE', 105, 60, { align: 'center' });
-            
-            // Reference and date
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'normal');
-            doc.text(`Reference: ${currentOrder.orderRef || currentOrder.orderId}`, 150, 70);
-            doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 150, 75);
-            
-            // Customer details
-            doc.text(`To: ${currentOrder.customerName || 'Customer'}`, 20, 85);
-            doc.text(`For: The late ${currentOrder.deceasedName}`, 20, 92);
-            
-            // Line items
-            let y = 105;
-            const total = calculateTotal(currentOrder);
-            const items = getPriceLineItems(currentOrder);
-            
-            items.forEach(item => {
-                doc.text(item.label, 20, y);
-                doc.text(`£${item.amount.toFixed(2)}`, 180, y, { align: 'right' });
-                y += 7;
-            });
-            
-            // Total
-            doc.setFont(undefined, 'bold');
-            doc.text('TOTAL', 20, y + 5);
-            doc.text(`£${total.toFixed(2)}`, 180, y + 5, { align: 'right' });
-            
-            // Deposit and balance
-            if (currentOrder.depositPaid) {
-                const deposit = parseFloat(currentOrder.depositPaid);
-                doc.setFont(undefined, 'normal');
-                doc.text('Deposit Paid', 20, y + 12);
-                doc.text(`-£${deposit.toFixed(2)}`, 180, y + 12, { align: 'right' });
-                
-                doc.setFont(undefined, 'bold');
-                doc.text('BALANCE OUTSTANDING', 20, y + 19);
-                doc.text(`£${(total - deposit).toFixed(2)}`, 180, y + 19, { align: 'right' });
-            }
-            
-            addFooter(doc);
-            
-            // Save PDF
-            const filename = `Invoice_${currentOrder.orderRef || currentOrder.orderId}.pdf`;
-            doc.save(filename);
-            
-            // Send WhatsApp notification
-            const balance = currentOrder.depositPaid ? total - parseFloat(currentOrder.depositPaid) : total;
-            const message = `🧾 *INVOICE GENERATED*\n\n` +
-                `Customer: ${currentOrder.customerName}\n` +
-                `Deceased: ${currentOrder.deceasedName}\n` +
-                `Reference: ${currentOrder.orderRef || currentOrder.orderId}\n` +
-                `Total: £${total.toFixed(2)}\n` +
-                (currentOrder.depositPaid ? `Deposit Paid: £${parseFloat(currentOrder.depositPaid).toFixed(2)}\n` : '') +
-                `Balance Due: £${balance.toFixed(2)}\n\n` +
-                `Invoice has been downloaded and is ready to send to customer.`;
-            
-            sendToWhatsApp(message).then(success => {
-                if (success) {
-                    // Update activity log
-                    if (!currentOrder.log) currentOrder.log = [];
-                    currentOrder.log.push({
-                        id: Date.now().toString(),
-                        ts: new Date().toISOString(),
-                        author: 'SYSTEM',
-                        text: 'Invoice generated and WhatsApp notification sent'
-                    });
-                    
-                    alert('✅ Invoice generated and notification sent to WhatsApp!');
+
+            // Header
+            let y = dcsPdfHeader(doc, 'INVOICE', 'David Crymble & Sons Memorial Masons');
+
+            // Ref + date
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(90, 90, 90);
+            doc.text(`Invoice Ref: ${(currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase()}`, 20, y);
+            doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 190, y, { align: 'right' });
+            doc.text('Payment due: 30 days from invoice date', 190, y + 5, { align: 'right' });
+            doc.setTextColor(0, 0, 0); y += 12;
+
+            // Customer + Deceased boxes
+            y = dcsPdfCustomerBoxes(doc, currentOrder, y);
+
+            // Table header
+            y = dcsPdfTableHeader(doc, y, 'AMOUNT');
+
+            let alt = false;
+            function row(label, sub, amount) {
+                if (y > 248) { doc.addPage(); y = 20; }
+                if (alt) { doc.setFillColor(246, 251, 242); doc.rect(20, y - 4, 170, 8, 'F'); }
+                alt = !alt;
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+                doc.text(label, 23, y);
+                if (sub) {
+                    doc.setFontSize(7.5); doc.setTextColor(130, 130, 130);
+                    doc.text(sub, 23, y + 4); doc.setTextColor(0, 0, 0); y += 4;
                 }
+                if (amount !== null && amount !== undefined) {
+                    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+                    doc.text(`£${parseFloat(amount).toFixed(2)}`, 188, y, { align: 'right' });
+                }
+                y += 8;
+            }
+
+            if (totals.breakdown.headstone.sell > 0)
+                row(`${currentOrder.hsType} Headstone — ${currentOrder.hsSize}`,
+                    `Colour: ${currentOrder.hsColour || 'Black'}${currentOrder.hsFinish ? ' · ' + currentOrder.hsFinish : ''}`,
+                    totals.breakdown.headstone.sell);
+
+            if (totals.breakdown.surround.sell > 0)
+                row(currentOrder.surroundType, `Grave surround${currentOrder.surroundGranite ? ' · Incl. 6" Granite Foundation' : ''}`, totals.breakdown.surround.sell);
+
+            if (totals.breakdown.stone.sell > 0)
+                row(currentOrder.stoneType, 'Stone / Chippings', totals.breakdown.stone.sell);
+
+            (currentOrder.accessories || []).forEach(accName => {
+                const acc = (priceBook.Accessories || []).find(a => a.name === accName);
+                if (acc && parseFloat(acc.sell) > 0) row(accName, 'Accessory', acc.sell);
             });
+
+            if (totals.breakdown.inscription.sell > 0)
+                row(currentOrder.inscriptionType === 'new' ? 'New Inscription' : 'Additional Inscription',
+                    `${totals.breakdown.inscription.letterCount} letters`, totals.breakdown.inscription.sell);
+            else if (currentOrder.inscriptionText)
+                row('New Inscription', 'Included', 0);
+
+            if (totals.breakdown.cemeteryFee > 0)
+                row('Cemetery / Churchyard Fee', currentOrder.cemetery, totals.breakdown.cemeteryFee);
+
+            // Totals section
+            y += 2;
+            doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3); doc.line(20, y, 190, y); y += 6;
+
+            const dep = parseFloat(currentOrder.depositPaid) || 0;
+            if (dep > 0) {
+                const bal = Math.max(0, totals.totalSell - dep);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+                doc.text('Sub Total', 115, y); doc.text(`£${totals.totalSell.toFixed(2)}`, 188, y, { align: 'right' }); y += 7;
+                doc.text('Deposit Received', 115, y);
+                doc.setTextColor(56, 118, 29); doc.text(`-£${dep.toFixed(2)}`, 188, y, { align: 'right' }); doc.setTextColor(0,0,0); y += 7;
+                doc.setLineWidth(0.3); doc.line(110, y - 1, 190, y - 1);
+                doc.setFillColor(56, 118, 29); doc.roundedRect(110, y, 80, 12, 2, 2, 'F');
+                doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+                doc.text('BALANCE DUE', 115, y + 7.5); doc.text(`£${bal.toFixed(2)}`, 187, y + 7.5, { align: 'right' });
+                doc.setTextColor(0, 0, 0); y += 18;
+            } else {
+                doc.setFillColor(56, 118, 29); doc.roundedRect(110, y - 4, 80, 12, 2, 2, 'F');
+                doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+                doc.text('TOTAL DUE', 115, y + 3.5); doc.text(`£${totals.totalSell.toFixed(2)}`, 187, y + 3.5, { align: 'right' });
+                doc.setTextColor(0, 0, 0); y += 16;
+            }
+
+            // Inscription preview
+            if (currentOrder.inscriptionText && y < 225) {
+                doc.setDrawColor(200, 200, 200); doc.line(20, y, 190, y); y += 8;
+                doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60);
+                doc.text('INSCRIPTION TEXT — Please verify below is correct', 20, y); doc.setTextColor(0, 0, 0); y += 6;
+                const iLines = doc.splitTextToSize(currentOrder.inscriptionText, 162);
+                const bh = Math.max(14, iLines.length * 5.5 + 8);
+                doc.setDrawColor(160, 200, 130); doc.roundedRect(20, y, 170, bh, 2, 2);
+                doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5);
+                let iy = y + 7;
+                iLines.forEach(l => { if (iy > 265) { doc.addPage(); iy = 20; } doc.text(l, 26, iy); iy += 5.5; });
+                y += bh + 8;
+            }
+
+            // Payment details box
+            if (y < 248) {
+                y = Math.max(y + 4, 236);
+                doc.setDrawColor(200, 200, 200); doc.line(20, y, 190, y); y += 7;
+                doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60);
+                doc.text('PAYMENT', 20, y); doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal'); y += 5;
+                doc.setFontSize(8.5);
+                doc.text('Bank Transfer: David Crymble & Sons  |  Cheques payable to: David Crymble & Sons', 20, y); y += 5;
+                doc.text('Payment due within 30 days. Thank you for choosing David Crymble & Sons.', 20, y);
+            }
+
+            dcsPdfFooter(doc);
+            const bal2 = dep > 0 ? Math.max(0, totals.totalSell - dep) : totals.totalSell;
+            doc.save(`Invoice_${(currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase()}_${new Date().toISOString().slice(0,10)}.pdf`);
+            addActivityLog(`Generated Invoice — Total: £${totals.totalSell.toFixed(2)}, Balance: £${bal2.toFixed(2)}`);
+            sendToWhatsApp(`🧾 *INVOICE GENERATED*\n\nCustomer: ${currentOrder.customerName}\nDeceased: ${currentOrder.deceasedName}\nRef: ${(currentOrder.orderRef||currentOrder.orderId||'').slice(-8).toUpperCase()}\nTotal: £${totals.totalSell.toFixed(2)}\nBalance Due: £${bal2.toFixed(2)}\n\nInvoice downloaded and ready to send.`);
         }
 
         // ============================================================
@@ -2284,337 +2348,150 @@
         // ============================================================
 
         function generateMasonJobCard() {
-    if (!currentOrder) {
-        alert('Please select an order first');
-        return;
-    }
-    
-    const totals = calculateOrderTotals(currentOrder);
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    
-    // DC&S Header
-    doc.setFillColor(102, 157, 53); // #669d35
-    doc.rect(0, 0, 210, 35, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(24);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MASON JOB CARD', 105, 15, { align: 'center' });
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('David Crymble & Sons Funeral Directors', 105, 22, { align: 'center' });
-    doc.text('Cost Prices Only - For Mason', 105, 28, { align: 'center' });
-    
-    // Reset text color
-    doc.setTextColor(0, 0, 0);
-    
-    let yPos = 45;
-    
-    // Order Reference
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Order Reference: ${currentOrder.orderRef || currentOrder.orderId}`, 20, yPos);
-    yPos += 8;
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 20, yPos);
-    yPos += 10;
-    
-    // Customer/Deceased Info
-    doc.setFont('helvetica', 'bold');
-    doc.text('Customer:', 20, yPos);
-    doc.setFont('helvetica', 'normal');
-    doc.text(currentOrder.customerName || 'Unknown', 50, yPos);
-    yPos += 6;
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('Deceased:', 20, yPos);
-    doc.setFont('helvetica', 'normal');
-    doc.text(currentOrder.deceasedName || 'Unknown', 50, yPos);
-    yPos += 6;
-    
-    if (currentOrder.cemetery) {
-        doc.setFont('helvetica', 'bold');
-        doc.text('Cemetery:', 20, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.text(currentOrder.cemetery, 50, yPos);
-        yPos += 6;
-    }
-    
-    yPos += 5;
-    
-    // Divider line
-    doc.setDrawColor(200, 200, 200);
-    doc.line(20, yPos, 190, yPos);
-    yPos += 8;
-    
-    // Items Section
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ITEMS & COSTS', 20, yPos);
-    yPos += 8;
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    
-    // Headstone
-    if (totals.breakdown.headstone.cost > 0) {
-        const hsLine = `Headstone: ${currentOrder.hsType} ${currentOrder.hsSize}`;
-        const hsColour = currentOrder.hsColour && currentOrder.hsColour !== 'Black' 
-            ? ` (${currentOrder.hsColour})` 
-            : '';
-        doc.text(hsLine + hsColour, 20, yPos);
-        doc.text(`£${totals.breakdown.headstone.cost.toFixed(2)}`, 190, yPos, { align: 'right' });
-        yPos += 6;
-    }
-    
-    // Surround
-    if (totals.breakdown.surround.cost > 0) {
-        const surLine = `Surround: ${currentOrder.surroundType}`;
-        const granite = currentOrder.surroundGranite ? ' (6" Granite)' : '';
-        doc.text(surLine + granite, 20, yPos);
-        doc.text(`£${totals.breakdown.surround.cost.toFixed(2)}`, 190, yPos, { align: 'right' });
-        yPos += 6;
-    }
-    
-    // Stone/Chippings
-    if (totals.breakdown.stone.cost > 0) {
-        doc.text(`Stone: ${currentOrder.stoneType}`, 20, yPos);
-        doc.text(`£${totals.breakdown.stone.cost.toFixed(2)}`, 190, yPos, { align: 'right' });
-        yPos += 6;
-    }
-    
-    // Accessories
-    if (totals.breakdown.accessories.cost > 0 && currentOrder.accessories) {
-        currentOrder.accessories.forEach(accName => {
-            const acc = priceBook.Accessories?.find(a => a.name === accName);
-            if (acc) {
-                doc.text(`Accessory: ${accName}`, 20, yPos);
-                doc.text(`£${acc.cost.toFixed(2)}`, 190, yPos, { align: 'right' });
-                yPos += 6;
-            }
-        });
-    }
-    
-    // Inscription
-    if (totals.breakdown.inscription.cost > 0) {
-        const inscType = currentOrder.inscriptionType === 'new' ? 'New Inscription' : 'Additional Inscription';
-        const letterCount = totals.breakdown.inscription.letterCount;
-        doc.text(`${inscType} (${letterCount} letters)`, 20, yPos);
-        doc.text(`£${totals.breakdown.inscription.cost.toFixed(2)}`, 190, yPos, { align: 'right' });
-        yPos += 6;
-    }
-    
-    // Cemetery Fee
-    if (totals.breakdown.cemeteryFee > 0) {
-        doc.text(`Cemetery Fee: ${currentOrder.cemetery}`, 20, yPos);
-        doc.text(`£${totals.breakdown.cemeteryFee.toFixed(2)}`, 190, yPos, { align: 'right' });
-        yPos += 6;
-    }
-    
-    yPos += 5;
-    
-    // Total line
-    doc.setDrawColor(0, 0, 0);
-    doc.setLineWidth(0.5);
-    doc.line(20, yPos, 190, yPos);
-    yPos += 8;
-    
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('TOTAL TO MASON:', 20, yPos);
-    doc.text(`£${totals.totalCost.toFixed(2)}`, 190, yPos, { align: 'right' });
-    yPos += 10;
-    
-    // Inscription Text (if present)
-    if (currentOrder.inscriptionText) {
-        yPos += 5;
-        doc.setDrawColor(200, 200, 200);
-        doc.line(20, yPos, 190, yPos);
-        yPos += 8;
-        
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'bold');
-        doc.text('INSCRIPTION TEXT:', 20, yPos);
-        yPos += 8;
-        
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        
-        // Word wrap inscription text
-        const lines = doc.splitTextToSize(currentOrder.inscriptionText, 170);
-        lines.forEach(line => {
-            if (yPos > 270) {
-                doc.addPage();
-                yPos = 20;
-            }
-            doc.text(line, 20, yPos);
-            yPos += 5;
-        });
-    }
-    
-    // Notes (if present)
-    if (currentOrder.masonNotes) {
-        yPos += 5;
-        doc.setDrawColor(200, 200, 200);
-        doc.line(20, yPos, 190, yPos);
-        yPos += 8;
-        
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'bold');
-        doc.text('MASON NOTES:', 20, yPos);
-        yPos += 8;
-        
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        
-        const noteLines = doc.splitTextToSize(currentOrder.masonNotes, 170);
-        noteLines.forEach(line => {
-            if (yPos > 270) {
-                doc.addPage();
-                yPos = 20;
-            }
-            doc.text(line, 20, yPos);
-            yPos += 5;
-        });
-    }
-    
-    // Footer
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(128, 128, 128);
-        doc.text(`David Crymble & Sons | Woodstock Road & Finaghy | 028 9066 7784`, 105, 290, { align: 'center' });
-        doc.text(`Page ${i} of ${pageCount}`, 190, 290, { align: 'right' });
-    }
-    
-    // Save PDF
-    const filename = `Mason_JobCard_${currentOrder.orderRef || currentOrder.orderId}_${new Date().toISOString().slice(0,10)}.pdf`;
-    doc.save(filename);
-    
-    // Log activity
-    addActivityLog('Generated Mason Job Card (Cost: £' + totals.totalCost.toFixed(2) + ')');
-    
-    // Send WhatsApp notification
-    sendWhatsAppNotification('job_card', {
-        customer: currentOrder.customerName,
-        deceased: currentOrder.deceasedName,
-        reference: currentOrder.orderRef || currentOrder.orderId,
-        total: totals.totalCost.toFixed(2)
-    });
-}
-
-
-        function generateJobCard() {
-            if (!currentOrder) return;
-            
+            if (!currentOrder) { alert('Please select an order first'); return; }
+            const totals = calculateOrderTotals(currentOrder);
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            
-            addLetterhead(doc);
-            
-            // Title
-            doc.setFontSize(16);
-            doc.setFont(undefined, 'bold');
-            doc.text('JOB CARD FOR STONE MASON', 105, 60, { align: 'center' });
-            
-            // Reference
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'normal');
-            doc.text(`Reference: ${currentOrder.orderRef || currentOrder.orderId}`, 150, 70);
-            
-            // Customer and deceased
-            doc.setFont(undefined, 'bold');
-            doc.text('Customer:', 20, 85);
-            doc.setFont(undefined, 'normal');
-            doc.text(currentOrder.customerName || '-', 50, 85);
-            
-            doc.setFont(undefined, 'bold');
-            doc.text('Deceased:', 20, 92);
-            doc.setFont(undefined, 'normal');
-            doc.text(currentOrder.deceasedName || '-', 50, 92);
-            
-            // Specification
-            let y = 105;
-            doc.setFont(undefined, 'bold');
-            doc.text('SPECIFICATION', 20, y);
-            y += 7;
-            
-            doc.setFont(undefined, 'normal');
-            doc.setFontSize(9);
-            
-            if (currentOrder.hsType) {
-                doc.text(`Headstone: ${currentOrder.hsType} - ${currentOrder.hsSize}`, 20, y);
-                y += 5;
+
+            // Header
+            let y = dcsPdfHeader(doc, 'MASON JOB CARD', 'CONFIDENTIAL — Cost Prices Only — Do Not Share with Customer');
+
+            // Order info bar
+            doc.setFillColor(232, 244, 226); doc.rect(20, y, 170, 18, 'F');
+            doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+            doc.text(`Ref: ${(currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase()}`, 24, y + 6);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Issued: ${new Date().toLocaleDateString('en-GB')}`, 24, y + 13);
+            if (currentOrder.installDate) {
+                doc.setTextColor(180, 50, 0); doc.setFont('helvetica', 'bold');
+                doc.text(`Install Date: ${currentOrder.installDate}`, 108, y + 6);
+                doc.setTextColor(0, 0, 0);
             }
-            if (currentOrder.hsColour) {
-                doc.text(`Colour: ${currentOrder.hsColour}`, 20, y);
-                y += 5;
+            if (currentOrder.graveNumber) {
+                doc.setFont('helvetica', 'bold');
+                doc.text(`Grave No: ${currentOrder.graveNumber}`, 108, y + 13);
             }
-            if (currentOrder.hsFinish) {
-                doc.text(`Finish: ${currentOrder.hsFinish}`, 20, y);
-                y += 5;
+            doc.setFont('helvetica', 'normal'); y += 24;
+
+            // Customer + Deceased boxes (slightly smaller for job card)
+            doc.setFillColor(246, 251, 242);
+            doc.roundedRect(20, y, 82, 26, 2, 2, 'F');
+            doc.roundedRect(108, y, 82, 26, 2, 2, 'F');
+            doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(56, 118, 29);
+            doc.text('CUSTOMER', 24, y + 6);
+            doc.setTextColor(0,0,0); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+            doc.text(currentOrder.customerName || '—', 24, y + 13);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+            if (currentOrder.phone) doc.text(`T: ${currentOrder.phone}`, 24, y + 20);
+
+            doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(56, 118, 29);
+            doc.text('DECEASED', 112, y + 6);
+            doc.setTextColor(0,0,0); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+            doc.text(currentOrder.deceasedName || '—', 112, y + 13);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+            if (currentOrder.cemetery) doc.text(`Cemetery: ${currentOrder.cemetery}`, 112, y + 20);
+            y += 32;
+
+            // Items table
+            y = dcsPdfTableHeader(doc, y, 'COST');
+
+            let alt = false;
+            function row(label, sub, amount) {
+                if (y > 248) { doc.addPage(); y = 20; }
+                if (alt) { doc.setFillColor(246, 251, 242); doc.rect(20, y - 4, 170, 8, 'F'); }
+                alt = !alt;
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+                doc.text(label, 23, y);
+                if (sub) {
+                    doc.setFontSize(7.5); doc.setTextColor(130, 130, 130);
+                    doc.text(sub, 23, y + 4); doc.setTextColor(0, 0, 0); y += 4;
+                }
+                if (amount !== null && amount !== undefined) {
+                    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+                    doc.text(`£${parseFloat(amount).toFixed(2)}`, 188, y, { align: 'right' });
+                }
+                y += 8;
             }
+
+            if (currentOrder.hsType || currentOrder.hsSize)
+                row(`${currentOrder.hsType || ''} Headstone — ${currentOrder.hsSize || ''}`,
+                    `Colour: ${currentOrder.hsColour || 'Black'}${currentOrder.hsFinish ? ' · ' + currentOrder.hsFinish : ''}`,
+                    totals.breakdown.headstone.cost > 0 ? totals.breakdown.headstone.cost : null);
+
+            if (totals.breakdown.surround.cost > 0)
+                row(currentOrder.surroundType, `Grave surround${currentOrder.surroundGranite ? ' · 6" Granite Foundation' : ''}`, totals.breakdown.surround.cost);
+
+            if (totals.breakdown.stone.cost > 0)
+                row(currentOrder.stoneType, 'Stone / Chippings', totals.breakdown.stone.cost);
+
+            (currentOrder.accessories || []).forEach(accName => {
+                const acc = (priceBook.Accessories || []).find(a => a.name === accName);
+                if (acc) row(accName, 'Accessory', acc.cost);
+            });
+
+            if (totals.breakdown.inscription.cost > 0)
+                row(currentOrder.inscriptionType === 'new' ? 'New Inscription' : 'Additional Inscription',
+                    `${totals.breakdown.inscription.letterCount} letters`, totals.breakdown.inscription.cost);
+            else if (currentOrder.inscriptionText)
+                row('New Inscription', 'Included (within 100 letters)', null);
+
+            if (totals.breakdown.cemeteryFee > 0)
+                row('Cemetery Fee', currentOrder.cemetery, totals.breakdown.cemeteryFee);
+
+            // Total to mason
+            y += 2;
+            doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3); doc.line(20, y, 190, y); y += 6;
+            doc.setFillColor(40, 90, 18); doc.roundedRect(110, y - 4, 80, 12, 2, 2, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+            doc.text('TOTAL TO MASON', 115, y + 3.5); doc.text(`£${totals.totalCost.toFixed(2)}`, 187, y + 3.5, { align: 'right' });
+            doc.setTextColor(0, 0, 0); y += 16;
+
+            // Inscription text box
             if (currentOrder.inscriptionText) {
-                doc.text('Inscription:', 20, y);
-                y += 5;
-                const lines = currentOrder.inscriptionText.split('\n');
-                lines.forEach(line => {
-                    doc.text(line, 25, y);
-                    y += 5;
-                });
+                if (y > 195) { doc.addPage(); y = 20; }
+                doc.setFillColor(255, 251, 224); doc.roundedRect(20, y, 170, 7, 1, 1, 'F');
+                doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(110, 75, 0);
+                doc.text('INSCRIPTION TEXT — COPY EXACTLY AS SHOWN', 24, y + 4.5);
+                doc.setTextColor(0, 0, 0); y += 11;
+
+                const iLines = doc.splitTextToSize(currentOrder.inscriptionText, 160);
+                const bh = Math.max(16, iLines.length * 6 + 10);
+                doc.setDrawColor(210, 185, 100); doc.setLineWidth(0.4); doc.roundedRect(20, y, 170, bh, 2, 2);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
+                let iy = y + 8;
+                iLines.forEach(l => { if (iy > 265) { doc.addPage(); iy = 20; } doc.text(l, 26, iy); iy += 6; });
+                y += bh + 10;
             }
-            
+
             // Mason notes
             if (currentOrder.masonNotes) {
+                if (y > 230) { doc.addPage(); y = 20; }
+                doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60);
+                doc.text('MASON NOTES', 20, y); doc.setTextColor(0, 0, 0); y += 6;
+                const nl = doc.splitTextToSize(currentOrder.masonNotes, 165);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+                nl.forEach(l => { if (y > 265) { doc.addPage(); y = 20; } doc.text(l, 22, y); y += 5; });
                 y += 5;
-                doc.setFillColor(255, 215, 0);
-                doc.rect(20, y - 3, 170, 20, 'F');
-                doc.setFont(undefined, 'bold');
-                doc.text('MASON NOTES:', 22, y + 2);
-                doc.setFont(undefined, 'normal');
-                doc.text(currentOrder.masonNotes, 22, y + 7);
-                y += 25;
             }
-            
+
             // Signature boxes
-            y += 10;
-            doc.text('Mason Signature: _______________________', 20, y);
-            doc.text('DC&S Signature: _______________________', 110, y);
-            
-            addFooter(doc);
-            
-            // Save PDF
-            const filename = `JobCard_${currentOrder.orderRef || currentOrder.orderId}.pdf`;
-            doc.save(filename);
-            
-            // Send WhatsApp notification
-            const message = `🔨 *JOB CARD GENERATED*\n\n` +
-                `Customer: ${currentOrder.customerName}\n` +
-                `Deceased: ${currentOrder.deceasedName}\n` +
-                `Reference: ${currentOrder.orderRef || currentOrder.orderId}\n` +
-                `Headstone: ${currentOrder.hsType || 'Not specified'}\n` +
-                `Size: ${currentOrder.hsSize || 'Not specified'}\n\n` +
-                `Job card has been downloaded and is ready to send to mason.`;
-            
-            sendToWhatsApp(message).then(success => {
-                if (success) {
-                    // Update activity log
-                    if (!currentOrder.log) currentOrder.log = [];
-                    currentOrder.log.push({
-                        id: Date.now().toString(),
-                        ts: new Date().toISOString(),
-                        author: 'SYSTEM',
-                        text: 'Job Card generated and WhatsApp notification sent'
-                    });
-                    
-                    alert('✅ Job Card generated and notification sent to WhatsApp!');
-                }
-            });
+            if (y < 248) {
+                y = Math.max(y + 5, 240);
+                doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3);
+                doc.roundedRect(20, y, 80, 22, 2, 2);
+                doc.roundedRect(110, y, 80, 22, 2, 2);
+                doc.setFontSize(7.5); doc.setTextColor(110, 110, 110); doc.setFont('helvetica', 'normal');
+                doc.text('Mason Signature:', 24, y + 6);
+                doc.text('Date Completed:', 114, y + 6);
+                doc.text('Confirmed correct & complete', 24, y + 18);
+                doc.text('Date: ___________', 114, y + 18);
+                doc.setTextColor(0, 0, 0);
+            }
+
+            dcsPdfFooter(doc);
+            doc.save(`JobCard_${(currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase()}_${new Date().toISOString().slice(0,10)}.pdf`);
+            addActivityLog(`Generated Mason Job Card — Cost: £${totals.totalCost.toFixed(2)}`);
+            sendWhatsAppNotification('job_card', { customer: currentOrder.customerName, deceased: currentOrder.deceasedName, reference: currentOrder.orderRef || currentOrder.orderId, total: totals.totalCost.toFixed(2) });
         }
 
         function getPriceLineItems(order) {
@@ -2741,28 +2618,6 @@
             sendToWhatsApp(message);
         }
 
-        function addLetterhead(doc) {
-            // Header
-            doc.setFontSize(18);
-            doc.setFont(undefined, 'bold');
-            doc.text('DAVID CRYMBLE & Sons', 105, 20, { align: 'center' });
-            
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'normal');
-            doc.text('FUNERAL DIRECTORS & MEMORIAL MASONS', 105, 27, { align: 'center' });
-        }
-
-        function addFooter(doc) {
-            doc.setFontSize(8);
-            doc.setFont(undefined, 'normal');
-            
-            const footerY = 280;
-            doc.text('T. 028 9066 7784  |  E. info@Crymbleandsons.com', 105, footerY, { align: 'center' });
-            doc.text('139 Upper Lisburn Road, Belfast, BT10 0LH  |  330-332 Woodstock Road, Belfast, BT6 9DP', 105, footerY + 4, { align: 'center' });
-            doc.text('AN INDEPENDENT FAMILY COMPANY — David, Joy & Andrew Crymble', 105, footerY + 8, { align: 'center' });
-            doc.setFont(undefined, 'italic');
-            doc.text('"Our God will take care of everything you need." Phil 4:19', 105, footerY + 12, { align: 'center' });
-        }
     </script>
 </body>
 </html>
