@@ -2392,7 +2392,7 @@
     };
 }
 
-        function generateEstimate() {
+        async function generateEstimate() {
             if (!currentOrder) { alert('Please select an order first'); return; }
             const totals = calculateOrderTotals(currentOrder);
             const { jsPDF } = window.jspdf;
@@ -2495,6 +2495,11 @@
                 y += bh + 8;
             }
 
+            // Payment QR code (if payment link exists)
+            if (currentOrder.stripePaymentUrl) {
+                y = await addPdfPaymentQR(doc, y, currentOrder.stripePaymentUrl);
+            }
+
             // Terms
             if (y < 260) {
                 y = Math.max(y + 4, 248);
@@ -2518,7 +2523,7 @@
         }
 
         
-        function generateInvoice() {
+        async function generateInvoice() {
             if (!currentOrder) { alert('Please select an order first'); return; }
             const totals = calculateOrderTotals(currentOrder);
             const { jsPDF } = window.jspdf;
@@ -2619,6 +2624,11 @@
                 let iy = y + 7;
                 iLines.forEach(l => { if (iy > 265) { doc.addPage(); iy = 20; } doc.text(l, 26, iy); iy += 5.5; });
                 y += bh + 8;
+            }
+
+            // Payment QR code (if payment link exists)
+            if (currentOrder.stripePaymentUrl) {
+                y = await addPdfPaymentQR(doc, y, currentOrder.stripePaymentUrl);
             }
 
             // Payment details box
@@ -3005,6 +3015,49 @@
             if (currentOrder && currentOrder.stripePaymentUrl) {
                 setTimeout(() => renderQRCode(currentOrder.stripePaymentUrl), 100);
             }
+        }
+
+        // Generate a QR code data URL for embedding in jsPDF
+        function getPdfQRDataUrl(url) {
+            return new Promise((resolve) => {
+                const tempDiv = document.createElement('div');
+                tempDiv.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
+                document.body.appendChild(tempDiv);
+                try {
+                    new QRCode(tempDiv, { text: url, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M });
+                    setTimeout(() => {
+                        const canvas = tempDiv.querySelector('canvas');
+                        const dataUrl = canvas ? canvas.toDataURL('image/png') : null;
+                        document.body.removeChild(tempDiv);
+                        resolve(dataUrl);
+                    }, 300);
+                } catch(e) {
+                    if (document.body.contains(tempDiv)) document.body.removeChild(tempDiv);
+                    resolve(null);
+                }
+            });
+        }
+
+        // Draw payment QR block into a jsPDF doc; returns new y position
+        async function addPdfPaymentQR(doc, y, url) {
+            if (!url || y > 232) return y;
+            const qrDataUrl = await getPdfQRDataUrl(url);
+            if (!qrDataUrl) return y;
+            y += 4;
+            doc.setFillColor(245, 244, 255);
+            doc.setDrawColor(99, 91, 255);
+            doc.setLineWidth(0.4);
+            doc.roundedRect(20, y, 170, 36, 2, 2, 'FD');
+            doc.addImage(qrDataUrl, 'PNG', 25, y + 3, 30, 30);
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(99, 91, 255);
+            doc.text('Pay Online', 60, y + 10);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(55, 65, 81);
+            doc.text('Scan the QR code to pay securely by card, Apple Pay or Google Pay.', 60, y + 18);
+            const urlLine = doc.splitTextToSize(url, 125);
+            doc.setFontSize(6.5); doc.setTextColor(99, 91, 255);
+            doc.text(urlLine[0] || '', 60, y + 27);
+            doc.setTextColor(0, 0, 0);
+            return y + 42;
         }
 
         function sendPaymentLinkWhatsApp() {
