@@ -1101,14 +1101,27 @@ function handleCreatePaymentLink(data) {
     const price = JSON.parse(priceResp.getContentText());
     if (!price.id) return respond(false, "Stripe price error: " + priceResp.getContentText());
 
+    // 3 — Build customer-facing success URL with balance details
+    const amountPounds = amountPence / 100;
+    const totalOrder   = parseFloat(data.totalSellPrice) || 0;
+    const prevDeposit  = parseFloat(data.previousDeposit) || 0;
+    const newBalance   = Math.max(0, totalOrder - prevDeposit - amountPounds);
+    const shortRef     = (orderRef || orderId || "").slice(-8).toUpperCase();
+    const successUrl   = "https://andrewcrymble.github.io/dcfs-memorial-tracker/payment-success.html"
+      + "?ref="  + encodeURIComponent(shortRef)
+      + "&amt="  + amountPounds.toFixed(2)
+      + "&bal="  + newBalance.toFixed(2)
+      + "&name=" + encodeURIComponent(deceasedName || "")
+      + "&cust=" + encodeURIComponent(customerName || "");
+
     // 3 — Create the Payment Link
     const linkPayload = {
       "line_items[0][price]": price.id,
       "line_items[0][quantity]": "1",
       "after_completion[type]": "redirect",
-      "after_completion[redirect][url]": "https://andrewcrymble.github.io/dcfs-memorial-tracker/?paid=1",
+      "after_completion[redirect][url]": successUrl,
       "metadata[order_id]": orderId || "",
-      "metadata[order_ref]": (orderRef || orderId || "").slice(-8).toUpperCase(),
+      "metadata[order_ref]": shortRef,
       "metadata[payment_type]": data.paymentType || "payment",
       "metadata[customer]": customerName || ""
     };

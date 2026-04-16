@@ -3599,6 +3599,8 @@
                         deceasedName: currentOrder.deceasedName,
                         amountPence: Math.round(amount * 100),
                         paymentType: opt,
+                        totalSellPrice: parseFloat(currentOrder.totalSellPrice) || 0,
+                        previousDeposit: parseFloat(currentOrder.depositPaid) || 0,
                         description: `${label} — ${currentOrder.deceasedName || 'Memorial'} (Ref: ${ref})`
                     })
                 });

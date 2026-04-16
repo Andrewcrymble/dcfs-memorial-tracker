@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Received — David Crymble &amp; Sons</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f7e6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+            color: #1e293b;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.12);
+            padding: 2.5rem 2rem;
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+        }
+        .tick {
+            width: 72px;
+            height: 72px;
+            background: #16a34a;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            font-size: 2rem;
+        }
+        h1 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #15803d;
+            margin-bottom: 0.4rem;
+        }
+        .subtitle {
+            font-size: 1rem;
+            color: #64748b;
+            margin-bottom: 2rem;
+        }
+        .summary-box {
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            border-radius: 10px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.45rem 0;
+            border-bottom: 1px solid #d1fae5;
+            font-size: 0.95rem;
+        }
+        .summary-row:last-child { border-bottom: none; }
+        .summary-row .label { color: #374151; }
+        .summary-row .value { font-weight: 700; color: #111; }
+        .summary-row .value.paid { color: #16a34a; }
+        .summary-row .value.balance { color: #0891b2; font-size: 1.1rem; }
+        .summary-row .value.clear { color: #16a34a; font-size: 1rem; }
+        .ref-badge {
+            display: inline-block;
+            background: #e0f2fe;
+            color: #0369a1;
+            border-radius: 6px;
+            padding: 0.25rem 0.65rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            margin-bottom: 1.75rem;
+        }
+        .footer-msg {
+            font-size: 0.88rem;
+            color: #64748b;
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+        }
+        .company {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            margin-top: 2rem;
+        }
+        .company strong { color: #5a8f2e; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="tick">✓</div>
+        <h1>Payment Received</h1>
+        <p class="subtitle" id="subtitle">Thank you for your payment.</p>
+
+        <div id="refBadge" class="ref-badge" style="display:none;"></div>
+
+        <div class="summary-box" id="summaryBox" style="display:none;">
+            <div class="summary-row" id="rowName" style="display:none;">
+                <span class="label">In Memory Of</span>
+                <span class="value" id="valName"></span>
+            </div>
+            <div class="summary-row">
+                <span class="label">Amount Paid</span>
+                <span class="value paid" id="valAmt">—</span>
+            </div>
+            <div class="summary-row" id="rowBal">
+                <span class="label">Remaining Balance</span>
+                <span class="value balance" id="valBal">—</span>
+            </div>
+        </div>
+
+        <p class="footer-msg">
+            We will be in touch to confirm the next steps for your memorial.
+            If you have any questions please don't hesitate to contact us.
+        </p>
+
+        <div class="company">
+            <strong>David Crymble &amp; Sons</strong><br>
+            Memorial Masons
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const p = new URLSearchParams(window.location.search);
+            const ref  = p.get('ref')  || '';
+            const amt  = parseFloat(p.get('amt'))  || 0;
+            const bal  = parseFloat(p.get('bal'))  || 0;
+            const name = p.get('name') || '';
+            const cust = p.get('cust') || '';
+
+            const fmt = n => '£' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+            // Reference badge
+            if (ref) {
+                const badge = document.getElementById('refBadge');
+                badge.textContent = 'Reference: ' + ref;
+                badge.style.display = 'inline-block';
+            }
+
+            // Summary box
+            if (amt > 0) {
+                document.getElementById('summaryBox').style.display = 'block';
+
+                // Deceased name
+                if (name) {
+                    document.getElementById('rowName').style.display = 'flex';
+                    document.getElementById('valName').textContent = name;
+                }
+
+                // Amount paid
+                document.getElementById('valAmt').textContent = fmt(amt);
+
+                // Balance
+                const rowBal = document.getElementById('rowBal');
+                const valBal = document.getElementById('valBal');
+                if (bal <= 0) {
+                    valBal.textContent = 'Paid in Full';
+                    valBal.className = 'value clear';
+                    // Update subtitle
+                    document.getElementById('subtitle').textContent =
+                        cust ? 'Thank you, ' + cust + '. Your account is now fully paid.' :
+                               'Your account is now fully paid.';
+                } else {
+                    valBal.textContent = fmt(bal);
+                    document.getElementById('subtitle').textContent =
+                        cust ? 'Thank you, ' + cust + '.' : 'Thank you for your payment.';
+                }
+            }
+        })();
+    </script>
+</body>
+</html>
