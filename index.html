@@ -819,8 +819,8 @@
 
             console.log('Rendering details for order:', currentOrder);
 
-            // Use stored total from sheet; fall back to recalculation if 0
-            const storedTotal = parseFloat(currentOrder.totalSellPrice) || 0;
+            // Use stored total — support both old and new field names from Apps Script
+            const storedTotal = parseFloat(currentOrder.totalSellPrice || currentOrder.totalPrice) || 0;
             const total = storedTotal > 0 ? storedTotal : calculateTotal(currentOrder);
 
             const contentArea = document.getElementById('contentArea');
@@ -1003,39 +1003,49 @@
             return text.replace(/[^a-zA-Z0-9]/g, '').length;
         }
 
-        // Render price breakdown using stored prices
+        // Render price breakdown — supports both old and new Apps Script field names
         function renderPriceBreakdown(order, total) {
             let html = '';
 
-            if (parseFloat(order.hsSellPrice) > 0) {
-                html += `<div class="price-row"><span>Headstone (${order.hsType || ''} ${order.hsSize || ''})</span><span>£${parseFloat(order.hsSellPrice).toFixed(2)}</span></div>`;
+            // Headstone: new field = hsSellPrice, old field = sellPrice
+            const hsPrice = parseFloat(order.hsSellPrice || order.sellPrice) || 0;
+            if (hsPrice > 0) {
+                const hsLabel = (order.hsType && order.hsSize) ? `${order.hsType} ${order.hsSize}` : 'Headstone';
+                html += `<div class="price-row"><span>Headstone (${hsLabel})</span><span>£${hsPrice.toFixed(2)}</span></div>`;
             }
 
-            if (parseFloat(order.surroundSellPrice) > 0) {
+            const surroundPrice = parseFloat(order.surroundSellPrice) || 0;
+            if (surroundPrice > 0) {
                 const graniteNote = order.surroundGranite ? ' + Granite' : '';
-                html += `<div class="price-row"><span>Surround (${order.surroundType || ''}${graniteNote})</span><span>£${parseFloat(order.surroundSellPrice).toFixed(2)}</span></div>`;
+                html += `<div class="price-row"><span>Surround (${order.surroundType || ''}${graniteNote})</span><span>£${surroundPrice.toFixed(2)}</span></div>`;
             }
 
-            if (parseFloat(order.stoneSellPrice) > 0) {
-                html += `<div class="price-row"><span>Stone / Chippings (${order.stoneType || ''})</span><span>£${parseFloat(order.stoneSellPrice).toFixed(2)}</span></div>`;
+            const stonePrice = parseFloat(order.stoneSellPrice) || 0;
+            if (stonePrice > 0) {
+                html += `<div class="price-row"><span>Stone / Chippings (${order.stoneType || ''})</span><span>£${stonePrice.toFixed(2)}</span></div>`;
             }
 
-            if (parseFloat(order.accessoriesSellPrice) > 0) {
+            const accPrice = parseFloat(order.accessoriesSellPrice) || 0;
+            if (accPrice > 0) {
                 const accLabel = (order.accessories || []).join(', ') || 'Accessories';
-                html += `<div class="price-row"><span>${accLabel}</span><span>£${parseFloat(order.accessoriesSellPrice).toFixed(2)}</span></div>`;
+                html += `<div class="price-row"><span>${accLabel}</span><span>£${accPrice.toFixed(2)}</span></div>`;
             }
 
-            if (parseFloat(order.inscriptionSellPrice) > 0) {
+            // Inscription: new field = inscriptionSellPrice, old field = inscriptionCharge
+            const inscPrice = parseFloat(order.inscriptionSellPrice || order.inscriptionCharge) || 0;
+            if (inscPrice > 0) {
                 const inscType = order.inscriptionType === 'additional' ? 'Additional Inscription' : 'New Inscription';
-                html += `<div class="price-row"><span>${inscType}</span><span>£${parseFloat(order.inscriptionSellPrice).toFixed(2)}</span></div>`;
+                html += `<div class="price-row"><span>${inscType}</span><span>£${inscPrice.toFixed(2)}</span></div>`;
             }
 
-            if (parseFloat(order.cemeteryFee) > 0) {
-                html += `<div class="price-row"><span>Cemetery Fee (${order.cemetery || ''})</span><span>£${parseFloat(order.cemeteryFee).toFixed(2)}</span></div>`;
+            const cemFee = parseFloat(order.cemeteryFee) || 0;
+            if (cemFee > 0) {
+                html += `<div class="price-row"><span>Cemetery Fee (${order.cemetery || ''})</span><span>£${cemFee.toFixed(2)}</span></div>`;
             }
 
-            if (parseFloat(order.servicesSellPrice) > 0) {
-                html += `<div class="price-row"><span>Additional Services</span><span>£${parseFloat(order.servicesSellPrice).toFixed(2)}</span></div>`;
+            const servicesPrice = parseFloat(order.servicesSellPrice) || 0;
+            if (servicesPrice > 0) {
+                html += `<div class="price-row"><span>Additional Services</span><span>£${servicesPrice.toFixed(2)}</span></div>`;
             }
 
             if (order.extraCharges && Array.isArray(order.extraCharges)) {
@@ -1044,11 +1054,12 @@
                 });
             }
 
-            const displayTotal = parseFloat(order.totalSellPrice) > 0 ? parseFloat(order.totalSellPrice) : total;
+            // Total: new field = totalSellPrice, old field = totalPrice
+            const displayTotal = parseFloat(order.totalSellPrice || order.totalPrice) || total;
             html += `<div class="price-row price-total"><span>Total</span><span>£${displayTotal.toFixed(2)}</span></div>`;
 
-            if (parseFloat(order.depositPaid) > 0) {
-                const deposit = parseFloat(order.depositPaid);
+            const deposit = parseFloat(order.depositPaid) || 0;
+            if (deposit > 0) {
                 html += `<div class="price-row"><span>Deposit Paid</span><span>-£${deposit.toFixed(2)}</span></div>`;
                 html += `<div class="price-row" style="font-weight: 600;"><span>Balance Outstanding</span><span>£${Math.max(0, displayTotal - deposit).toFixed(2)}</span></div>`;
             }
