@@ -2606,17 +2606,21 @@
             }
 
             // Inscription preview
-            if (currentOrder.inscriptionText && y < 225) {
-                doc.setDrawColor(200, 200, 200); doc.line(20, y, 190, y); y += 8;
+            if (currentOrder.inscriptionText) {
+                if (y > 238) { doc.addPage(); y = 20; }
+                doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3); doc.line(20, y, 190, y); y += 8;
                 doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
-                doc.text('INSCRIPTION TEXT — Please verify below is correct', 20, y); y += 6;
+                doc.text('INSCRIPTION TEXT — Please verify below is correct', 20, y); y += 7;
                 const iLines = doc.splitTextToSize(currentOrder.inscriptionText, 162);
-                const bh = Math.max(14, iLines.length * 5.5 + 8);
-                doc.setDrawColor(180, 180, 180); doc.roundedRect(20, y, 170, bh, 2, 2);
-                doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5);
-                let iy = y + 7;
-                iLines.forEach(l => { if (iy > 265) { doc.addPage(); iy = 20; } doc.text(l, 26, iy); iy += 5.5; });
-                y += bh + 8;
+                doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
+                let iy = y;
+                iLines.forEach(l => {
+                    if (iy > 255) { doc.addPage(); iy = 20; }
+                    doc.text(l, 24, iy);
+                    iy += 5.5;
+                });
+                doc.setTextColor(0, 0, 0);
+                y = iy + 6;  // track actual position after text (fixes page-break y bug)
             }
 
             // Payment QR code (if payment link exists)
@@ -2625,7 +2629,7 @@
             }
 
             // Terms
-            if (y < 260) {
+            if (y < 258) {
                 y = Math.max(y + 4, 248);
                 doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(130, 130, 130);
                 doc.text('This is an estimate only. Prices confirmed upon order acceptance and may vary subject to cemetery requirements.', 20, y);
@@ -2737,17 +2741,21 @@
             }
 
             // Inscription preview
-            if (currentOrder.inscriptionText && y < 225) {
-                doc.setDrawColor(200, 200, 200); doc.line(20, y, 190, y); y += 8;
+            if (currentOrder.inscriptionText) {
+                if (y > 238) { doc.addPage(); y = 20; }
+                doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3); doc.line(20, y, 190, y); y += 8;
                 doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
-                doc.text('INSCRIPTION TEXT — Please verify below is correct', 20, y); y += 6;
+                doc.text('INSCRIPTION TEXT — Please verify below is correct', 20, y); y += 7;
                 const iLines = doc.splitTextToSize(currentOrder.inscriptionText, 162);
-                const bh = Math.max(14, iLines.length * 5.5 + 8);
-                doc.setDrawColor(180, 180, 180); doc.roundedRect(20, y, 170, bh, 2, 2);
-                doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5);
-                let iy = y + 7;
-                iLines.forEach(l => { if (iy > 265) { doc.addPage(); iy = 20; } doc.text(l, 26, iy); iy += 5.5; });
-                y += bh + 8;
+                doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
+                let iy = y;
+                iLines.forEach(l => {
+                    if (iy > 255) { doc.addPage(); iy = 20; }
+                    doc.text(l, 24, iy);
+                    iy += 5.5;
+                });
+                doc.setTextColor(0, 0, 0);
+                y = iy + 6;
             }
 
             // Payment QR code (if payment link exists)
@@ -2820,7 +2828,6 @@
             doc.setTextColor(0,0,0); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
             doc.text(currentOrder.customerName || '—', 24, y + 13);
             doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
-            if (currentOrder.phone) doc.text(`T: ${currentOrder.phone}`, 24, y + 20);
 
             doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(56, 118, 29);
             doc.text('DECEASED', 112, y + 6);
@@ -2886,7 +2893,7 @@
 
             // Inscription text box
             if (currentOrder.inscriptionText) {
-                if (y > 195) { doc.addPage(); y = 20; }
+                if (y > 220) { doc.addPage(); y = 20; }
                 doc.setFillColor(245, 245, 245); doc.setDrawColor(0,0,0); doc.setLineWidth(0.3);
                 doc.rect(20, y, 170, 7, 'FD');
                 doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
@@ -2894,12 +2901,14 @@
                 y += 11;
 
                 const iLines = doc.splitTextToSize(currentOrder.inscriptionText, 160);
-                const bh = Math.max(16, iLines.length * 6 + 10);
-                doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.4); doc.roundedRect(20, y, 170, bh, 2, 2);
                 doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
-                let iy = y + 8;
-                iLines.forEach(l => { if (iy > 265) { doc.addPage(); iy = 20; } doc.text(l, 26, iy); iy += 6; });
-                y += bh + 10;
+                let iy = y + 4;
+                iLines.forEach(l => {
+                    if (iy > 255) { doc.addPage(); iy = 20; }
+                    doc.text(l, 26, iy);
+                    iy += 6;
+                });
+                y = iy + 8;  // track actual position
             }
 
             // Mason notes
@@ -3236,23 +3245,23 @@
             if (!url) return y;
             const qrDataUrl = await getPdfQRDataUrl(url);
             if (!qrDataUrl) return y;
-            // If not enough room, start a new page
-            if (y > 220) { doc.addPage(); y = 20; }
+            // If not enough room for the 28mm block, start a new page
+            if (y + 32 > 258) { doc.addPage(); y = 20; }
             y += 4;
             doc.setFillColor(245, 244, 255);
             doc.setDrawColor(99, 91, 255);
             doc.setLineWidth(0.4);
-            doc.roundedRect(20, y, 170, 36, 2, 2, 'FD');
-            doc.addImage(qrDataUrl, 'PNG', 25, y + 3, 30, 30);
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(99, 91, 255);
-            doc.text('Pay Online', 60, y + 10);
-            doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(55, 65, 81);
-            doc.text('Scan the QR code to pay securely by card, Apple Pay or Google Pay.', 60, y + 18);
-            const urlLine = doc.splitTextToSize(url, 125);
+            doc.roundedRect(20, y, 170, 26, 2, 2, 'FD');
+            doc.addImage(qrDataUrl, 'PNG', 24, y + 2, 22, 22);
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(99, 91, 255);
+            doc.text('Pay Online', 50, y + 8);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(55, 65, 81);
+            doc.text('Scan the QR code or visit the link to pay by card, Apple Pay or Google Pay.', 50, y + 15);
+            const urlLine = doc.splitTextToSize(url, 135);
             doc.setFontSize(6.5); doc.setTextColor(99, 91, 255);
-            doc.text(urlLine[0] || '', 60, y + 27);
+            doc.text(urlLine[0] || '', 50, y + 21);
             doc.setTextColor(0, 0, 0);
-            return y + 42;
+            return y + 30;
         }
 
         function sendPaymentLinkWhatsApp() {
