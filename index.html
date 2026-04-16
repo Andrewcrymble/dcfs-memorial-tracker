@@ -6,446 +6,375 @@
     <title>DC&S Headstone Order Tracker</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
-            --header-green: #669d35;
-            --accent-cyan: #0097a7;
-            --bg-grey: #f0f4f7;
-            --surface-white: #ffffff;
-            --text-dark: #1a2733;
-            --status-enquiry: #94a3b8;
-            --status-quoted: #f59e0b;
-            --status-confirmed: #3b82f6;
-            --status-design: #8b5cf6;
-            --status-production: #f97316;
-            --status-ready: #10b981;
-            --status-installed: #059669;
+            --green: #5a8f2e;
+            --green-light: #f0f7e6;
+            --cyan: #0097a7;
+            --cyan-dark: #00838f;
+            --bg: #f4f6f9;
+            --white: #ffffff;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --radius: 10px;
+            --shadow: 0 1px 4px rgba(0,0,0,0.08);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: var(--bg-grey);
-            color: var(--text-dark);
-            line-height: 1.6;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            font-size: 14px;
         }
 
+        /* ── HEADER ── */
         .app-header {
-            background: var(--header-green);
+            background: var(--green);
             color: white;
-            padding: 1rem 2rem;
+            padding: 0 1.5rem;
+            height: 56px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
+        .app-header h1 { font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; }
+        .header-actions { display: flex; gap: 0.5rem; }
 
-        .app-header h1 {
-            font-size: 1.5rem;
-            font-weight: 600;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 1rem;
-        }
-
+        /* ── BUTTONS ── */
         .btn {
-            padding: 0.5rem 1rem;
+            padding: 0.45rem 1rem;
             border: none;
             border-radius: 6px;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: 500;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
         }
+        .btn-primary { background: var(--cyan); color: white; }
+        .btn-primary:hover { background: var(--cyan-dark); }
+        .btn-secondary { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.25); }
+        .btn-outline { background: white; color: var(--green); border: 1px solid var(--border); }
+        .btn-outline:hover { background: var(--green-light); border-color: var(--green); }
+        .btn-cyan { background: var(--cyan); color: white; }
+        .btn-cyan:hover { background: var(--cyan-dark); }
+        .btn-danger { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
+        .btn-danger:hover { background: #dc2626; color: white; }
 
-        .btn-primary {
-            background: var(--accent-cyan);
-            color: white;
-        }
+        /* ── LAYOUT ── */
+        .main-container { display: flex; height: calc(100vh - 56px); }
 
-        .btn-primary:hover {
-            background: #00838f;
-        }
-
-        .btn-secondary {
-            background: white;
-            color: var(--header-green);
-        }
-
-        .btn-secondary:hover {
-            background: #f0f0f0;
-        }
-
-        .btn-danger {
-            background: #ef4444;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #dc2626;
-        }
-
-        .main-container {
-            display: flex;
-            height: calc(100vh - 60px);
-        }
-
+        /* ── SIDEBAR ── */
         .sidebar {
-            width: 300px;
-            background: var(--surface-white);
-            border-right: 1px solid #e5e7eb;
-            overflow-y: auto;
+            width: 280px;
+            min-width: 280px;
+            background: var(--white);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
-
-        .search-box {
-            padding: 1rem;
-            border-bottom: 1px solid #e5e7eb;
-        }
-
+        .search-box { padding: 0.75rem; border-bottom: 1px solid var(--border); }
         .search-box input {
             width: 100%;
-            padding: 0.5rem;
-            border: 1px solid #d1d5db;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border);
             border-radius: 6px;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            background: var(--bg);
+            outline: none;
+            transition: border-color 0.15s;
         }
+        .search-box input:focus { border-color: var(--cyan); background: white; }
 
         .filter-tabs {
             display: flex;
-            padding: 0.5rem;
-            gap: 0.25rem;
-            border-bottom: 1px solid #e5e7eb;
-            overflow-x: auto;
-        }
-
-        .filter-tab {
             padding: 0.5rem 0.75rem;
-            font-size: 0.8rem;
-            border: none;
+            gap: 0.25rem;
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            flex-shrink: 0;
+        }
+        .filter-tabs::-webkit-scrollbar { height: 2px; }
+        .filter-tab {
+            padding: 0.3rem 0.65rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            border: 1px solid transparent;
             background: transparent;
             cursor: pointer;
-            border-radius: 4px;
+            border-radius: 20px;
             white-space: nowrap;
+            color: var(--text-muted);
+            transition: all 0.15s;
         }
+        .filter-tab:hover { background: var(--bg); color: var(--text); }
+        .filter-tab.active { background: var(--cyan); color: white; }
 
-        .filter-tab.active {
-            background: var(--accent-cyan);
-            color: white;
-        }
-
-        .order-list {
-            list-style: none;
-        }
-
+        .order-list { list-style: none; overflow-y: auto; flex: 1; }
         .order-item {
-            padding: 1rem;
-            border-bottom: 1px solid #e5e7eb;
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid var(--border);
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.15s;
+            position: relative;
         }
-
-        .order-item:hover {
-            background: #f9fafb;
-        }
-
+        .order-item:hover { background: var(--bg); }
         .order-item.active {
-            background: #e0f2f1;
-            border-left: 3px solid var(--accent-cyan);
+            background: #e8f5e9;
+            border-left: 3px solid var(--green);
         }
-
-        .order-ref {
-            font-weight: 600;
-            color: var(--text-dark);
-            margin-bottom: 0.25rem;
-        }
-
-        .order-deceased {
-            font-size: 0.9rem;
-            color: #6b7280;
-            margin-bottom: 0.25rem;
-        }
-
+        .order-item-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.2rem; }
+        .order-name { font-weight: 600; font-size: 0.9rem; color: var(--text); }
+        .order-customer { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.35rem; }
         .order-status-badge {
             display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 500;
+            padding: 0.15rem 0.5rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
             color: white;
+            letter-spacing: 0.02em;
         }
 
-        .content-area {
-            flex: 1;
-            overflow-y: auto;
-            padding: 2rem;
-        }
+        /* ── CONTENT ── */
+        .content-area { flex: 1; overflow-y: auto; padding: 1.5rem; background: var(--bg); }
 
-        .order-header {
-            background: var(--surface-white);
-            padding: 1.5rem;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .order-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-
-        .order-meta {
+        /* ── ORDER HEADER CARD ── */
+        .order-hero {
+            background: var(--green);
+            border-radius: var(--radius);
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1.25rem;
+            color: white;
             display: flex;
-            gap: 2rem;
-            color: #6b7280;
-            font-size: 0.9rem;
+            justify-content: space-between;
+            align-items: flex-start;
         }
+        .order-hero-left h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.4rem; }
+        .order-hero-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; opacity: 0.9; flex-wrap: wrap; }
+        .order-hero-meta span { display: flex; align-items: center; gap: 0.3rem; }
+        .order-hero-right { text-align: right; }
+        .hero-total { font-size: 2rem; font-weight: 700; line-height: 1; }
+        .hero-total-label { font-size: 0.8rem; opacity: 0.8; margin-top: 0.2rem; }
 
-        .form-section {
-            background: var(--surface-white);
-            padding: 1.5rem;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        /* ── DETAIL GRID ── */
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+        .detail-grid-wide { grid-column: 1 / -1; }
+
+        /* ── CARDS ── */
+        .card {
+            background: var(--white);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
         }
-
-        .section-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            color: var(--header-green);
+        .card-header {
+            padding: 0.75rem 1.25rem;
+            border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            background: var(--bg);
         }
+        .card-header-icon { font-size: 0.95rem; }
+        .card-header-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+        .card-body { padding: 1rem 1.25rem; }
 
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-        }
+        /* ── DATA ROWS ── */
+        .data-row { display: flex; flex-direction: column; margin-bottom: 0.75rem; }
+        .data-row:last-child { margin-bottom: 0; }
+        .data-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 0.15rem; }
+        .data-value { font-size: 0.9rem; color: var(--text); font-weight: 500; }
+        .data-value.empty { color: var(--text-muted); font-weight: 400; font-style: italic; }
 
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
+        .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem 1.5rem; }
+        .data-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem 1rem; }
 
-        .form-group label {
-            font-size: 0.85rem;
-            font-weight: 500;
-            margin-bottom: 0.25rem;
-            color: #374151;
-        }
-
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
-            padding: 0.5rem;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            font-family: inherit;
-        }
-
-        .form-group textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-
-        .status-selector {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-        }
-
-        .status-option {
-            padding: 0.5rem 1rem;
-            border: 2px solid #e5e7eb;
-            border-radius: 6px;
+        /* ── STATUS WORKFLOW ── */
+        .status-workflow { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+        .status-pill {
+            padding: 0.4rem 0.9rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
             cursor: pointer;
-            font-size: 0.85rem;
-            font-weight: 500;
-            transition: all 0.2s;
+            border: 2px solid transparent;
+            transition: all 0.15s;
+            background: var(--bg);
+            color: var(--text-muted);
         }
+        .status-pill:hover { opacity: 0.85; transform: translateY(-1px); }
+        .status-pill.active { color: white; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
 
-        .status-option.active {
-            color: white;
-            border-color: transparent;
-        }
-
-        .price-display {
-            background: #f9fafb;
-            padding: 1rem;
-            border-radius: 6px;
-            border-left: 4px solid var(--accent-cyan);
-        }
-
-        .price-row {
+        /* ── PRICE BREAKDOWN ── */
+        .price-table { width: 100%; }
+        .price-line { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .price-line:last-of-type { border-bottom: none; }
+        .price-line-label { color: var(--text); }
+        .price-line-amount { font-weight: 600; color: var(--text); }
+        .price-total-line {
             display: flex;
             justify-content: space-between;
-            padding: 0.25rem 0;
-            font-size: 0.9rem;
-        }
-
-        .price-total {
-            font-size: 1.25rem;
-            font-weight: 600;
-            border-top: 2px solid #d1d5db;
-            padding-top: 0.5rem;
+            align-items: center;
+            padding: 0.75rem 0 0;
             margin-top: 0.5rem;
+            border-top: 2px solid var(--border);
+        }
+        .price-total-line .label { font-size: 0.95rem; font-weight: 700; color: var(--text); }
+        .price-total-line .amount { font-size: 1.4rem; font-weight: 700; color: var(--green); }
+        .price-balance { display: flex; justify-content: space-between; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--border); font-size: 0.85rem; }
+        .price-balance .label { color: var(--text-muted); }
+        .price-balance .amount { font-weight: 600; color: #ef4444; }
+
+        /* ── INSCRIPTION BOX ── */
+        .inscription-box {
+            background: var(--bg);
+            border-left: 3px solid var(--cyan);
+            border-radius: 0 6px 6px 0;
+            padding: 0.75rem 1rem;
+            white-space: pre-wrap;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin-top: 0.75rem;
+            color: var(--text);
         }
 
-        .file-upload-area {
-            border: 2px dashed #d1d5db;
-            border-radius: 8px;
-            padding: 2rem;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
+        /* ── ACTIVITY LOG ── */
+        .activity-list { list-style: none; }
+        .activity-entry {
+            display: flex;
+            gap: 0.75rem;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
         }
+        .activity-entry:last-child { border-bottom: none; }
+        .activity-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); flex-shrink: 0; margin-top: 5px; }
+        .activity-content { flex: 1; }
+        .activity-text { font-size: 0.875rem; color: var(--text); }
+        .activity-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
 
-        .file-upload-area:hover {
-            border-color: var(--accent-cyan);
-            background: #f9fafb;
-        }
-
-        .file-list {
-            list-style: none;
-            margin-top: 1rem;
-        }
-
-        .file-item {
+        /* ── FILES ── */
+        .file-entry {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0.75rem;
-            background: #f9fafb;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg);
             border-radius: 6px;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.4rem;
+            font-size: 0.85rem;
         }
 
-        .activity-log {
-            list-style: none;
+        /* ── ACTION BAR ── */
+        .action-bar {
+            background: var(--white);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 0.85rem 1.25rem;
+            display: flex;
+            gap: 0.6rem;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 1.25rem;
         }
+        .action-bar .spacer { flex: 1; }
 
-        .activity-item {
-            padding: 1rem;
-            border-left: 3px solid #e5e7eb;
-            margin-bottom: 0.5rem;
-            background: #f9fafb;
-            border-radius: 0 6px 6px 0;
-        }
-
-        .activity-time {
-            font-size: 0.75rem;
-            color: #6b7280;
-            margin-bottom: 0.25rem;
-        }
-
-        .activity-text {
-            font-size: 0.9rem;
-        }
-
+        /* ── MODAL ── */
         .modal {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
+            inset: 0;
+            background: rgba(0,0,0,0.45);
             z-index: 1000;
             align-items: center;
             justify-content: center;
+            padding: 1rem;
         }
-
-        .modal.active {
-            display: flex;
-        }
-
+        .modal.active { display: flex; }
         .modal-content {
             background: white;
-            border-radius: 8px;
-            padding: 2rem;
-            max-width: 600px;
-            width: 90%;
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            width: 100%;
+            max-width: 860px;
             max-height: 90vh;
             overflow-y: auto;
+            box-shadow: var(--shadow-md);
         }
-
         .modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.25rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border);
         }
+        .modal-title { font-size: 1.1rem; font-weight: 700; }
+        .close-modal { font-size: 1.5rem; border: none; background: none; cursor: pointer; color: var(--text-muted); line-height: 1; }
+        .close-modal:hover { color: var(--text); }
 
-        .modal-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-        }
-
-        .close-modal {
-            font-size: 1.5rem;
-            border: none;
-            background: none;
-            cursor: pointer;
-            color: #6b7280;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 3rem;
-            color: #6b7280;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 3rem;
-            color: #6b7280;
-        }
-
-        .empty-state-icon {
-            font-size: 3rem;
+        /* ── FORM STYLES ── */
+        .form-section {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 1.25rem;
             margin-bottom: 1rem;
+            border: 1px solid var(--border);
         }
+        .section-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--green);
+            margin-bottom: 0.85rem;
+        }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.25rem; }
+        .form-group label { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-family: inherit;
+            background: white;
+            transition: border-color 0.15s;
+            outline: none;
+        }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,151,167,0.1); }
+        .form-group textarea { min-height: 90px; resize: vertical; }
 
-        .action-buttons {
-            display: flex;
-            gap: 1rem;
-            margin-top: 2rem;
-        }
+        /* ── MISC ── */
+        .loading { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
+        .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60%; color: var(--text-muted); gap: 0.5rem; }
+        .empty-state-icon { font-size: 3rem; opacity: 0.4; }
+        .empty-state h2 { font-size: 1.1rem; font-weight: 600; color: var(--text); }
+        .empty-state p { font-size: 0.9rem; }
 
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .checkbox-group input[type="checkbox"] {
-            width: auto;
-        }
+        .checkbox-group { display: flex; align-items: center; gap: 0.5rem; }
+        .checkbox-group input[type="checkbox"] { width: auto; }
 
         @media print {
-            .app-header,
-            .sidebar,
-            .action-buttons {
-                display: none;
-            }
-            
-            .main-container {
-                height: auto;
-            }
-            
-            .content-area {
-                padding: 0;
-            }
+            .app-header, .sidebar, .action-bar { display: none; }
+            .main-container { height: auto; }
+            .content-area { padding: 0; }
         }
     </style>
 </head>
@@ -604,16 +533,6 @@
                     if (data.priceBook) {
                         priceBook = data.priceBook;
                     }
-                    // DEBUG — remove after fixing
-                    if (allOrders.length > 0) {
-                        const o = allOrders[0];
-                        console.log('=== DEBUG FIRST ORDER ===');
-                        console.log('totalSellPrice:', o.totalSellPrice);
-                        console.log('hsSellPrice:', o.hsSellPrice);
-                        console.log('inscriptionSellPrice:', o.inscriptionSellPrice);
-                        console.log('cemeteryFee:', o.cemeteryFee);
-                        console.log('Full order:', JSON.stringify(o));
-                    }
                     renderOrderList();
                     delete window[callbackName];
                 };
@@ -720,43 +639,26 @@
                 return matchesFilter && matchesSearch;
             });
 
-            console.log('Rendering order list. Filtered orders:', filtered.length);
-            console.log('Sample order:', filtered[0]);
-
             if (filtered.length === 0) {
                 orderList.innerHTML = '<li class="empty-state"><p>No orders found</p></li>';
                 return;
             }
 
             orderList.innerHTML = filtered.map((order, index) => {
-                // Generate orderId if it doesn't exist
                 if (!order.orderId) {
-                    // Try to use other unique fields or create one from index
                     order.orderId = order.id || order.ID || order.Order_ID || order.orderRef || `order_${index}_${Date.now()}`;
                 }
-                
-                // Debug: log what we're rendering
-                console.log('Rendering order item:', {
-                    orderId: order.orderId,
-                    orderRef: order.orderRef,
-                    deceasedName: order.deceasedName,
-                    status: order.status,
-                    allKeys: Object.keys(order)
-                });
-                
-                // Escape orderId to prevent injection
                 const safeOrderId = String(order.orderId || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                
+                const status = order.status || order.Status || 'Enquiry';
                 return `
-                    <li class="order-item ${currentOrder?.orderId === order.orderId ? 'active' : ''}" 
+                    <li class="order-item ${currentOrder?.orderId === order.orderId ? 'active' : ''}"
                         data-order-id="${safeOrderId}"
-                        data-order-index="${index}"
-                        style="cursor: pointer;">
-                        <div class="order-ref">${order.orderRef || order.OrderRef || order.Order_Ref || 'No Ref'}</div>
-                        <div class="order-deceased">${order.deceasedName || order.DeceasedName || order.Deceased_Name || 'Unknown'}</div>
-                        <span class="order-status-badge" style="background: ${STATUS_COLORS[order.status || order.Status] || '#94a3b8'}">
-                            ${order.status || order.Status || 'Enquiry'}
-                        </span>
+                        data-order-index="${index}">
+                        <div class="order-item-top">
+                            <div class="order-name">${order.deceasedName || 'Unknown'}</div>
+                            <span class="order-status-badge" style="background:${STATUS_COLORS[status] || '#94a3b8'}">${status}</span>
+                        </div>
+                        <div class="order-customer">${order.customerName || ''} &middot; ${order.orderRef || 'No Ref'}</div>
                     </li>
                 `;
             }).join('');
@@ -781,31 +683,16 @@
 
         // Select order
         function selectOrder(orderId) {
-            console.log('Selecting order:', orderId);
             currentOrder = allOrders.find(o => o.orderId === orderId || o.id === orderId || o.ID === orderId);
-            console.log('Found order:', currentOrder);
-            console.log('All orders:', allOrders);
-            
-            if (!currentOrder) {
-                console.error('Order not found!');
-                return;
-            }
-            
+            if (!currentOrder) return;
             renderOrderList();
             renderOrderDetails();
         }
 
         // Select order by array index (fallback)
         function selectOrderByIndex(index) {
-            console.log('Selecting order by index:', index);
             currentOrder = allOrders[index];
-            console.log('Found order:', currentOrder);
-            
-            if (!currentOrder) {
-                console.error('Order not found at index:', index);
-                return;
-            }
-            
+            if (!currentOrder) return;
             renderOrderList();
             renderOrderDetails();
         }
@@ -830,94 +717,177 @@
                 return;
             }
 
+            const o = currentOrder;
+            const val = (v) => v ? `<span class="data-value">${v}</span>` : `<span class="data-value empty">—</span>`;
+
             contentArea.innerHTML = `
-                <div class="order-header">
-                    <div class="order-title">${currentOrder.orderRef || currentOrder.orderId || 'New Order'}</div>
-                    <div class="order-meta">
-                        <span>📅 ${currentOrder.orderDate || 'Not set'}</span>
-                        <span>👤 ${currentOrder.customerName || 'Unknown'}</span>
-                        <span>💷 £${total.toFixed(2)}</span>
+                <!-- Hero banner -->
+                <div class="order-hero">
+                    <div class="order-hero-left">
+                        <h2>${o.deceasedName || 'Unnamed'}</h2>
+                        <div class="order-hero-meta">
+                            <span>📋 ${o.orderRef || o.orderId}</span>
+                            <span>📅 ${o.orderDate || 'No date'}</span>
+                            <span>👤 ${o.customerName || 'No customer'}</span>
+                            ${o.cemetery ? `<span>📍 ${o.cemetery}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="order-hero-right">
+                        <div class="hero-total">£${total.toFixed(2)}</div>
+                        <div class="hero-total-label">Customer Total</div>
                     </div>
                 </div>
 
-                <div class="form-section">
-                    <div class="section-title">⚙️ Order Status</div>
-                    <div class="status-selector">
-                        ${Object.keys(STATUS_COLORS).map(status => `
-                            <div class="status-option ${currentOrder.status === status ? 'active' : ''}" 
-                                 style="${currentOrder.status === status ? 'background: ' + STATUS_COLORS[status] : ''}"
-                                 onclick="updateStatus('${status}')">
-                                ${status}
+                <!-- Status -->
+                <div class="card" style="margin-bottom:1.25rem;">
+                    <div class="card-header">
+                        <span class="card-header-icon">⚙️</span>
+                        <span class="card-header-title">Order Status</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="status-workflow">
+                            ${Object.keys(STATUS_COLORS).map(s => `
+                                <button class="status-pill ${o.status === s ? 'active' : ''}"
+                                    style="${o.status === s ? `background:${STATUS_COLORS[s]};border-color:${STATUS_COLORS[s]}` : ''}"
+                                    onclick="updateStatus('${s}')">${s}</button>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2-col detail grid -->
+                <div class="detail-grid">
+
+                    <!-- Customer -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-header-icon">👤</span>
+                            <span class="card-header-title">Customer</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="data-grid">
+                                <div class="data-row"><div class="data-label">Name</div>${val(o.customerName)}</div>
+                                <div class="data-row"><div class="data-label">Phone</div>${val(o.phone)}</div>
+                                <div class="data-row"><div class="data-label">Email</div>${val(o.email)}</div>
+                                <div class="data-row" style="grid-column:1/-1"><div class="data-label">Address</div>${val(o.address)}</div>
                             </div>
-                        `).join('')}
+                        </div>
                     </div>
-                </div>
 
-                <div class="form-section">
-                    <div class="section-title">👤 Customer Details</div>
-                    <div class="form-grid">
-                        <div><strong>Name:</strong> ${currentOrder.customerName || '-'}</div>
-                        <div><strong>Phone:</strong> ${currentOrder.phone || '-'}</div>
-                        <div><strong>Email:</strong> ${currentOrder.email || '-'}</div>
-                        <div style="grid-column: 1 / -1;"><strong>Address:</strong> ${currentOrder.address || '-'}</div>
+                    <!-- Deceased -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-header-icon">🕊️</span>
+                            <span class="card-header-title">Deceased</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="data-grid">
+                                <div class="data-row"><div class="data-label">Name</div>${val(o.deceasedName)}</div>
+                                <div class="data-row"><div class="data-label">Date of Birth</div>${val(o.deceasedDob)}</div>
+                                <div class="data-row"><div class="data-label">Date of Death</div>${val(o.deceasedDod)}</div>
+                                <div class="data-row"><div class="data-label">Cemetery</div>${val(o.cemetery)}</div>
+                                <div class="data-row"><div class="data-label">Grave No.</div>${val(o.graveNumber)}</div>
+                            </div>
+                        </div>
                     </div>
-                </div>
 
-                <div class="form-section">
-                    <div class="section-title">🕊️ Deceased Details</div>
-                    <div class="form-grid">
-                        <div><strong>Name:</strong> ${currentOrder.deceasedName || '-'}</div>
-                        <div><strong>DOB:</strong> ${currentOrder.deceasedDob || '-'}</div>
-                        <div><strong>DOD:</strong> ${currentOrder.deceasedDod || '-'}</div>
+                    <!-- Headstone Spec -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-header-icon">🪨</span>
+                            <span class="card-header-title">Headstone Specification</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="data-grid-3">
+                                <div class="data-row"><div class="data-label">Type</div>${val(o.hsType)}</div>
+                                <div class="data-row"><div class="data-label">Size</div>${val(o.hsSize)}</div>
+                                <div class="data-row"><div class="data-label">Colour</div>${val(o.hsColour)}</div>
+                                <div class="data-row"><div class="data-label">Finish</div>${val(o.hsFinish)}</div>
+                                <div class="data-row"><div class="data-label">Surround</div>${val(o.surroundType)}</div>
+                                <div class="data-row"><div class="data-label">Stone/Chippings</div>${val(o.stoneType)}</div>
+                            </div>
+                        </div>
                     </div>
-                </div>
 
-                <div class="form-section">
-                    <div class="section-title">🪨 Headstone Specification</div>
-                    <div class="form-grid">
-                        <div><strong>Type:</strong> ${currentOrder.hsType || '-'}</div>
-                        <div><strong>Size:</strong> ${currentOrder.hsSize || '-'}</div>
-                        <div><strong>Colour:</strong> ${currentOrder.hsColour || '-'}</div>
-                        <div><strong>Finish:</strong> ${currentOrder.hsFinish || '-'}</div>
+                    <!-- Price Breakdown -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-header-icon">💰</span>
+                            <span class="card-header-title">Price Breakdown</span>
+                        </div>
+                        <div class="card-body">
+                            ${renderPriceBreakdown(o, total)}
+                        </div>
                     </div>
-                </div>
 
-                <div class="form-section">
-                    <div class="section-title">✍️ Inscription</div>
-                    <div><strong>Type:</strong> ${currentOrder.inscriptionType || 'new'}</div>
-                    <div><strong>Lines:</strong> ${currentOrder.inscriptionLines || 0}</div>
-                    <div><strong>Style:</strong> ${currentOrder.inscriptionStyle || '-'}</div>
-                    <div><strong>Colour:</strong> ${currentOrder.inscriptionColour || '-'}</div>
-                    ${currentOrder.inscriptionText ? `<div style="margin-top: 1rem; white-space: pre-wrap; background: #f9fafb; padding: 1rem; border-radius: 6px;">${currentOrder.inscriptionText}</div>` : ''}
-                </div>
-
-                <div class="form-section">
-                    <div class="section-title">💰 Pricing Breakdown</div>
-                    <div class="price-display">
-                        ${renderPriceBreakdown(currentOrder, total)}
+                    <!-- Inscription (full width) -->
+                    <div class="card detail-grid-wide">
+                        <div class="card-header">
+                            <span class="card-header-icon">✍️</span>
+                            <span class="card-header-title">Inscription</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="data-grid-3" style="margin-bottom:0.75rem;">
+                                <div class="data-row"><div class="data-label">Type</div>${val(o.inscriptionType)}</div>
+                                <div class="data-row"><div class="data-label">Lines</div>${val(o.inscriptionLines)}</div>
+                                <div class="data-row"><div class="data-label">Style</div>${val(o.inscriptionStyle)}</div>
+                                <div class="data-row"><div class="data-label">Colour</div>${val(o.inscriptionColour)}</div>
+                            </div>
+                            ${o.inscriptionText
+                                ? `<div class="inscription-box">${o.inscriptionText}</div>`
+                                : '<span class="data-value empty">No inscription text entered</span>'}
+                        </div>
                     </div>
+
+                    <!-- Notes (full width, only if present) -->
+                    ${(o.notes || o.masonNotes) ? `
+                    <div class="card detail-grid-wide">
+                        <div class="card-header">
+                            <span class="card-header-icon">📝</span>
+                            <span class="card-header-title">Notes</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="data-grid">
+                                ${o.notes ? `<div class="data-row" style="grid-column:1/-1"><div class="data-label">General Notes</div><div class="data-value">${o.notes}</div></div>` : ''}
+                                ${o.masonNotes ? `<div class="data-row" style="grid-column:1/-1"><div class="data-label">Mason Notes</div><div class="data-value">${o.masonNotes}</div></div>` : ''}
+                            </div>
+                        </div>
+                    </div>` : ''}
+
+                    <!-- Activity Log (full width) -->
+                    <div class="card detail-grid-wide">
+                        <div class="card-header">
+                            <span class="card-header-icon">🕐</span>
+                            <span class="card-header-title">Activity Log</span>
+                        </div>
+                        <div class="card-body">
+                            ${renderActivityLog(o)}
+                        </div>
+                    </div>
+
+                    <!-- Files (full width) -->
+                    <div class="card detail-grid-wide">
+                        <div class="card-header">
+                            <span class="card-header-icon">📎</span>
+                            <span class="card-header-title">Attached Files</span>
+                        </div>
+                        <div class="card-body">
+                            ${renderFiles(o)}
+                        </div>
+                    </div>
+
                 </div>
 
-                <div class="form-section">
-                    <div class="section-title">📁 Files</div>
-                    ${renderFiles(currentOrder)}
-                </div>
-
-                <div class="form-section">
-                    <div class="section-title">📝 Activity Log</div>
-                    ${renderActivityLog(currentOrder)}
-                </div>
-
-                <div class="action-buttons">
-                    <button class="btn btn-primary" onclick="editOrder()">✏️ Edit Order</button>
-                    <button class="btn btn-secondary" onclick="generateEstimate()">📄 Generate Estimate</button>
-                    <button class="btn btn-secondary" onclick="generateMasonJobCard()">🔨 Mason Job Card</button>
-                    <button class="btn btn-secondary" onclick="generateInvoice()">🧾 Generate Invoice</button>
-                    <button class="btn btn-danger" onclick="deleteOrder()" style="margin-left: auto;">🗑️ Delete</button>
+                <!-- Action Bar -->
+                <div class="action-bar">
+                    <button class="btn btn-outline" onclick="editOrder()">✏️ Edit Order</button>
+                    <button class="btn btn-cyan" onclick="generateEstimate()">📄 Estimate</button>
+                    <button class="btn btn-cyan" onclick="generateMasonJobCard()">🔨 Job Card</button>
+                    <button class="btn btn-cyan" onclick="generateInvoice()">🧾 Invoice</button>
+                    <div class="spacer"></div>
+                    <button class="btn btn-danger" onclick="deleteOrder()">🗑️ Delete</button>
                 </div>
             `;
-            
-            console.log('Order details rendered successfully');
         }
 
         // Calculate total
@@ -1011,57 +981,55 @@
             const hsPrice = parseFloat(order.hsSellPrice || order.sellPrice) || 0;
             if (hsPrice > 0) {
                 const hsLabel = (order.hsType && order.hsSize) ? `${order.hsType} ${order.hsSize}` : 'Headstone';
-                html += `<div class="price-row"><span>Headstone (${hsLabel})</span><span>£${hsPrice.toFixed(2)}</span></div>`;
+                html += `<div class="price-line"><span class="price-line-label">Headstone (${hsLabel})</span><span class="price-line-amount">£${hsPrice.toFixed(2)}</span></div>`;
             }
 
             const surroundPrice = parseFloat(order.surroundSellPrice) || 0;
             if (surroundPrice > 0) {
                 const graniteNote = order.surroundGranite ? ' + Granite' : '';
-                html += `<div class="price-row"><span>Surround (${order.surroundType || ''}${graniteNote})</span><span>£${surroundPrice.toFixed(2)}</span></div>`;
+                html += `<div class="price-line"><span class="price-line-label">Surround (${order.surroundType || ''}${graniteNote})</span><span class="price-line-amount">£${surroundPrice.toFixed(2)}</span></div>`;
             }
 
             const stonePrice = parseFloat(order.stoneSellPrice) || 0;
             if (stonePrice > 0) {
-                html += `<div class="price-row"><span>Stone / Chippings (${order.stoneType || ''})</span><span>£${stonePrice.toFixed(2)}</span></div>`;
+                html += `<div class="price-line"><span class="price-line-label">Stone / Chippings (${order.stoneType || ''})</span><span class="price-line-amount">£${stonePrice.toFixed(2)}</span></div>`;
             }
 
             const accPrice = parseFloat(order.accessoriesSellPrice) || 0;
             if (accPrice > 0) {
                 const accLabel = (order.accessories || []).join(', ') || 'Accessories';
-                html += `<div class="price-row"><span>${accLabel}</span><span>£${accPrice.toFixed(2)}</span></div>`;
+                html += `<div class="price-line"><span class="price-line-label">${accLabel}</span><span class="price-line-amount">£${accPrice.toFixed(2)}</span></div>`;
             }
 
-            // Inscription: new field = inscriptionSellPrice, old field = inscriptionCharge
             const inscPrice = parseFloat(order.inscriptionSellPrice || order.inscriptionCharge) || 0;
             if (inscPrice > 0) {
                 const inscType = order.inscriptionType === 'additional' ? 'Additional Inscription' : 'New Inscription';
-                html += `<div class="price-row"><span>${inscType}</span><span>£${inscPrice.toFixed(2)}</span></div>`;
+                html += `<div class="price-line"><span class="price-line-label">${inscType}</span><span class="price-line-amount">£${inscPrice.toFixed(2)}</span></div>`;
             }
 
             const cemFee = parseFloat(order.cemeteryFee) || 0;
             if (cemFee > 0) {
-                html += `<div class="price-row"><span>Cemetery Fee (${order.cemetery || ''})</span><span>£${cemFee.toFixed(2)}</span></div>`;
+                html += `<div class="price-line"><span class="price-line-label">Cemetery Fee (${order.cemetery || ''})</span><span class="price-line-amount">£${cemFee.toFixed(2)}</span></div>`;
             }
 
             const servicesPrice = parseFloat(order.servicesSellPrice) || 0;
             if (servicesPrice > 0) {
-                html += `<div class="price-row"><span>Additional Services</span><span>£${servicesPrice.toFixed(2)}</span></div>`;
+                html += `<div class="price-line"><span class="price-line-label">Additional Services</span><span class="price-line-amount">£${servicesPrice.toFixed(2)}</span></div>`;
             }
 
             if (order.extraCharges && Array.isArray(order.extraCharges)) {
                 order.extraCharges.forEach(charge => {
-                    html += `<div class="price-row"><span>${charge.label}</span><span>£${parseFloat(charge.amount).toFixed(2)}</span></div>`;
+                    html += `<div class="price-line"><span class="price-line-label">${charge.label}</span><span class="price-line-amount">£${parseFloat(charge.amount).toFixed(2)}</span></div>`;
                 });
             }
 
-            // Total: new field = totalSellPrice, old field = totalPrice
             const displayTotal = parseFloat(order.totalSellPrice || order.totalPrice) || total;
-            html += `<div class="price-row price-total"><span>Total</span><span>£${displayTotal.toFixed(2)}</span></div>`;
+            html += `<div class="price-total-line"><span class="label">Total</span><span class="amount">£${displayTotal.toFixed(2)}</span></div>`;
 
             const deposit = parseFloat(order.depositPaid) || 0;
             if (deposit > 0) {
-                html += `<div class="price-row"><span>Deposit Paid</span><span>-£${deposit.toFixed(2)}</span></div>`;
-                html += `<div class="price-row" style="font-weight: 600;"><span>Balance Outstanding</span><span>£${Math.max(0, displayTotal - deposit).toFixed(2)}</span></div>`;
+                html += `<div class="price-balance"><span class="label">Deposit Paid</span><span class="amount" style="color:#10b981;">-£${deposit.toFixed(2)}</span></div>`;
+                html += `<div class="price-balance"><span class="label">Balance Outstanding</span><span class="amount">£${Math.max(0, displayTotal - deposit).toFixed(2)}</span></div>`;
             }
 
             return html;
@@ -1073,16 +1041,12 @@
                 return '<p style="color: #6b7280;">No files attached</p>';
             }
 
-            return `
-                <ul class="file-list">
-                    ${order.files.map(file => `
-                        <li class="file-item">
-                            <span>📎 ${file.name} (${file.type})</span>
-                            ${file.driveUrl ? `<a href="${file.driveUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">View</a>` : ''}
-                        </li>
-                    `).join('')}
-                </ul>
-            `;
+            return order.files.map(file => `
+                <div class="file-entry">
+                    <span>📎 ${file.name}${file.type ? ` (${file.type})` : ''}</span>
+                    ${file.driveUrl ? `<a href="${file.driveUrl}" target="_blank" class="btn btn-outline" style="padding:0.25rem 0.6rem;font-size:0.8rem;">View</a>` : ''}
+                </div>
+            `).join('');
         }
 
         // Render activity log
@@ -1094,11 +1058,14 @@
             const sortedLog = [...order.log].sort((a, b) => new Date(b.ts) - new Date(a.ts));
 
             return `
-                <ul class="activity-log">
+                <ul class="activity-list">
                     ${sortedLog.map(entry => `
-                        <li class="activity-item">
-                            <div class="activity-time">${new Date(entry.ts).toLocaleString()} - ${entry.author}</div>
-                            <div class="activity-text">${entry.text}</div>
+                        <li class="activity-entry">
+                            <div class="activity-dot"></div>
+                            <div class="activity-content">
+                                <div class="activity-text">${entry.text}</div>
+                                <div class="activity-meta">${new Date(entry.ts).toLocaleString('en-GB')} &middot; ${entry.author}</div>
+                            </div>
                         </li>
                     `).join('')}
                 </ul>
@@ -1206,7 +1173,7 @@
                                 <label>Type</label>
                                 <select name="hsType">
                                     <option value="">Select type</option>
-                                    ${getUniqueValues(priceBook.Headstones, 'type').map(type => 
+                                    ${getHeadstoneTypes().map(type =>
                                         `<option value="${type}" ${order.hsType === type ? 'selected' : ''}>${type}</option>`
                                     ).join('')}
                                 </select>
@@ -1215,7 +1182,7 @@
                                 <label>Size</label>
                                 <select name="hsSize">
                                     <option value="">Select size</option>
-                                    ${getUniqueValues(priceBook.Headstones, 'size').map(size => 
+                                    ${getHeadstoneSizes().map(size =>
                                         `<option value="${size}" ${order.hsSize === size ? 'selected' : ''}>${size}</option>`
                                     ).join('')}
                                 </select>
@@ -1224,10 +1191,11 @@
                                 <label>Colour</label>
                                 <select name="hsColour">
                                     <option value="">Select colour</option>
-                                    <option value="Black" ${order.hsColour === 'Black' ? 'selected' : ''}>Black</option>
+                                    <option value="Black" ${order.hsColour === 'Black' ? 'selected' : ''}>Black (standard)</option>
                                     <option value="SA Impala" ${order.hsColour === 'SA Impala' ? 'selected' : ''}>SA Impala (+£50)</option>
-                                    <option value="Bahamas" ${order.hsColour === 'Bahamas' ? 'selected' : ''}>Bahamas</option>
+                                    <option value="Bahamas Blue" ${order.hsColour === 'Bahamas Blue' ? 'selected' : ''}>Bahamas Blue (+£100)</option>
                                     <option value="Grey" ${order.hsColour === 'Grey' ? 'selected' : ''}>Grey (-£50)</option>
+                                    <option value="Ruby Red" ${order.hsColour === 'Ruby Red' ? 'selected' : ''}>Ruby Red (+£150)</option>
                                     <option value="Other" ${order.hsColour === 'Other' ? 'selected' : ''}>Other</option>
                                 </select>
                             </div>
@@ -1240,6 +1208,26 @@
                                     <option value="Flamed" ${order.hsFinish === 'Flamed' ? 'selected' : ''}>Flamed</option>
                                     <option value="Sandblasted" ${order.hsFinish === 'Sandblasted' ? 'selected' : ''}>Sandblasted</option>
                                     <option value="Natural" ${order.hsFinish === 'Natural' ? 'selected' : ''}>Natural</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Surround Type</label>
+                                <select name="surroundType">
+                                    <option value="">No surround</option>
+                                    ${getUniqueValues(priceBook.Surrounds, 'type').length > 0
+                                        ? getUniqueValues(priceBook.Surrounds, 'type').map(t => `<option value="${t}" ${order.surroundType === t ? 'selected' : ''}>${t}</option>`).join('')
+                                        : ['Full Kerb', 'Half Kerb', 'Cremation Kerb', 'Vase Kerb'].map(t => `<option value="${t}" ${order.surroundType === t ? 'selected' : ''}>${t}</option>`).join('')
+                                    }
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Stone / Chippings</label>
+                                <select name="stoneType">
+                                    <option value="">None</option>
+                                    ${getUniqueValues(priceBook.Stones, 'type').length > 0
+                                        ? getUniqueValues(priceBook.Stones, 'type').map(t => `<option value="${t}" ${order.stoneType === t ? 'selected' : ''}>${t}</option>`).join('')
+                                        : ['White Marble', 'Black Granite', 'Grey Granite', 'Pea Gravel', 'Slate'].map(t => `<option value="${t}" ${order.stoneType === t ? 'selected' : ''}>${t}</option>`).join('')
+                                    }
                                 </select>
                             </div>
                         </div>
@@ -1288,8 +1276,8 @@
                                 <label>Cemetery</label>
                                 <select name="cemetery">
                                     <option value="">Select cemetery</option>
-                                    ${(priceBook.Cemetery_Fees || []).map(c =>
-                                        `<option value="${c.location}" ${order.cemetery === c.location ? 'selected' : ''}>${c.location}</option>`
+                                    ${getCemeteryOptions().map(loc =>
+                                        `<option value="${loc}" ${order.cemetery === loc ? 'selected' : ''}>${loc}</option>`
                                     ).join('')}
                                 </select>
                             </div>
@@ -1297,6 +1285,29 @@
                                 <label>Grave Number</label>
                                 <input type="text" name="graveNumber" value="${order.graveNumber || ''}">
                             </div>
+                            <div class="form-group">
+                                <label>Install Date</label>
+                                <input type="date" name="installDate" value="${order.installDate || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label>Deposit Paid (£)</label>
+                                <input type="number" name="depositPaid" value="${order.depositPaid || ''}" min="0" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accessories -->
+                    <div class="form-section">
+                        <div class="section-title">🎁 Accessories</div>
+                        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:0.5rem;">
+                            ${ACCESSORY_OPTIONS.map(acc => {
+                                const checked = (order.accessories || []).includes(acc);
+                                return `
+                                    <label style="display:flex;align-items:center;gap:0.4rem;padding:0.4rem 0.6rem;background:white;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:0.85rem;${checked ? 'border-color:var(--cyan);background:#e0f7fa;' : ''}">
+                                        <input type="checkbox" name="accessories" value="${acc}" ${checked ? 'checked' : ''} style="accent-color:var(--cyan);">
+                                        ${acc}
+                                    </label>`;
+                            }).join('')}
                         </div>
                     </div>
 
@@ -1323,12 +1334,38 @@
             document.getElementById('orderModal').classList.add('active');
         }
 
-        // Get unique values from price book
+        // Get unique values from price book with hardcoded fallbacks
         function getUniqueValues(items, field) {
             if (!items) return [];
             const values = items.map(item => item[field]).filter(Boolean);
             return [...new Set(values)];
         }
+
+        function getHeadstoneTypes() {
+            const fromBook = getUniqueValues(priceBook.Headstones, 'type');
+            return fromBook.length > 0 ? fromBook : ['Denmore', 'Traditional', 'Flatstone', 'Ledger', 'Kerb Set', 'Cross', 'Celtic Cross', 'Heart'];
+        }
+
+        function getHeadstoneSizes() {
+            const fromBook = getUniqueValues(priceBook.Headstones, 'size');
+            return fromBook.length > 0 ? fromBook : ['2ft', '2.5ft', '3ft', '3.5ft', '4ft', '4.5ft', '5ft'];
+        }
+
+        function getCemeteryOptions() {
+            const fromBook = (priceBook.Cemetery_Fees || []).map(c => c.location).filter(Boolean);
+            return fromBook.length > 0 ? fromBook : [
+                'City Cemetery Belfast', 'Roselawn Cemetery', 'Milltown Cemetery',
+                'Dundonald Cemetery', 'Carnmoney Cemetery', 'Lisburn Cemetery',
+                'Movilla Cemetery', 'Bangor Cemetery', 'Clandeboye Cemetery',
+                'Drumbeg Church', 'Ballymena Cemetery', 'Other'
+            ];
+        }
+
+        const ACCESSORY_OPTIONS = [
+            'Vase', 'Flower Container', 'Photo Oval', 'Bronze Plaque',
+            'LED Lights', 'Pebbles', 'Granite Chips', 'Kerb Letters',
+            'Butterfly', 'Angel', 'Book', 'Bench'
+        ];
 
         // Save order form
         async function saveOrderForm(event) {
@@ -1347,10 +1384,12 @@
                 masonCharges: []
             };
 
-            // Update order data from form
+            // Update order data from form (handle multi-value checkboxes)
+            const accessories = formData.getAll('accessories');
             for (let [key, value] of formData.entries()) {
-                orderData[key] = value;
+                if (key !== 'accessories') orderData[key] = value;
             }
+            orderData.accessories = accessories;
 
             // Calculate and store prices from price book
             const totals = calculateOrderTotals(orderData);
