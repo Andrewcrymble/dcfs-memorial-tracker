@@ -488,17 +488,59 @@
         async function sendToWhatsApp(message) {
             try {
                 const url = `${BEEPMATE_CONFIG.baseUrl}?key=${BEEPMATE_CONFIG.apiKey}&id=${BEEPMATE_CONFIG.groupId}&msg=${encodeURIComponent(message)}`;
-                
-                // Send message
-                const response = await fetch(url, {
-                    mode: 'no-cors'
-                });
-                
-                console.log('WhatsApp message sent:', message);
+                await fetch(url, { mode: 'no-cors' });
+                console.log('WhatsApp message sent');
                 return true;
             } catch (error) {
                 console.error('Error sending WhatsApp message:', error);
                 return false;
+            }
+        }
+
+        // Upload PDF to Drive then send WhatsApp with link
+        async function sendPdfToWhatsApp(doc, docType, filename, summaryLines) {
+            try {
+                // Convert PDF to base64
+                const base64 = doc.output('datauristring').split(',')[1];
+
+                // Upload to the order's Google Drive folder
+                const resp = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'uploadFile',
+                        orderId: currentOrder.orderId,
+                        customerName: currentOrder.customerName,
+                        deceasedName: currentOrder.deceasedName,
+                        fileName: filename,
+                        fileType: docType,
+                        fileData: base64,
+                        mimeType: 'application/pdf'
+                    })
+                });
+
+                const result = await resp.json();
+
+                if (result.success && result.viewUrl) {
+                    // Rich WhatsApp message with Drive link
+                    const emoji = docType === 'Estimate' ? '📄' : docType === 'Invoice' ? '🧾' : '🔨';
+                    const msg = `${emoji} *${docType.toUpperCase()}*\n\n` +
+                        summaryLines.join('\n') +
+                        `\n\n📎 *View PDF:*\n${result.viewUrl}`;
+                    await sendToWhatsApp(msg);
+                    console.log('PDF uploaded and WhatsApp sent:', result.viewUrl);
+                } else {
+                    // Drive upload failed — send text-only notification
+                    const emoji = docType === 'Estimate' ? '📄' : docType === 'Invoice' ? '🧾' : '🔨';
+                    await sendToWhatsApp(`${emoji} *${docType.toUpperCase()}*\n\n` + summaryLines.join('\n') + '\n\n(PDF saved to device — Drive upload failed)');
+                }
+            } catch (err) {
+                console.warn('sendPdfToWhatsApp error:', err);
+                // Still send a text notification as fallback
+                try {
+                    const emoji = docType === 'Estimate' ? '📄' : docType === 'Invoice' ? '🧾' : '🔨';
+                    await sendToWhatsApp(`${emoji} *${docType.toUpperCase()} GENERATED*\n\n` + summaryLines.join('\n'));
+                } catch(e) {}
             }
         }
 
@@ -2240,9 +2282,16 @@
             }
 
             dcsPdfFooter(doc);
-            doc.save(`Estimate_${(currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase()}_${new Date().toISOString().slice(0,10)}.pdf`);
+            const estRef = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
+            const estFilename = `Estimate_${estRef}_${new Date().toISOString().slice(0,10)}.pdf`;
+            doc.save(estFilename);
             addActivityLog(`Generated Estimate — Total: £${totals.totalSell.toFixed(2)}`);
-            sendWhatsAppNotification('estimate', { customer: currentOrder.customerName, deceased: currentOrder.deceasedName, reference: currentOrder.orderRef || currentOrder.orderId, total: totals.totalSell.toFixed(2) });
+            sendPdfToWhatsApp(doc, 'Estimate', estFilename, [
+                `Customer: ${currentOrder.customerName}`,
+                `In Memory Of: ${currentOrder.deceasedName}`,
+                `Ref: ${estRef}`,
+                `Total: £${totals.totalSell.toFixed(2)}`
+            ]);
         }
 
         
@@ -2361,9 +2410,17 @@
 
             dcsPdfFooter(doc);
             const bal2 = dep > 0 ? Math.max(0, totals.totalSell - dep) : totals.totalSell;
-            doc.save(`Invoice_${(currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase()}_${new Date().toISOString().slice(0,10)}.pdf`);
+            const invRef = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
+            const invFilename = `Invoice_${invRef}_${new Date().toISOString().slice(0,10)}.pdf`;
+            doc.save(invFilename);
             addActivityLog(`Generated Invoice — Total: £${totals.totalSell.toFixed(2)}, Balance: £${bal2.toFixed(2)}`);
-            sendToWhatsApp(`🧾 *INVOICE GENERATED*\n\nCustomer: ${currentOrder.customerName}\nDeceased: ${currentOrder.deceasedName}\nRef: ${(currentOrder.orderRef||currentOrder.orderId||'').slice(-8).toUpperCase()}\nTotal: £${totals.totalSell.toFixed(2)}\nBalance Due: £${bal2.toFixed(2)}\n\nInvoice downloaded and ready to send.`);
+            sendPdfToWhatsApp(doc, 'Invoice', invFilename, [
+                `Customer: ${currentOrder.customerName}`,
+                `In Memory Of: ${currentOrder.deceasedName}`,
+                `Ref: ${invRef}`,
+                `Total: £${totals.totalSell.toFixed(2)}`,
+                `Balance Due: £${bal2.toFixed(2)}`
+            ]);
         }
 
         // ============================================================
@@ -2512,9 +2569,19 @@
             }
 
             dcsPdfFooter(doc);
-            doc.save(`JobCard_${(currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase()}_${new Date().toISOString().slice(0,10)}.pdf`);
+            const jcRef = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
+            const jcFilename = `JobCard_${jcRef}_${new Date().toISOString().slice(0,10)}.pdf`;
+            doc.save(jcFilename);
             addActivityLog(`Generated Mason Job Card — Cost: £${totals.totalCost.toFixed(2)}`);
-            sendWhatsAppNotification('job_card', { customer: currentOrder.customerName, deceased: currentOrder.deceasedName, reference: currentOrder.orderRef || currentOrder.orderId, total: totals.totalCost.toFixed(2) });
+            sendPdfToWhatsApp(doc, 'Job Card', jcFilename, [
+                `Customer: ${currentOrder.customerName}`,
+                `Deceased: ${currentOrder.deceasedName}`,
+                `Ref: ${jcRef}`,
+                currentOrder.hsType ? `Stone: ${currentOrder.hsType} ${currentOrder.hsSize || ''}` : '',
+                currentOrder.cemetery ? `Cemetery: ${currentOrder.cemetery}` : '',
+                currentOrder.installDate ? `Install Date: ${currentOrder.installDate}` : '',
+                `Mason Cost: £${totals.totalCost.toFixed(2)}`
+            ].filter(Boolean));
         }
 
         function getPriceLineItems(order) {
