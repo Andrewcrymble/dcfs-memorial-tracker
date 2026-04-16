@@ -1773,7 +1773,10 @@
                 text: `Status changed to ${newStatus}`
             });
 
+            const idx2 = allOrders.findIndex(o => o.orderId === currentOrder.orderId);
+            if (idx2 >= 0) allOrders[idx2] = currentOrder;
             await saveOrder(currentOrder);
+            renderOrderList();
             renderOrderDetails();
         }
 
@@ -3719,7 +3722,12 @@
                 text: `Payment received: £${amt.toFixed(2)} via ${method}${noteStr}`
             });
 
+            // Update allOrders array so sidebar reflects new payment immediately
+            const idx = allOrders.findIndex(o => o.orderId === currentOrder.orderId);
+            if (idx >= 0) allOrders[idx] = currentOrder;
+
             await saveOrder(currentOrder);
+            renderOrderList();
             renderOrderDetails();
         }
 
