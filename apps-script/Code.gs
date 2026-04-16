@@ -33,7 +33,9 @@ const HEADERS = [
   "Proof Date", "Proof Approved", "Production Start", "Install Date",
   "Artwork Notes", "General Notes", "Mason Notes", 
   "Folder Link", "Files", "Extra Charges", "Mason Charges",
-  "Log Entries"
+  "Log Entries",
+  "Note Entries", "Mason Note Entries",
+  "Stripe Link ID", "Stripe Payment Date", "Stripe Payment Amount"
 ];
 
 // ============================================================
@@ -559,16 +561,94 @@ function getOrCreateOrderFolder(orderId, customerName, deceasedName) {
 
 function doPost(e) {
   try {
-    const data = JSON.parse(e.postData.contents);
-    const action = data.action || "upsert";
-    if (action === "upsert")             return upsertOrder(data.order);
-    if (action === "delete")             return deleteOrder(data.orderId);
-    if (action === "uploadFile")         return uploadFileToDrive(data);
-    if (action === "deleteFile")         return deleteFileFromDrive(data.fileId);
-    if (action === "createPaymentLink")  return handleCreatePaymentLink(data);
+    const body = JSON.parse(e.postData.contents);
+    // Stripe webhooks have a 'type' field; app actions have an 'action' field
+    if (body.type) return handleStripeWebhook(body);
+    const action = body.action || "upsert";
+    if (action === "upsert")             return upsertOrder(body.order);
+    if (action === "delete")             return deleteOrder(body.orderId);
+    if (action === "uploadFile")         return uploadFileToDrive(body);
+    if (action === "deleteFile")         return deleteFileFromDrive(body.fileId);
+    if (action === "createPaymentLink")  return handleCreatePaymentLink(body);
     return respond(false, "Unknown action");
   } catch (err) {
     return respond(false, err.toString());
+  }
+}
+
+// ============================================================
+// STRIPE WEBHOOK HANDLER
+// Called when Stripe sends a payment event to our Apps Script URL
+// ============================================================
+function handleStripeWebhook(event) {
+  try {
+    Logger.log('Stripe webhook received: ' + event.type);
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data && event.data.object;
+      if (session) {
+        const orderId     = session.metadata && session.metadata.order_id;
+        const amountPounds = (session.amount_total || 0) / 100;
+        const paymentType  = (session.metadata && session.metadata.payment_type) || 'payment';
+        if (orderId) {
+          markPaymentReceived(orderId, amountPounds, paymentType);
+        }
+      }
+    }
+    // Always return 200 to Stripe to acknowledge receipt
+    return ContentService
+      .createTextOutput(JSON.stringify({ received: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    Logger.log('Webhook error: ' + err);
+    return ContentService
+      .createTextOutput(JSON.stringify({ received: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function markPaymentReceived(orderId, amountPounds, paymentType) {
+  try {
+    const sheet   = getOrCreateSheet();
+    const data    = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const col = name => headers.indexOf(name);
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) !== String(orderId)) continue;
+      const rowNum = i + 1;
+
+      // Add to deposit paid
+      const depCol = col('Deposit Paid');
+      if (depCol >= 0) {
+        const current = parseFloat(data[i][depCol]) || 0;
+        sheet.getRange(rowNum, depCol + 1).setValue(current + amountPounds);
+      }
+
+      // Mark payment status
+      const psCol = col('Payment Status');
+      if (psCol >= 0) sheet.getRange(rowNum, psCol + 1).setValue('Paid via Stripe');
+
+      // Record Stripe payment details
+      const sdCol = col('Stripe Payment Date');
+      if (sdCol >= 0) sheet.getRange(rowNum, sdCol + 1).setValue(new Date().toLocaleString('en-GB'));
+      const saCol = col('Stripe Payment Amount');
+      if (saCol >= 0) sheet.getRange(rowNum, saCol + 1).setValue(amountPounds);
+
+      // Append to log
+      const logCol = col('Log Entries');
+      if (logCol >= 0) {
+        const existing = String(data[i][logCol] || '');
+        const ts = new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        const entry = '[' + ts + '] System: 💳 Stripe payment received — £' + amountPounds.toFixed(2) + ' (' + paymentType + ')';
+        sheet.getRange(rowNum, logCol + 1).setValue(existing ? existing + ' | ' + entry : entry);
+      }
+
+      Logger.log('Payment marked for order: ' + orderId + ' — £' + amountPounds);
+      return;
+    }
+    Logger.log('Order not found for webhook: ' + orderId);
+  } catch (err) {
+    Logger.log('markPaymentReceived error: ' + err);
   }
 }
 
@@ -754,7 +834,17 @@ function mapSheetOrderToTracker(sheetOrder) {
     files: parseJSON(sheetOrder["Files"]),
     extraCharges: parseJSON(sheetOrder["Extra Charges"]),
     masonCharges: parseJSON(sheetOrder["Mason Charges"]),
-    
+
+    // Notes (timestamped entries)
+    noteEntries: parseJSON(sheetOrder["Note Entries"]),
+    masonNoteEntries: parseJSON(sheetOrder["Mason Note Entries"]),
+
+    // Stripe payment tracking
+    stripeLinkId: sheetOrder["Stripe Link ID"] || "",
+    stripePaymentDate: sheetOrder["Stripe Payment Date"] || "",
+    stripePaymentAmount: parseFloat(sheetOrder["Stripe Payment Amount"]) || 0,
+    stripePaymentReceived: !!(sheetOrder["Stripe Payment Date"] && sheetOrder["Stripe Payment Date"] !== ""),
+
     // Activity log
     log: parseLogEntries(sheetOrder["Log Entries"])
   };
@@ -912,6 +1002,11 @@ function upsertOrder(order) {
     "Extra Charges": order.extraCharges ? JSON.stringify(order.extraCharges) : "[]",
     "Mason Charges": order.masonCharges ? JSON.stringify(order.masonCharges) : "[]",
     "Log Entries": logText,
+    "Note Entries": order.noteEntries ? JSON.stringify(order.noteEntries) : "[]",
+    "Mason Note Entries": order.masonNoteEntries ? JSON.stringify(order.masonNoteEntries) : "[]",
+    "Stripe Link ID": order.stripeLinkId || "",
+    "Stripe Payment Date": order.stripePaymentDate || "",
+    "Stripe Payment Amount": order.stripePaymentAmount || 0,
   };
 
   const row = headers.map(h => valueMap.hasOwnProperty(h) ? valueMap[h] : "");
@@ -1011,7 +1106,11 @@ function handleCreatePaymentLink(data) {
       "line_items[0][price]": price.id,
       "line_items[0][quantity]": "1",
       "after_completion[type]": "redirect",
-      "after_completion[redirect][url]": "https://andrewcrymble.github.io/dcfs-memorial-tracker/?paid=1"
+      "after_completion[redirect][url]": "https://andrewcrymble.github.io/dcfs-memorial-tracker/?paid=1",
+      "metadata[order_id]": orderId || "",
+      "metadata[order_ref]": (orderRef || orderId || "").slice(-8).toUpperCase(),
+      "metadata[payment_type]": data.paymentType || "payment",
+      "metadata[customer]": customerName || ""
     };
     const linkResp = UrlFetchApp.fetch("https://api.stripe.com/v1/payment_links", {
       method: "post",

@@ -766,7 +766,7 @@
                             <div class="order-name">${order.deceasedName || 'Unknown'}</div>
                             <span class="order-status-badge" style="background:${STATUS_COLORS[status] || '#94a3b8'}">${status}</span>
                         </div>
-                        <div class="order-customer">${order.customerName || ''} &middot; ${order.orderRef || 'No Ref'}</div>
+                        <div class="order-customer">${order.customerName || ''} &middot; ${order.orderRef || 'No Ref'}${order.stripePaymentReceived ? `<span style="display:inline-block;background:#dcfce7;color:#15803d;border-radius:4px;font-size:0.65rem;font-weight:700;padding:0.1rem 0.35rem;margin-left:0.3rem;">💳 PAID</span>` : ''}</div>
                     </li>
                 `;
             }).join('');
@@ -947,6 +947,17 @@
                                 : '<span class="data-value empty">No inscription text entered</span>'}
                         </div>
                     </div>
+
+                    <!-- Payment received banner -->
+                    ${o.stripePaymentReceived ? `
+                    <div style="background:#dcfce7;border:2px solid #16a34a;border-radius:10px;padding:1rem 1.25rem;display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem;">
+                        <span style="font-size:2rem;">💚</span>
+                        <div style="flex:1;">
+                            <div style="font-size:1rem;font-weight:700;color:#15803d;">Payment Received via Stripe</div>
+                            <div style="font-size:0.85rem;color:#16a34a;margin-top:0.1rem;">£${(o.stripePaymentAmount||0).toFixed(2)} received · ${o.stripePaymentDate || ''}</div>
+                        </div>
+                        <span style="background:#15803d;color:white;padding:0.3rem 0.9rem;border-radius:20px;font-size:0.8rem;font-weight:700;">✓ PAID</span>
+                    </div>` : ''}
 
                     <!-- Order Notes (interactive, always visible) -->
                     <div class="card detail-grid-wide" style="border-left:4px solid var(--cyan);">
@@ -3509,6 +3520,22 @@
                     </div>
                     <div style="font-size:1.2rem;font-weight:700;color:#374151;margin-left:1rem;">£${half}</div>
                   </label>
+
+                  <label id="plOpt_custom" onclick="selectPayOpt('custom')" style="cursor:pointer;border:2px solid #e5e7eb;border-radius:8px;padding:0.9rem 1rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                      <div>
+                        <div style="font-weight:600;color:#374151;">💰 Custom Amount</div>
+                        <div style="font-size:0.78rem;color:#6b7280;">Enter any amount you'd like to charge</div>
+                      </div>
+                      <div style="font-size:0.85rem;color:#6b7280;">Enter below ↓</div>
+                    </div>
+                    <div id="customAmtRow" style="display:none;margin-top:0.6rem;">
+                      <div style="display:flex;align-items:center;gap:0.4rem;border:1px solid #d1d5db;border-radius:6px;padding:0.35rem 0.6rem;background:white;">
+                        <span style="font-weight:600;color:#374151;">£</span>
+                        <input type="number" id="customAmtInput" placeholder="0.00" min="1" step="0.01" style="border:none;outline:none;font-size:1rem;font-weight:600;width:100%;color:#111;" oninput="window._customAmt=parseFloat(this.value)||0;">
+                      </div>
+                    </div>
+                  </label>
                 </div>
 
                 <div style="display:flex;gap:0.75rem;">
@@ -3530,12 +3557,16 @@
 
         function selectPayOpt(opt) {
             window._payOpt = opt;
-            ['full','half'].forEach(o => {
+            ['full','half','custom'].forEach(o => {
                 const el = document.getElementById('plOpt_' + o);
                 if (!el) return;
-                el.style.borderColor = o === opt ? '#635bff' : '#e5e7eb';
-                el.style.background  = o === opt ? '#f5f4ff' : '';
+                const isSelected = o === opt;
+                el.style.border = isSelected ? '2px solid #635bff' : '2px solid #e5e7eb';
+                el.style.background = isSelected ? '#f5f4ff' : 'transparent';
             });
+            // Show/hide custom input
+            const customRow = document.getElementById('customAmtRow');
+            if (customRow) customRow.style.display = opt === 'custom' ? 'block' : 'none';
         }
 
         async function doCreatePaymentLink() {
@@ -3544,13 +3575,17 @@
             const opt = window._payOpt || 'full';
             let amount = balance;
             if (opt === 'half') amount = balance / 2;
+            if (opt === 'custom') {
+                amount = window._customAmt || parseFloat(document.getElementById('customAmtInput')?.value) || 0;
+                if (amount <= 0) { alert('Please enter a valid amount.'); return; }
+            }
             amount = Math.round(amount * 100) / 100;
 
             const modal = document.getElementById('paymentOptionModal');
             const btn = document.getElementById('plCreateBtn');
             if (btn) { btn.textContent = '⏳ Creating…'; btn.disabled = true; }
 
-            const label = opt === 'half' ? '50% Deposit' : 'Full Payment';
+            const label = opt === 'half' ? '50% Deposit' : opt === 'custom' ? `Custom Payment £${amount.toFixed(2)}` : 'Full Payment';
             const ref = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
 
             try {
@@ -3563,6 +3598,7 @@
                         customerName: currentOrder.customerName,
                         deceasedName: currentOrder.deceasedName,
                         amountPence: Math.round(amount * 100),
+                        paymentType: opt,
                         description: `${label} — ${currentOrder.deceasedName || 'Memorial'} (Ref: ${ref})`
                     })
                 });
