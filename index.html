@@ -589,6 +589,34 @@
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', () => {
+            // If redirected here from a Stripe payment, show thank-you screen instead of the tracker
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('paid') || urlParams.has('amt')) {
+                const amt  = parseFloat(urlParams.get('amt'))  || 0;
+                const bal  = parseFloat(urlParams.get('bal'))  || 0;
+                const ref  = urlParams.get('ref')  || '';
+                const name = urlParams.get('name') || '';
+                const cust = urlParams.get('cust') || '';
+                const fmt  = n => '£' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                document.body.style.cssText = 'margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f0f7e6;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem 1rem;';
+                document.body.innerHTML = `
+                <div style="background:white;border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,0.12);padding:2.5rem 2rem;max-width:480px;width:100%;text-align:center;">
+                    <div style="width:72px;height:72px;background:#16a34a;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1.5rem;font-size:2rem;">✓</div>
+                    <h1 style="font-size:1.6rem;font-weight:700;color:#15803d;margin-bottom:0.4rem;">Payment Received</h1>
+                    <p style="font-size:1rem;color:#64748b;margin-bottom:1.5rem;">${cust ? 'Thank you, ' + cust + '.' : 'Thank you for your payment.'}</p>
+                    ${ref ? `<div style="display:inline-block;background:#e0f2fe;color:#0369a1;border-radius:6px;padding:0.25rem 0.65rem;font-size:0.8rem;font-weight:700;letter-spacing:0.04em;margin-bottom:1.5rem;">Reference: ${ref}</div>` : ''}
+                    ${amt > 0 ? `
+                    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;text-align:left;">
+                        ${name ? `<div style="display:flex;justify-content:space-between;padding:0.45rem 0;border-bottom:1px solid #d1fae5;font-size:0.95rem;"><span style="color:#374151;">In Memory Of</span><span style="font-weight:700;">${name}</span></div>` : ''}
+                        <div style="display:flex;justify-content:space-between;padding:0.45rem 0;border-bottom:1px solid #d1fae5;font-size:0.95rem;"><span style="color:#374151;">Amount Paid</span><span style="font-weight:700;color:#16a34a;">${fmt(amt)}</span></div>
+                        <div style="display:flex;justify-content:space-between;padding:0.45rem 0;font-size:0.95rem;"><span style="color:#374151;">Remaining Balance</span><span style="font-weight:700;color:${bal <= 0 ? '#16a34a' : '#0891b2'};font-size:1.05rem;">${bal <= 0 ? 'Paid in Full' : fmt(bal)}</span></div>
+                    </div>` : ''}
+                    <p style="font-size:0.88rem;color:#64748b;line-height:1.6;margin-bottom:1.5rem;">We will be in touch to confirm the next steps for your memorial. If you have any questions please don't hesitate to contact us.</p>
+                    <div style="font-size:0.8rem;color:#9ca3af;margin-top:1rem;"><strong style="color:#5a8f2e;">David Crymble &amp; Sons</strong><br>Memorial Masons</div>
+                </div>`;
+                return; // Don't load the tracker
+            }
+
             loadOrders(); // priceBook is included in the Apps Script response
             const chipName = document.getElementById('userChipName');
             if (chipName) chipName.textContent = localStorage.getItem('dcs_current_user') || 'Andrew';
