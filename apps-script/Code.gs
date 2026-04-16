@@ -30,6 +30,240 @@ const HEADERS = [
 ];
 
 // ============================================================
+// RUN THIS ONCE — creates a brand new master sheet with:
+//   • Orders tab  (your 4 existing customers pre-loaded)
+//   • Headstones, Surrounds, Stones, Accessories, Cemetery_Fees tabs
+// After running, copy the new Sheet ID from the popup and update
+// SHEET_ID at the top of this file, then redeploy.
+// ============================================================
+function createMasterSheet() {
+  // --- Create new spreadsheet ---
+  const ss = SpreadsheetApp.create('DC&S Memorial Tracker');
+  const id = ss.getId();
+
+  function styleHeader(sheet, cols) {
+    const r = sheet.getRange(1, 1, 1, cols);
+    r.setBackground('#1e3a5f');
+    r.setFontColor('#ffffff');
+    r.setFontWeight('bold');
+    r.setFontSize(9);
+    sheet.setFrozenRows(1);
+  }
+
+  // ── ORDERS TAB ──────────────────────────────────────────────
+  const ordersSheet = ss.getActiveSheet();
+  ordersSheet.setName('Orders');
+
+  const orderHeaders = [
+    'Order ID','Created','Last Updated','Status','Payment Status',
+    'Customer Name','Phone','Email','Address',
+    'Deceased Name','Date of Birth','Date of Passing','Order Date',
+    'Headstone Type','Headstone Size','Headstone Colour','Headstone Finish',
+    'Headstone Sell Price','Headstone Cost Price',
+    'Surround Type','Granite Upgrade','Surround Sell Price','Surround Cost Price',
+    'Stone / Chippings','Stone Sell Price','Stone Cost Price',
+    'Accessories','Accessories Sell Price','Accessories Cost Price',
+    'Inscription Type','Inscription Text','Inscription Lines','Letter Style','Inscription Colour',
+    'Inscription Sell Price','Inscription Cost Price',
+    'Cemetery / Location','Cemetery Fee',
+    'Total Sell Price','Total Cost Price','Profit Margin','Margin Percentage',
+    'Deposit Paid','Balance Due',
+    'Proof Date','Proof Approved','Production Start','Install Date',
+    'Artwork Notes','General Notes','Mason Notes',
+    'Folder Link','Files','Extra Charges','Log Entries'
+  ];
+
+  const insc1 = 'AICKEN\nIn loving memory of\nGloria\nDied 18th February 2026\nA loving Wife, daughter, sister, aunt and friend\n\n(Gone from our lives, but forever in our hearts)';
+  const insc2 = 'ENGLAND\nIn loving memory of\nOwen\nMuch loved husband of the late Ruth\nand devoted father to Wilson\nDied 23rd October 2025\n\n(Resting where no shadows fall)';
+  const insc3 = 'And their son Richard, died 9th February 2026 much loved brother and Dad';
+  const log1  = '[08/04/2026 10:49] ANDREW CRYMBLE: left voice message for Brian to call me back | [08/04/2026 14:40] ANDREW CRYMBLE: spoke with brian sending proof request over to Orchard | [08/04/2026 14:46] ANDREW CRYMBLE: Job sent to Orchard for proof';
+  const log2  = '[08/04/2026 14:55] ANDREW CRYMBLE: job sent to Gerard | [08/04/2026 14:57] Andrew Crymble: estimate sent to Heather';
+  const log3  = '[08/04/2026 14:47] ANDREW CRYMBLE: confirmed with Orchard and approved';
+
+  // Columns match orderHeaders above (56 columns)
+  // Sell Price stored in "Headstone Sell Price" col; Total in "Total Sell Price"
+  const orderRows = [
+    // Order 1 — Brian Aicken / Gloria
+    ['mn6bfu5ld4cmk','08/04/2026 14:37','08/04/2026 14:46','confirmed','Unpaid',
+     'Brian Aicken','7719593390','baicken07@gmail.cm','',
+     'Gloria Aicken','','18/02/2026','25/03/2026',
+     'Denmore','3ft (Base 3.6ft)','Black','Polished',
+     3392,0,
+     'Half Surround','No',0,0,
+     '','','',
+     '','','',
+     'new',insc1,0,'Standard','',0,0,
+     'Roselawn',300,
+     3392,0,0,0,
+     0,3392,
+     '','No','','',
+     '','Gone from our lives, but forever in our hearts on base','',
+     '','','',log1],
+
+    // Order 2 — Heather Kirker / Owen England
+    ['mn7ej3cmh6eco','08/04/2026 14:37','08/04/2026 14:58','quoted','Unpaid',
+     'Heather Kirker','','','',
+     'Owen England','','23/10/2025','26/03/2026',
+     'Ogee','2ft (Base 2.6ft)','Black','Polished',
+     1246,0,
+     '','No',0,0,
+     '','','',
+     '','','',
+     'new',insc2,0,'Standard','',0,0,
+     '',0,
+     1246,0,0,0,
+     0,1246,
+     '','No','','',
+     '','','',
+     '','','',log2],
+
+    // Order 3 — Drew Anderson / Richard Anderson
+    ['mn7g3e0z0ocv1','08/04/2026 14:37','08/04/2026 14:47','production','Unpaid',
+     'Drew Anderson','','','148 Erinvale Drive, BT10 0GF',
+     'Richard Anderson','','','26/03/2026',
+     '','','','',
+     1600,0,
+     'Half Surround','No',0,0,
+     '','','',
+     '','','',
+     'additional',insc3,0,'Standard','',0,0,
+     '',0,
+     1600,0,0,0,
+     0,1600,
+     '','No','','',
+     '','','',
+     '','','',log3],
+
+    // Order 4 — Lillian Kirkpatrick / Mum
+    ['mn7gm54f82k8l','01/04/2026','01/04/2026 20:21','enquiry','Unpaid',
+     'Lillian Kirkpatrick','','','',
+     'Mum','','','26/03/2026',
+     'Half Denmore','2.6ft (Base 3ft)','Black','Polished',
+     1400,0,
+     '','No',0,0,
+     '','','',
+     '','','',
+     'new','',0,'Standard','',0,0,
+     '',0,
+     1400,0,0,0,
+     0,1400,
+     '','No','','',
+     '','','',
+     '','','',''],
+  ];
+
+  ordersSheet.getRange(1, 1, 1, orderHeaders.length).setValues([orderHeaders]);
+  ordersSheet.getRange(2, 1, orderRows.length, orderHeaders.length).setValues(orderRows);
+  styleHeader(ordersSheet, orderHeaders.length);
+  ordersSheet.setRowHeights(2, orderRows.length, 80);
+  ordersSheet.autoResizeColumns(1, orderHeaders.length);
+
+  // ── PRICING TABS ─────────────────────────────────────────────
+  function makeTab(name, headers, rows) {
+    const sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    if (rows.length) sh.getRange(2, 1, rows.length, headers.length).setValues(rows);
+    styleHeader(sh, headers.length);
+    sh.autoResizeColumns(1, headers.length);
+  }
+
+  makeTab('Headstones',
+    ['Type','Size','Cost (£)','Sell (£)','Margin (£)','Margin (%)'],
+    [
+      ['Ogee','1.9ft (Base 2ft)',750,900,150,16.7],
+      ['Ogee','2ft (Base 2.6ft)',1000,1150,150,13.0],
+      ['Ogee','2.6ft (Base 3ft)',1200,1400,200,14.3],
+      ['Ogee','3ft (Base 3.6ft)',1400,1600,200,12.5],
+      ['Ogee','3.6ft (Base 4ft)',1600,1800,200,11.1],
+      ['G3','1.9ft (Base 2ft)',750,900,150,16.7],
+      ['G3','2ft (Base 2.6ft)',1000,1150,150,13.0],
+      ['G3','2.6ft (Base 3ft)',1200,1400,200,14.3],
+      ['G3','3ft (Base 3.6ft)',1400,1600,200,12.5],
+      ['G3','3.6ft (Base 4ft)',1600,1800,200,11.1],
+      ['Denmore','3ft (Base 3.6ft)',1400,1600,200,12.5],
+      ['Denmore','3.6ft (Base 4ft)',1600,1800,200,11.1],
+      ['Half Denmore','2ft (Base 2.6ft)',1000,1150,150,13.0],
+      ['Half Denmore','2.6ft (Base 3ft)',1200,1400,200,14.3],
+      ['Half Denmore','3ft (Base 3.6ft)',1400,1600,200,12.5],
+      ['Murphy','36"x30" / Base 42"x12"x5"',1400,2600,1200,46.2],
+    ]
+  );
+
+  makeTab('Headstone_Colours',
+    ['Colour Name','Cost Adjustment (£)','Sell Adjustment (£)','Margin (£)','Notes'],
+    [
+      ['Black',0,0,0,'Standard'],
+      ['G603 Light Grey',-100,0,100,'Mason discount, customer pays standard'],
+      ['Bahamas Blue (Visac Blue)',0,100,100,'Customer premium'],
+      ['SA Impala',50,150,100,'Premium granite'],
+    ]
+  );
+
+  makeTab('Surrounds',
+    ['Type','Base Cost (£)','Base Sell (£)','Granite Cost Add (£)','Granite Sell Add (£)','Base Margin (£)','With Granite Margin (£)'],
+    [
+      ['Full Surround',1400,1600,300,400,200,300],
+      ['Half Surround',900,1200,300,275,300,275],
+      ['Tree Surround',1050,1400,300,275,350,325],
+    ]
+  );
+
+  makeTab('Stones',
+    ['Type','Standalone Cost (£)','With Surround Cost (£)','Sell Price (£)','Standalone Margin (£)','With Surround Margin (£)'],
+    [
+      ['Grey',60,0,100,40,100],
+      ['White Quartz',140,40,200,60,160],
+      ['Black Pebbles',195,95,300,105,205],
+      ['White Pebbles',195,95,300,105,205],
+      ['Green Pebbles',210,110,300,90,190],
+      ['Blue Pebbles',210,110,300,90,190],
+      ['Blue Glass Chippings',210,110,300,90,190],
+      ['Green Glass Chippings',210,110,300,90,190],
+      ['Black Glass Chippings',210,110,300,90,190],
+    ]
+  );
+
+  makeTab('Accessories',
+    ['Item Name','Size','Cost (£)','Sell (£)','Margin (£)','Margin (%)'],
+    [
+      ['Martin Vase','Standard',160,210,50,23.8],
+      ['Chamfered Top Vase','Standard',150,210,60,28.6],
+      ['Round Vase 4','Standard',180,210,30,14.3],
+      ['12" x 12" Splayed Vase','12" x 12"',160,230,70,30.4],
+      ['18" x 12" Splayed Vase','18" x 12"',180,250,70,28.0],
+      ['6" x 6" x 12" Rose Vase','6" x 6" x 12"',180,240,60,25.0],
+      ['10" x 10" Heart Vase','10" x 10"',200,250,50,20.0],
+      ['16" x 12" Book','16" x 12"',180,250,70,28.0],
+      ['15" x 15" Heart Plaque','15" x 15"',160,210,50,23.8],
+    ]
+  );
+
+  makeTab('Cemetery_Fees',
+    ['Cemetery / Location','Fee (£)','Notes'],
+    [
+      ['None',0,'No cemetery fee'],
+      ['Roselawn',300,''],
+      ['Blaris',200,''],
+      ['Church Yard',300,'Varies - confirm with church'],
+    ]
+  );
+
+  makeTab('Additional_Services',
+    ['Service Name','Cost (£)','Sell (£)','Margin (£)','Margin (%)','Notes'],
+    [['Reconcrete Full Grave',120,200,80,40.0,'Full grave foundation']]
+  );
+
+  // Done — show the new sheet URL & ID
+  const url = ss.getUrl();
+  SpreadsheetApp.getUi().alert(
+    '✅ Master sheet created!\n\n' +
+    'URL: ' + url + '\n\n' +
+    'NEW SHEET ID:\n' + id + '\n\n' +
+    'Copy that Sheet ID, then update SHEET_ID at the top of Code.gs and redeploy.'
+  );
+}
+
+// ============================================================
 // RUN THIS ONCE to create all price book tabs in your Sheet
 // Open Apps Script editor → select setupPriceBook → click Run
 // ============================================================
