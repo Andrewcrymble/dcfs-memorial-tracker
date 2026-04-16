@@ -1242,25 +1242,47 @@
                                     <option value="Natural" ${order.hsFinish === 'Natural' ? 'selected' : ''}>Natural</option>
                                 </select>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Surround & Stone -->
+                    <div class="form-section">
+                        <div class="section-title">🔲 Surround & Stone</div>
+                        <div class="form-grid">
                             <div class="form-group">
                                 <label>Surround Type</label>
                                 <select name="surroundType" id="f_surroundType" onchange="updateFormPrices()">
                                     <option value="">No surround</option>
-                                    ${getUniqueValues(priceBook.Surrounds, 'type').length > 0
-                                        ? getUniqueValues(priceBook.Surrounds, 'type').map(t => `<option value="${t}" ${order.surroundType === t ? 'selected' : ''}>${t}</option>`).join('')
-                                        : ['Full Kerb', 'Half Kerb', 'Cremation Kerb', 'Vase Kerb'].map(t => `<option value="${t}" ${order.surroundType === t ? 'selected' : ''}>${t}</option>`).join('')
-                                    }
+                                    <option value="Full Kerb" ${order.surroundType === 'Full Kerb' ? 'selected' : ''}>Full Kerb</option>
+                                    <option value="Half Kerb" ${order.surroundType === 'Half Kerb' ? 'selected' : ''}>Half Kerb</option>
+                                    <option value="Cremation Kerb" ${order.surroundType === 'Cremation Kerb' ? 'selected' : ''}>Cremation Kerb</option>
+                                    <option value="Vase Kerb" ${order.surroundType === 'Vase Kerb' ? 'selected' : ''}>Vase Kerb</option>
+                                    ${getUniqueValues(priceBook.Surrounds, 'type').filter(t => !['Full Kerb','Half Kerb','Cremation Kerb','Vase Kerb'].includes(t)).map(t =>
+                                        `<option value="${t}" ${order.surroundType === t ? 'selected' : ''}>${t}</option>`
+                                    ).join('')}
                                 </select>
                                 <div class="price-indicator" id="pi_surround"></div>
+                            </div>
+                            <div class="form-group">
+                                <label>Granite Upgrade</label>
+                                <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.4rem;font-weight:normal;text-transform:none;letter-spacing:0;">
+                                    <input type="checkbox" name="surroundGranite" id="f_surroundGranite" ${order.surroundGranite ? 'checked' : ''} onchange="updateFormPrices()" style="accent-color:var(--cyan);width:16px;height:16px;">
+                                    6" Granite Foundation
+                                </label>
+                                <div class="price-indicator" id="pi_granite"></div>
                             </div>
                             <div class="form-group">
                                 <label>Stone / Chippings</label>
                                 <select name="stoneType" id="f_stoneType" onchange="updateFormPrices()">
                                     <option value="">None</option>
-                                    ${getUniqueValues(priceBook.Stones, 'type').length > 0
-                                        ? getUniqueValues(priceBook.Stones, 'type').map(t => `<option value="${t}" ${order.stoneType === t ? 'selected' : ''}>${t}</option>`).join('')
-                                        : ['White Marble', 'Black Granite', 'Grey Granite', 'Pea Gravel', 'Slate'].map(t => `<option value="${t}" ${order.stoneType === t ? 'selected' : ''}>${t}</option>`).join('')
-                                    }
+                                    <option value="White Marble" ${order.stoneType === 'White Marble' ? 'selected' : ''}>White Marble</option>
+                                    <option value="Black Granite" ${order.stoneType === 'Black Granite' ? 'selected' : ''}>Black Granite</option>
+                                    <option value="Grey Granite" ${order.stoneType === 'Grey Granite' ? 'selected' : ''}>Grey Granite</option>
+                                    <option value="Pea Gravel" ${order.stoneType === 'Pea Gravel' ? 'selected' : ''}>Pea Gravel</option>
+                                    <option value="Slate" ${order.stoneType === 'Slate' ? 'selected' : ''}>Slate</option>
+                                    ${getUniqueValues(priceBook.Stones, 'type').filter(t => !['White Marble','Black Granite','Grey Granite','Pea Gravel','Slate'].includes(t)).map(t =>
+                                        `<option value="${t}" ${order.stoneType === t ? 'selected' : ''}>${t}</option>`
+                                    ).join('')}
                                 </select>
                                 <div class="price-indicator" id="pi_stone"></div>
                             </div>
@@ -1463,13 +1485,25 @@
 
             // — Surround —
             const surroundType = val('f_surroundType');
-            let surCost = 0, surSell = 0;
+            const graniteUpgrade = document.getElementById('f_surroundGranite')?.checked;
+            let surCost = 0, surSell = 0, granCost = 0, granSell = 0;
             if (surroundType && priceBook.Surrounds) {
                 const sur = priceBook.Surrounds.find(s => s.type === surroundType);
-                if (sur) { surCost = parseFloat(sur.baseCost || sur.cost) || 0; surSell = parseFloat(sur.baseSell || sur.sell) || 0; }
+                if (sur) {
+                    surCost = parseFloat(sur.baseCost || sur.cost) || 0;
+                    surSell = parseFloat(sur.baseSell || sur.sell) || 0;
+                    if (graniteUpgrade) {
+                        granCost = parseFloat(sur.graniteCostAdd) || 0;
+                        granSell = parseFloat(sur.graniteSellAdd) || 0;
+                    }
+                }
             }
             showPI('pi_surround', surCost, surSell);
-            totalCost += surCost; totalSell += surSell;
+            const piGran = document.getElementById('pi_granite');
+            if (piGran) piGran.innerHTML = graniteUpgrade && granSell > 0
+                ? `<span class="pi-cost">Cost £${granCost.toFixed(2)}</span><span class="pi-sep">|</span><span class="pi-retail">Retail £${granSell.toFixed(2)}</span>`
+                : '';
+            totalCost += surCost + granCost; totalSell += surSell + granSell;
 
             // — Stone —
             const stoneType = val('f_stoneType');
@@ -1569,24 +1603,28 @@
             }
             orderData.accessories = accessories;
 
-            // Calculate and store prices from price book
-            const totals = calculateOrderTotals(orderData);
-            orderData.hsSellPrice = totals.breakdown.headstone.sell;
-            orderData.hsCostPrice = totals.breakdown.headstone.cost;
-            orderData.surroundSellPrice = totals.breakdown.surround.sell;
-            orderData.surroundCostPrice = totals.breakdown.surround.cost;
-            orderData.stoneSellPrice = totals.breakdown.stone.sell;
-            orderData.stoneCostPrice = totals.breakdown.stone.cost;
-            orderData.inscriptionSellPrice = totals.breakdown.inscription.sell;
-            orderData.inscriptionCostPrice = totals.breakdown.inscription.cost;
-            orderData.accessoriesSellPrice = totals.breakdown.accessories.sell;
-            orderData.accessoriesCostPrice = totals.breakdown.accessories.cost;
-            orderData.cemeteryFee = totals.breakdown.cemeteryFee;
-            orderData.totalSellPrice = totals.totalSell;
-            orderData.totalCostPrice = totals.totalCost;
-            orderData.profitMargin = totals.profitMargin;
-            orderData.marginPercentage = totals.marginPercentage;
-            orderData.balanceDue = Math.max(0, totals.totalSell - (parseFloat(orderData.depositPaid) || 0));
+            // Calculate and store prices from price book (safe — won't block save if it fails)
+            try {
+                const totals = calculateOrderTotals(orderData);
+                orderData.hsSellPrice = totals.breakdown.headstone.sell;
+                orderData.hsCostPrice = totals.breakdown.headstone.cost;
+                orderData.surroundSellPrice = totals.breakdown.surround.sell;
+                orderData.surroundCostPrice = totals.breakdown.surround.cost;
+                orderData.stoneSellPrice = totals.breakdown.stone.sell;
+                orderData.stoneCostPrice = totals.breakdown.stone.cost;
+                orderData.inscriptionSellPrice = totals.breakdown.inscription.sell;
+                orderData.inscriptionCostPrice = totals.breakdown.inscription.cost;
+                orderData.accessoriesSellPrice = totals.breakdown.accessories.sell;
+                orderData.accessoriesCostPrice = totals.breakdown.accessories.cost;
+                orderData.cemeteryFee = totals.breakdown.cemeteryFee;
+                orderData.totalSellPrice = totals.totalSell;
+                orderData.totalCostPrice = totals.totalCost;
+                orderData.profitMargin = totals.profitMargin;
+                orderData.marginPercentage = totals.marginPercentage;
+                orderData.balanceDue = Math.max(0, totals.totalSell - (parseFloat(orderData.depositPaid) || 0));
+            } catch (calcErr) {
+                console.warn('Price calculation error (order will still save):', calcErr);
+            }
 
             // Add activity log entry
             if (!orderData.log) orderData.log = [];
@@ -1766,34 +1804,22 @@
     if (!order.hsType || !order.hsSize) {
         return { cost: 0, sell: 0, margin: 0 };
     }
-    
-    // Find base headstone price
-    const headstone = priceBook.Headstones?.find(h => 
+    const headstone = priceBook.Headstones?.find(h =>
         h.type === order.hsType && h.size === order.hsSize
     );
-    
     if (!headstone) {
-        console.warn('Headstone not found in price book:', order.hsType, order.hsSize);
         return { cost: 0, sell: 0, margin: 0 };
     }
-    
-    let cost = headstone.cost;
-    let sell = headstone.sell;
-    
-    // Apply colour adjustment if present
+    let cost = parseFloat(headstone.cost) || 0;
+    let sell = parseFloat(headstone.sell) || 0;
     if (order.hsColour && order.hsColour !== 'Black') {
         const colour = priceBook.Colours?.find(c => c.name === order.hsColour);
         if (colour) {
-            cost += colour.costAdj;
-            sell += colour.sellAdj;
+            cost += parseFloat(colour.costAdj) || 0;
+            sell += parseFloat(colour.sellAdj) || 0;
         }
     }
-    
-    return {
-        cost: cost,
-        sell: sell,
-        margin: sell - cost
-    };
+    return { cost, sell, margin: sell - cost };
 }
 
         function calculateSurroundPricing(order) {
@@ -1851,39 +1877,40 @@
 
         function calculateInscriptionPricing(order) {
     if (!order.inscriptionText) {
-        return { cost: 0, sell: 0, margin: 0 };
+        return { cost: 0, sell: 0, margin: 0, letterCount: 0 };
     }
-    
-    // Count letters (excluding spaces and punctuation)
+
     const letterCount = (order.inscriptionText.match(/[a-zA-Z0-9]/g) || []).length;
-    
+
     let cost = 0;
     let sell = 0;
-    
+
+    // Safe access with hardcoded fallbacks if priceBook entries are missing
+    const ni = priceBook.NewInscription || {};
+    const ai = priceBook.AdditionalInscription || {};
+
     if (order.inscriptionType === 'new') {
-        // NEW inscription: First 100 free, then £2 cost / £3 sell per letter
         if (letterCount > 100) {
             const extraLetters = letterCount - 100;
-            cost = extraLetters * priceBook.NewInscription.costPerLetterAfter100;
-            sell = extraLetters * priceBook.NewInscription.sellPerLetterAfter100;
+            cost = extraLetters * (ni.costPerLetterAfter100 ?? 2);
+            sell = extraLetters * (ni.sellPerLetterAfter100 ?? 3);
         }
     } else {
-        // ADDITIONAL inscription: £150/£250 base for 50 letters, then £3/£4.50 per letter
+        const baseCost = ai.baseCost ?? 150;
+        const baseSell = ai.baseSell ?? 250;
         if (letterCount <= 50) {
-            cost = priceBook.AdditionalInscription.baseCost;
-            sell = priceBook.AdditionalInscription.baseSell;
+            cost = baseCost;
+            sell = baseSell;
         } else {
             const extraLetters = letterCount - 50;
-            cost = priceBook.AdditionalInscription.baseCost + 
-                   (extraLetters * priceBook.AdditionalInscription.costPerLetterAfter50);
-            sell = priceBook.AdditionalInscription.baseSell + 
-                   (extraLetters * priceBook.AdditionalInscription.sellPerLetterAfter50);
+            cost = baseCost + extraLetters * (ai.costPerLetterAfter50 ?? 3);
+            sell = baseSell + extraLetters * (ai.sellPerLetterAfter50 ?? 4.5);
         }
     }
-    
+
     return {
-        cost: cost,
-        sell: sell,
+        cost,
+        sell,
         margin: sell - cost,
         letterCount: letterCount
     };
