@@ -1210,7 +1210,7 @@
                         <div class="form-grid">
                             <div class="form-group">
                                 <label>Type</label>
-                                <select name="hsType" id="f_hsType" onchange="updateFormPrices()">
+                                <select name="hsType" id="f_hsType" onchange="onHsTypeChange()">
                                     <option value="">Select type</option>
                                     ${getHeadstoneTypes().map(type =>
                                         `<option value="${type}" ${order.hsType === type ? 'selected' : ''}>${type}</option>`
@@ -1221,9 +1221,21 @@
                                 <label>Size</label>
                                 <select name="hsSize" id="f_hsSize" onchange="updateFormPrices()">
                                     <option value="">Select size</option>
-                                    ${getHeadstoneSizes().map(size =>
-                                        `<option value="${size}" ${order.hsSize === size ? 'selected' : ''}>${size}</option>`
-                                    ).join('')}
+                                    ${(() => {
+                                        if (order.hsType && priceBook.Headstones) {
+                                            const sizesForType = priceBook.Headstones.filter(h => h.type === order.hsType);
+                                            if (sizesForType.length > 0) {
+                                                return sizesForType.map(h => {
+                                                    const sell = parseFloat(h.sell || 0);
+                                                    const label = sell > 0 ? `${h.size} — £${sell.toFixed(0)}` : h.size;
+                                                    return `<option value="${h.size}" ${order.hsSize === h.size ? 'selected' : ''}>${label}</option>`;
+                                                }).join('');
+                                            }
+                                        }
+                                        return getHeadstoneSizes().map(size =>
+                                            `<option value="${size}" ${order.hsSize === size ? 'selected' : ''}>${size}</option>`
+                                        ).join('');
+                                    })()}
                                 </select>
                                 <div class="price-indicator" id="pi_headstone"></div>
                             </div>
@@ -1262,9 +1274,15 @@
                                 <select name="surroundType" id="f_surroundType" onchange="updateFormPrices()">
                                     <option value="">No surround</option>
                                     ${(() => {
-                                        const fromBook = getUniqueValues(priceBook.Surrounds, 'type');
-                                        const opts = fromBook.length > 0 ? fromBook : ['Full Kerb', 'Half Kerb', 'Cremation Kerb', 'Vase Kerb'];
-                                        return opts.map(t => `<option value="${t}" ${order.surroundType === t ? 'selected' : ''}>${t}</option>`).join('');
+                                        const surrounds = priceBook.Surrounds || [];
+                                        if (surrounds.length > 0) {
+                                            return surrounds.map(s => {
+                                                const sell = parseFloat(s.baseSell || 0);
+                                                const label = sell > 0 ? `${s.type} — £${sell.toFixed(0)}` : s.type;
+                                                return `<option value="${s.type}" ${order.surroundType === s.type ? 'selected' : ''}>${label}</option>`;
+                                            }).join('');
+                                        }
+                                        return ['Full Kerb', 'Half Kerb', 'Cremation Kerb', 'Vase Kerb'].map(t => `<option value="${t}" ${order.surroundType === t ? 'selected' : ''}>${t}</option>`).join('');
                                     })()}
                                 </select>
                                 <div class="price-indicator" id="pi_surround"></div>
@@ -1282,9 +1300,15 @@
                                 <select name="stoneType" id="f_stoneType" onchange="updateFormPrices()">
                                     <option value="">None</option>
                                     ${(() => {
-                                        const fromBook = getUniqueValues(priceBook.Stones, 'type');
-                                        const opts = fromBook.length > 0 ? fromBook : ['White Marble', 'Black Granite', 'Grey Granite', 'Pea Gravel', 'Slate'];
-                                        return opts.map(t => `<option value="${t}" ${order.stoneType === t ? 'selected' : ''}>${t}</option>`).join('');
+                                        const stones = priceBook.Stones || [];
+                                        if (stones.length > 0) {
+                                            return stones.map(s => {
+                                                const sell = parseFloat(s.sell || 0);
+                                                const label = sell > 0 ? `${s.type} — £${sell.toFixed(0)}` : s.type;
+                                                return `<option value="${s.type}" ${order.stoneType === s.type ? 'selected' : ''}>${label}</option>`;
+                                            }).join('');
+                                        }
+                                        return ['White Marble', 'Black Granite', 'Grey Granite', 'Pea Gravel', 'Slate'].map(t => `<option value="${t}" ${order.stoneType === t ? 'selected' : ''}>${t}</option>`).join('');
                                     })()}
                                 </select>
                                 <div class="price-indicator" id="pi_stone"></div>
@@ -1337,9 +1361,19 @@
                                 <label>Cemetery</label>
                                 <select name="cemetery" id="f_cemetery" onchange="updateFormPrices()">
                                     <option value="">Select cemetery</option>
-                                    ${getCemeteryOptions().map(loc =>
-                                        `<option value="${loc}" ${order.cemetery === loc ? 'selected' : ''}>${loc}</option>`
-                                    ).join('')}
+                                    ${(() => {
+                                        const fees = priceBook.Cemetery_Fees || [];
+                                        if (fees.length > 0) {
+                                            return fees.map(c => {
+                                                const fee = parseFloat(c.fee || 0);
+                                                const label = fee > 0 ? `${c.location} — £${fee.toFixed(0)}` : c.location;
+                                                return `<option value="${c.location}" ${order.cemetery === c.location ? 'selected' : ''}>${label}</option>`;
+                                            }).join('');
+                                        }
+                                        return getCemeteryOptions().map(loc =>
+                                            `<option value="${loc}" ${order.cemetery === loc ? 'selected' : ''}>${loc}</option>`
+                                        ).join('');
+                                    })()}
                                 </select>
                                 <div class="price-indicator" id="pi_cemetery"></div>
                             </div>
@@ -1450,6 +1484,36 @@
                 'Movilla Cemetery', 'Bangor Cemetery', 'Clandeboye Cemetery',
                 'Drumbeg Church', 'Ballymena Cemetery', 'Other'
             ];
+        }
+
+        // Rebuild headstone size dropdown with prices when type changes
+        function onHsTypeChange() {
+            const hsType = document.getElementById('f_hsType')?.value || '';
+            const sizeSelect = document.getElementById('f_hsSize');
+            if (!sizeSelect) return;
+
+            const currentSize = sizeSelect.value;
+            let options = '<option value="">Select size</option>';
+
+            if (hsType && priceBook.Headstones) {
+                const sizesForType = priceBook.Headstones.filter(h => h.type === hsType);
+                if (sizesForType.length > 0) {
+                    options += sizesForType.map(h => {
+                        const sell = parseFloat(h.sell || 0);
+                        const label = sell > 0 ? `${h.size} — £${sell.toFixed(0)}` : h.size;
+                        return `<option value="${h.size}" ${currentSize === h.size ? 'selected' : ''}>${label}</option>`;
+                    }).join('');
+                    sizeSelect.innerHTML = options;
+                    updateFormPrices();
+                    return;
+                }
+            }
+            // Fallback: show all sizes without prices
+            options += getHeadstoneSizes().map(s =>
+                `<option value="${s}" ${currentSize === s ? 'selected' : ''}>${s}</option>`
+            ).join('');
+            sizeSelect.innerHTML = options;
+            updateFormPrices();
         }
 
         const ACCESSORY_OPTIONS = [
