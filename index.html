@@ -2491,7 +2491,7 @@
                 await fetch(SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify({ action: 'upsert', order: orderData })
                 });
 
@@ -3079,7 +3079,7 @@
                 y = Math.max(y + 4, 248);
                 doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(130, 130, 130);
                 doc.text('This is an estimate only. Prices confirmed upon order acceptance and may vary subject to cemetery requirements.', 20, y);
-                doc.text('A deposit is required to confirm your order. Payment in full due on or before installation date.', 20, y + 4.5);
+                doc.text('We require full payment or a minimum 50% deposit upon order placement. Remaining balance due on or before installation.', 20, y + 4.5);
                 doc.setTextColor(0, 0, 0);
             }
 
