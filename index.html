@@ -948,41 +948,6 @@
                         </div>
                     </div>
 
-                    <!-- Payment received banner -->
-                    ${o.stripePaymentReceived ? `
-                    <div style="background:#dcfce7;border:2px solid #16a34a;border-radius:10px;padding:1rem 1.25rem;display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem;">
-                        <span style="font-size:2rem;">💚</span>
-                        <div style="flex:1;">
-                            <div style="font-size:1rem;font-weight:700;color:#15803d;">Payment Received via Stripe</div>
-                            <div style="font-size:0.85rem;color:#16a34a;margin-top:0.1rem;">£${(o.stripePaymentAmount||0).toFixed(2)} received · ${o.stripePaymentDate || ''}</div>
-                        </div>
-                        <span style="background:#15803d;color:white;padding:0.3rem 0.9rem;border-radius:20px;font-size:0.8rem;font-weight:700;">✓ PAID</span>
-                    </div>` : ''}
-
-                    <!-- Order Notes (interactive, always visible) -->
-                    <div class="card detail-grid-wide" style="border-left:4px solid var(--cyan);">
-                        <div class="card-header">
-                            <span class="card-header-icon">📝</span>
-                            <span class="card-header-title">Order Notes</span>
-                            <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);">${(o.noteEntries||[]).length} note${(o.noteEntries||[]).length!==1?'s':''}</span>
-                        </div>
-                        <div class="card-body">
-                            ${renderOrderNotes(o)}
-                        </div>
-                    </div>
-
-                    <!-- Mason Notes (interactive, always visible) -->
-                    <div class="card detail-grid-wide" style="border-left:4px solid #16a34a;">
-                        <div class="card-header" style="background:#f0fdf4;">
-                            <span class="card-header-icon">🔨</span>
-                            <span class="card-header-title" style="color:#15803d;">Mason Notes</span>
-                            <span style="margin-left:auto;font-size:0.72rem;background:#dcfce7;color:#15803d;padding:0.15rem 0.5rem;border-radius:4px;font-weight:600;">Printed on Job Card</span>
-                        </div>
-                        <div class="card-body">
-                            ${renderMasonNotes(o)}
-                        </div>
-                    </div>
-
                     <!-- Activity Log (full width) -->
                     <div class="card detail-grid-wide">
                         <div class="card-header">
@@ -1006,6 +971,41 @@
                         </div>
                     </div>
 
+                </div>
+
+                <!-- Payment received banner (outside grid) -->
+                ${o.stripePaymentReceived ? `
+                <div style="background:#dcfce7;border:2px solid #16a34a;border-radius:10px;padding:1rem 1.25rem;display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem;">
+                    <span style="font-size:2rem;">💚</span>
+                    <div style="flex:1;">
+                        <div style="font-size:1rem;font-weight:700;color:#15803d;">Payment Received via Stripe</div>
+                        <div style="font-size:0.85rem;color:#16a34a;margin-top:0.1rem;">£${(o.stripePaymentAmount||0).toFixed(2)} received · ${o.stripePaymentDate || ''}</div>
+                    </div>
+                    <span style="background:#15803d;color:white;padding:0.3rem 0.9rem;border-radius:20px;font-size:0.8rem;font-weight:700;">✓ PAID</span>
+                </div>` : ''}
+
+                <!-- Order Notes (outside grid — fully interactive) -->
+                <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);border-left:4px solid var(--cyan);margin-bottom:1.25rem;">
+                    <div class="card-header">
+                        <span class="card-header-icon">📝</span>
+                        <span class="card-header-title">Order Notes</span>
+                        <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);">${(o.noteEntries||[]).length} note${(o.noteEntries||[]).length!==1?'s':''}</span>
+                    </div>
+                    <div class="card-body">
+                        ${renderOrderNotes(o)}
+                    </div>
+                </div>
+
+                <!-- Mason Notes (outside grid — fully interactive) -->
+                <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);border-left:4px solid #16a34a;margin-bottom:1.25rem;">
+                    <div class="card-header" style="background:#f0fdf4;">
+                        <span class="card-header-icon">🔨</span>
+                        <span class="card-header-title" style="color:#15803d;">Mason Notes</span>
+                        <span style="margin-left:auto;font-size:0.72rem;background:#dcfce7;color:#15803d;padding:0.15rem 0.5rem;border-radius:4px;font-weight:600;">Printed on Job Card</span>
+                    </div>
+                    <div class="card-body">
+                        ${renderMasonNotes(o)}
+                    </div>
                 </div>
 
                 <!-- Payment card (shown when payment link exists) -->
