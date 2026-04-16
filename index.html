@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DC&S Headstone Order Tracker</title>
+    <title>David Crymble &amp; Sons — Memorial Tool</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -74,7 +74,7 @@
         .btn-danger:hover { background: #dc2626; color: white; }
 
         /* ── LAYOUT ── */
-        .main-container { display: flex; height: calc(100vh - 56px); }
+        .main-container { display: flex; height: calc(100vh - 56px - 52px); }
 
         /* ── SIDEBAR ── */
         .sidebar {
@@ -422,8 +422,146 @@
         .lt-label { font-size: 0.7rem; opacity: 0.75; text-transform: uppercase; letter-spacing: 0.05em; }
         .lt-value { font-size: 1.5rem; font-weight: 700; }
 
+        /* ── PASSWORD SCREEN ── */
+        #pwScreen {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg, #2d5a10 0%, #5a8f2e 60%, #0097a7 100%);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        #pwScreen.hidden { display: none; }
+        .pw-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 2.5rem 2rem;
+            max-width: 380px;
+            width: 100%;
+            text-align: center;
+        }
+        .pw-logo {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        .pw-card h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 0.25rem;
+        }
+        .pw-card p {
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-bottom: 1.75rem;
+        }
+        .pw-input-wrap { position: relative; margin-bottom: 1rem; }
+        #pwInput {
+            width: 100%;
+            padding: 0.75rem 3rem 0.75rem 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.15s;
+            text-align: center;
+            letter-spacing: 0.1em;
+        }
+        #pwInput:focus { border-color: #5a8f2e; }
+        #pwInput.error { border-color: #ef4444; animation: shake 0.3s; }
+        @keyframes shake {
+            0%,100% { transform: translateX(0); }
+            25% { transform: translateX(-6px); }
+            75% { transform: translateX(6px); }
+        }
+        #pwToggle {
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            color: #64748b;
+        }
+        #pwError {
+            font-size: 0.8rem;
+            color: #ef4444;
+            margin-bottom: 0.75rem;
+            min-height: 1.2em;
+        }
+        #pwSubmit {
+            width: 100%;
+            padding: 0.75rem;
+            background: #5a8f2e;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        #pwSubmit:hover { background: #4a7a24; }
+        .pw-footer {
+            margin-top: 1.5rem;
+            font-size: 0.75rem;
+            color: #9ca3af;
+        }
+
+        /* ── STATS BAR ── */
+        .stats-bar {
+            background: white;
+            border-bottom: 1px solid var(--border);
+            padding: 0.6rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            overflow-x: auto;
+            flex-shrink: 0;
+        }
+        .stats-bar::-webkit-scrollbar { height: 2px; }
+        .stat-chip {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0.3rem 1rem;
+            border-right: 1px solid var(--border);
+            min-width: 80px;
+            flex-shrink: 0;
+        }
+        .stat-chip:last-child { border-right: none; }
+        .stat-chip-count {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: var(--text);
+            line-height: 1;
+        }
+        .stat-chip-label {
+            font-size: 0.62rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-muted);
+            margin-top: 0.15rem;
+            white-space: nowrap;
+        }
+        .stat-chip.money .stat-chip-count { color: var(--green); font-size: 1rem; }
+        .stat-chip.outstanding .stat-chip-count { color: #ef4444; font-size: 1rem; }
+        .stat-bar-divider {
+            width: 1px;
+            height: 36px;
+            background: var(--border);
+            margin: 0 0.5rem;
+            flex-shrink: 0;
+        }
+
         @media print {
-            .app-header, .sidebar, .action-bar { display: none; }
+            .app-header, .sidebar, .action-bar, .stats-bar { display: none; }
             .main-container { height: auto; }
             .content-area { padding: 0; }
         }
@@ -439,14 +577,46 @@
     </style>
 </head>
 <body>
+
+    <!-- ── PASSWORD SCREEN ── -->
+    <div id="pwScreen">
+        <div class="pw-card">
+            <div class="pw-logo">🪨</div>
+            <h2>David Crymble &amp; Sons</h2>
+            <p>Memorial Tool — Staff Access Only</p>
+            <div class="pw-input-wrap">
+                <input type="password" id="pwInput" placeholder="Enter password" onkeydown="if(event.key==='Enter')checkPassword()">
+                <button id="pwToggle" onclick="togglePwVisibility()" title="Show/hide">👁</button>
+            </div>
+            <div id="pwError"></div>
+            <button id="pwSubmit" onclick="checkPassword()">Unlock →</button>
+            <div class="pw-footer">David Crymble &amp; Sons Memorial Masons · Belfast</div>
+        </div>
+    </div>
+
     <div class="app-header">
-        <h1>DC&S Headstone Order Tracker</h1>
+        <h1>David Crymble &amp; Sons — Memorial Tool</h1>
         <div class="header-actions">
             <button id="userChip" onclick="toggleUserDropdown()" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:0.3rem;font-weight:600;">👤 <span id="userChipName">Andrew</span> ▾</button>
             <button class="btn btn-primary" onclick="showNewOrderModal()">+ New Order</button>
             <button class="btn btn-secondary" onclick="refreshOrders()">🔄 Refresh</button>
             <button class="btn btn-secondary" onclick="testConnection()">🔍 Test Connection</button>
         </div>
+    </div>
+
+    <!-- ── STATS BAR ── -->
+    <div class="stats-bar" id="statsBar">
+        <div class="stat-chip"><span class="stat-chip-count" id="st-all">—</span><span class="stat-chip-label">Total Jobs</span></div>
+        <div class="stat-chip"><span class="stat-chip-count" id="st-Enquiry" style="color:#94a3b8">—</span><span class="stat-chip-label">Enquiry</span></div>
+        <div class="stat-chip"><span class="stat-chip-count" id="st-Quoted" style="color:#f59e0b">—</span><span class="stat-chip-label">Quoted</span></div>
+        <div class="stat-chip"><span class="stat-chip-count" id="st-Confirmed" style="color:#0097a7">—</span><span class="stat-chip-label">Confirmed</span></div>
+        <div class="stat-chip"><span class="stat-chip-count" id="st-In Design" style="color:#8b5cf6">—</span><span class="stat-chip-label">In Design</span></div>
+        <div class="stat-chip"><span class="stat-chip-count" id="st-Production" style="color:#f97316">—</span><span class="stat-chip-label">Production</span></div>
+        <div class="stat-chip"><span class="stat-chip-count" id="st-Ready" style="color:#16a34a">—</span><span class="stat-chip-label">Ready</span></div>
+        <div class="stat-chip"><span class="stat-chip-count" id="st-Installed" style="color:#5a8f2e">—</span><span class="stat-chip-label">Installed</span></div>
+        <div class="stat-bar-divider"></div>
+        <div class="stat-chip money"><span class="stat-chip-count" id="st-totalVal">—</span><span class="stat-chip-label">Total Value (Active)</span></div>
+        <div class="stat-chip outstanding"><span class="stat-chip-count" id="st-outstanding">—</span><span class="stat-chip-label">Outstanding Balance</span></div>
     </div>
 
     <div class="main-container">
@@ -494,6 +664,81 @@
     </div>
 
     <script>
+        // ── PASSWORD PROTECTION ──
+        // To change the password, update the string below and redeploy to GitHub
+        const APP_PASSWORD = '7901';
+
+        (function initPasswordScreen() {
+            const unlocked = sessionStorage.getItem('dcfs_unlocked');
+            if (unlocked === 'yes') {
+                document.getElementById('pwScreen').classList.add('hidden');
+            }
+            // focus input
+            setTimeout(() => { const el = document.getElementById('pwInput'); if(el) el.focus(); }, 100);
+        })();
+
+        function checkPassword() {
+            const input = document.getElementById('pwInput');
+            const errorEl = document.getElementById('pwError');
+            if (input.value === APP_PASSWORD) {
+                sessionStorage.setItem('dcfs_unlocked', 'yes');
+                document.getElementById('pwScreen').classList.add('hidden');
+                errorEl.textContent = '';
+            } else {
+                input.classList.add('error');
+                errorEl.textContent = 'Incorrect password. Please try again.';
+                input.value = '';
+                setTimeout(() => input.classList.remove('error'), 400);
+                input.focus();
+            }
+        }
+
+        function togglePwVisibility() {
+            const input = document.getElementById('pwInput');
+            const btn = document.getElementById('pwToggle');
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = '🙈';
+            } else {
+                input.type = 'password';
+                btn.textContent = '👁';
+            }
+        }
+
+        // ── STATS BAR ──
+        function renderStatsBar() {
+            const fmtMoney = n => '£' + n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed'];
+            const counts = {};
+            statuses.forEach(s => counts[s] = 0);
+            let total = 0;
+            let totalVal = 0;
+            let outstanding = 0;
+            const activeStatuses = new Set(['Enquiry','Quoted','Confirmed','In Design','Production','Ready']);
+
+            (allOrders || []).forEach(o => {
+                const s = o.status || 'Enquiry';
+                if (counts[s] !== undefined) counts[s]++;
+                total++;
+                const val = parseFloat(o.totalSellPrice) || 0;
+                const paid = parseFloat(o.depositPaid) || 0;
+                const bal = Math.max(0, val - paid);
+                if (activeStatuses.has(s)) {
+                    totalVal += val;
+                    outstanding += bal;
+                }
+            });
+
+            const el = id => document.getElementById(id);
+            if (el('st-all')) el('st-all').textContent = total;
+            statuses.forEach(s => {
+                const chip = el('st-' + s);
+                if (chip) chip.textContent = counts[s];
+            });
+            if (el('st-totalVal')) el('st-totalVal').textContent = fmtMoney(totalVal);
+            if (el('st-outstanding')) el('st-outstanding').textContent = fmtMoney(outstanding);
+        }
+
         // Configuration
        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwoD6BDLRLZeWyVuuof48f7cMuu97K-oNHulf0DDdDwbxdfaxkh12-Ht-ZHolfGd_k/exec';
         const SHEET_ID = '1_pbyhKL1IElgneBZHFIWG76Cv6hNKdUw0fgSHQjMN6M';
@@ -791,8 +1036,9 @@
 
         // Render order list
         function renderOrderList(searchTerm = '') {
+            renderStatsBar();
             const orderList = document.getElementById('orderList');
-            
+
             let filtered = allOrders.filter(order => {
                 const matchesFilter = currentFilter === 'all' || order.status === currentFilter;
                 const matchesSearch = !searchTerm || 
