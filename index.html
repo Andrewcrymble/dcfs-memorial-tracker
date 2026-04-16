@@ -1160,24 +1160,52 @@
         // Render files
         function renderFiles(order) {
             const files = order.files || [];
-            const fileTypes = ['Proof', 'Artwork', 'Photo', 'Signed Form', 'Cemetery Permit', 'Invoice', 'Other'];
+            const fileTypes = ['Proof', 'Artwork', 'Photo', 'Signed Form', 'Cemetery Permit', 'Grave Paper', 'Invoice', 'Other'];
 
             const fileGrid = files.length === 0
                 ? `<p style="color:#9ca3af;font-size:0.85rem;margin:0 0 1rem;">No files uploaded yet.</p>`
-                : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.75rem;margin-bottom:1rem;">
+                : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:0.75rem;margin-bottom:1rem;">
                     ${files.map((file, idx) => {
                         const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name || '');
                         const isPdf = /\.pdf$/i.test(file.name || '');
-                        const icon = isImg ? '🖼️' : isPdf ? '📄' : '📎';
-                        const typeTag = file.type ? `<span style="display:inline-block;padding:0.1rem 0.45rem;background:#e0f2fe;color:#0369a1;border-radius:4px;font-size:0.7rem;font-weight:600;margin-bottom:0.4rem;">${file.type}</span>` : '';
+                        const isProof = file.type === 'Proof';
+                        const isGravePaper = file.type === 'Grave Paper';
+                        const icon = isImg ? '🖼️' : isPdf ? '📄' : isGravePaper ? '📜' : '📎';
+                        const approved = file.approved;
+
+                        // Type tag colour
+                        let tagBg = '#e0f2fe', tagCol = '#0369a1';
+                        if (isProof)      { tagBg = approved ? '#dcfce7' : '#fef9c3'; tagCol = approved ? '#15803d' : '#854d0e'; }
+                        if (isGravePaper) { tagBg = '#f3e8ff'; tagCol = '#7e22ce'; }
+
+                        const typeTag = file.type
+                            ? `<span style="display:inline-block;padding:0.1rem 0.45rem;background:${tagBg};color:${tagCol};border-radius:4px;font-size:0.7rem;font-weight:600;margin-bottom:0.3rem;">${file.type}</span>`
+                            : '';
+
+                        const approvedBadge = approved
+                            ? `<div style="display:flex;align-items:center;gap:0.3rem;padding:0.2rem 0.5rem;background:#dcfce7;border:1px solid #86efac;border-radius:4px;font-size:0.7rem;font-weight:700;color:#15803d;margin-top:0.2rem;">
+                                ✅ APPROVED
+                                <span style="font-weight:400;color:#16a34a;">${file.approvedAt ? new Date(file.approvedAt).toLocaleDateString('en-GB') : ''}</span>
+                               </div>`
+                            : '';
+
+                        const approveBtn = isProof && !approved
+                            ? `<button onclick="approveFile(${idx})" style="padding:0.2rem 0.55rem;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;color:#16a34a;font-size:0.75rem;font-weight:600;cursor:pointer;">✅ Approve</button>`
+                            : '';
+
+                        const borderColor = approved ? '#86efac' : isGravePaper ? '#d8b4fe' : '#e5e7eb';
+                        const bgColor    = approved ? '#f0fdf4' : 'white';
+
                         return `
-                        <div style="border:1px solid #e5e7eb;border-radius:8px;padding:0.75rem;background:white;display:flex;flex-direction:column;gap:0.3rem;">
+                        <div style="border:1px solid ${borderColor};border-radius:8px;padding:0.75rem;background:${bgColor};display:flex;flex-direction:column;gap:0.3rem;">
                             <div style="font-size:1.4rem;line-height:1;">${icon}</div>
                             ${typeTag}
                             <div style="font-size:0.8rem;font-weight:600;color:#111;word-break:break-all;line-height:1.3;">${file.name}</div>
                             <div style="font-size:0.72rem;color:#9ca3af;">${file.uploadedAt ? new Date(file.uploadedAt).toLocaleDateString('en-GB') : ''}</div>
+                            ${approvedBadge}
                             <div style="display:flex;gap:0.4rem;margin-top:0.3rem;flex-wrap:wrap;">
                                 ${file.viewUrl || file.driveUrl ? `<a href="${file.viewUrl || file.driveUrl}" target="_blank" style="padding:0.2rem 0.55rem;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;color:#16a34a;font-size:0.75rem;font-weight:600;text-decoration:none;">👁 View</a>` : ''}
+                                ${approveBtn}
                                 <button onclick="deleteFile(${idx})" style="padding:0.2rem 0.55rem;background:#fff1f2;border:1px solid #fca5a5;border-radius:4px;color:#dc2626;font-size:0.75rem;font-weight:600;cursor:pointer;">🗑 Remove</button>
                             </div>
                         </div>`;
@@ -1297,6 +1325,17 @@
                 } catch(e) {}
             }
             currentOrder.files.splice(idx, 1);
+            await saveOrder(currentOrder);
+            renderOrderDetails();
+        }
+
+        async function approveFile(idx) {
+            if (!currentOrder || !currentOrder.files) return;
+            const file = currentOrder.files[idx];
+            if (!confirm(`Mark "${file.name}" as APPROVED?\n\nThis will record the approval date and link to the Drive file.`)) return;
+            file.approved = true;
+            file.approvedAt = new Date().toISOString();
+            addActivityLog(`Proof approved: ${file.name}`);
             await saveOrder(currentOrder);
             renderOrderDetails();
         }
