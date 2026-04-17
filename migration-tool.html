@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DCFS Migration Tool</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #f0f2f5;
+    color: #1e2530;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: #5a8f2e;
+    color: #fff;
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  }
+  header .logo {
+    width: 48px; height: 48px;
+    background: rgba(255,255,255,.2);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+  }
+  header h1 { font-size: 1.4rem; font-weight: 700; }
+  header p  { font-size: .85rem; opacity: .85; margin-top: 2px; }
+  .badge {
+    margin-left: auto;
+    background: #fbbf24;
+    color: #78350f;
+    font-size: .75rem; font-weight: 700;
+    padding: 4px 12px; border-radius: 999px;
+    letter-spacing: .05em;
+  }
+
+  /* ── Layout ── */
+  main { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  /* ── Cards ── */
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .step-badge {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #5a8f2e; color: #fff;
+    font-weight: 700; font-size: .9rem;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .card-header h2 { font-size: 1rem; font-weight: 700; }
+  .card-header p  { font-size: .82rem; color: #6b7280; margin-top: 2px; }
+  .card-body  { padding: 24px; }
+
+  /* ── File picker ── */
+  .file-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: #5a8f2e; color: #fff;
+    border: none; border-radius: 8px;
+    padding: 11px 22px; font-size: .95rem; font-weight: 600;
+    cursor: pointer; transition: background .15s;
+  }
+  .file-btn:hover { background: #4a7a25; }
+  #file-input { display: none; }
+  #file-name { margin-top: 10px; font-size: .85rem; color: #6b7280; font-style: italic; }
+  .hint { font-size: .82rem; color: #9ca3af; margin-top: 6px; }
+
+  /* ── Stats row ── */
+  .stats-row {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .stat-chip {
+    background: #f0f7e8; border: 1px solid #c3dfa0;
+    border-radius: 8px; padding: 8px 16px;
+    font-size: .85rem; font-weight: 600; color: #3d6b1a;
+  }
+  .warnings-box {
+    background: #fef9ec; border: 1px solid #fcd34d;
+    border-radius: 8px; padding: 12px 16px;
+    font-size: .83rem; color: #92400e;
+    margin-bottom: 14px;
+  }
+  .warnings-box ul { margin: 6px 0 0 18px; }
+
+  /* ── Preview table ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  th {
+    background: #1e2530; color: #b89a5e;
+    padding: 8px 10px; text-align: left;
+    font-size: .78rem; font-weight: 700;
+    position: sticky; top: 0; z-index: 1;
+    white-space: nowrap;
+  }
+  td { padding: 7px 10px; border-bottom: 1px solid #f0f2f5; }
+  tr:hover td { background: #f7fdf2; }
+  .badge-status {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: .72rem; font-weight: 700;
+  }
+  .s-installed { background:#d1fae5; color:#065f46; }
+  .s-confirmed { background:#dbeafe; color:#1e40af; }
+  .s-enquiry   { background:#f3f4f6; color:#374151; }
+  .toggle-link {
+    display: inline-block; margin-top: 12px;
+    font-size: .83rem; color: #5a8f2e; cursor: pointer;
+    text-decoration: underline;
+  }
+
+  /* ── Push section ── */
+  .push-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media(max-width:640px){ .push-grid { grid-template-columns: 1fr; } }
+
+  .push-box { border-radius: 10px; padding: 18px; }
+  .push-box.test { border: 2px solid #f59e0b; background: #fffbeb; }
+  .push-box.live { border: 2px solid #ef4444; background: #fff5f5; }
+  .push-box h3 { font-size: .95rem; font-weight: 700; margin-bottom: 10px; }
+  .push-box.test h3 { color: #92400e; }
+  .push-box.live h3 { color: #991b1b; }
+
+  .field-label { font-size: .78rem; font-weight: 600; color: #4b5563; margin-bottom: 4px; display: block; }
+  input[type=text], input[type=url], textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid #d1d5db;
+    border-radius: 6px; font-size: .85rem; margin-bottom: 10px;
+    font-family: inherit;
+  }
+  input:focus { outline: 2px solid #5a8f2e; border-color: transparent; }
+
+  .warn-box {
+    background: #fee2e2; border: 1px solid #fca5a5;
+    border-radius: 6px; padding: 10px 12px;
+    font-size: .8rem; color: #7f1d1d;
+    margin-bottom: 10px;
+  }
+  .help-text { font-size: .76rem; color: #6b7280; margin-bottom: 8px; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: none; border-radius: 8px;
+    padding: 10px 18px; font-size: .88rem; font-weight: 700;
+    cursor: pointer; transition: opacity .15s; width: 100%;
+    justify-content: center;
+  }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-test { background: #f59e0b; color: #fff; }
+  .btn-test:hover:not(:disabled) { background: #d97706; }
+  .btn-live { background: #ef4444; color: #fff; }
+  .btn-live:hover:not(:disabled) { background: #dc2626; }
+
+  /* ── Progress ── */
+  #progress-section { display: none; }
+  .progress-bar-wrap {
+    background: #e5e7eb; border-radius: 999px; height: 12px;
+    overflow: hidden; margin: 10px 0;
+  }
+  .progress-bar-fill {
+    background: #5a8f2e; height: 100%; width: 0%;
+    transition: width .2s; border-radius: 999px;
+  }
+  .progress-status { font-size: .85rem; color: #374151; margin-bottom: 6px; }
+  .results-box {
+    background: #f0fdf4; border: 1px solid #a7f3d0;
+    border-radius: 8px; padding: 14px; margin-top: 14px;
+    font-size: .85rem;
+  }
+  .results-box .fail { color: #dc2626; margin-top: 8px; }
+  .results-box .fail-item { font-size: .78rem; margin-left: 12px; margin-top: 3px; }
+
+  /* ── Setup Guide ── */
+  .guide-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none;
+  }
+  .guide-toggle:hover { color: #5a8f2e; }
+  .guide-body { display: none; margin-top: 16px; }
+  .guide-body ol { margin-left: 20px; font-size: .88rem; line-height: 1.8; color: #374151; }
+  .guide-body a { color: #5a8f2e; }
+  .guide-body code {
+    background: #f3f4f6; padding: 1px 5px; border-radius: 4px;
+    font-size: .82rem;
+  }
+
+  /* ── Hidden ── */
+  .hidden { display: none !important; }
+
+  /* ── Loader spinner ── */
+  .spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,.4);
+    border-top-color: #fff;
+    border-radius: 50%; animation: spin .6s linear infinite;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📋</div>
+  <div>
+    <h1>DCFS Migration Tool</h1>
+    <p>Import legacy memorial records into tracker</p>
+  </div>
+  <span class="badge">TEST MODE READY</span>
+</header>
+
+<main>
+
+  <!-- ── Step 1: File Picker ── -->
+  <div class="card" id="card-pick">
+    <div class="card-header">
+      <div class="step-badge">1</div>
+      <div>
+        <h2>Select Excel File</h2>
+        <p>Choose the exported legacy memorial spreadsheet</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <input type="file" id="file-input" accept=".xlsx,.xls">
+      <button class="file-btn" onclick="document.getElementById('file-input').click()">
+        📂 Select Excel File
+      </button>
+      <div id="file-name">No file selected</div>
+      <div class="hint">Select <strong>MemorialEnquiryAndEstimate.xlsx</strong></div>
+    </div>
+  </div>
+
+  <!-- ── Step 2: Preview ── -->
+  <div class="card hidden" id="card-preview">
+    <div class="card-header">
+      <div class="step-badge">2</div>
+      <div>
+        <h2>Preview Records</h2>
+        <p>Review mapped data before pushing to Google Sheets</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="stats-row" id="stats-row"></div>
+      <div id="warnings-container"></div>
+      <div class="table-wrap">
+        <table id="preview-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Ref</th>
+              <th>Customer</th>
+              <th>Deceased</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Cemetery</th>
+              <th>Has Inscription</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="preview-tbody"></tbody>
+        </table>
+      </div>
+      <span class="toggle-link hidden" id="toggle-all" onclick="toggleAllRows()"></span>
+    </div>
+  </div>
+
+  <!-- ── Step 3: Push ── -->
+  <div class="card hidden" id="card-push">
+    <div class="card-header">
+      <div class="step-badge">3</div>
+      <div>
+        <h2>Push to Google Sheet</h2>
+        <p>Send transformed records to your Apps Script endpoint</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="push-grid">
+
+        <!-- TEST -->
+        <div class="push-box test">
+          <h3>🧪 Test Sheet</h3>
+          <label class="field-label">Test Google Sheet URL</label>
+          <input type="url" id="test-url" placeholder="https://script.google.com/macros/s/…/exec">
+          <div class="help-text">Paste your test Apps Script URL here. See setup guide below.</div>
+          <button class="btn btn-test" id="btn-test" onclick="startPush('test')" disabled>
+            🧪 Push <span id="test-count">0</span> records to TEST sheet
+          </button>
+        </div>
+
+        <!-- LIVE -->
+        <div class="push-box live">
+          <h3>🚀 Live Sheet</h3>
+          <label class="field-label">Live Sheet URL</label>
+          <input type="url" id="live-url" value="https://script.google.com/macros/s/AKfycbwoD6BDLRLZeWyVuuof48f7cMuu97K-oNHulf0DDdDwbxdfaxkh12-Ht-ZHolfGd_k/exec" readonly>
+          <div class="warn-box">⚠️ This will write to your <strong>LIVE tracker</strong>. Only do this after testing.</div>
+          <label class="field-label">Type CONFIRM to enable</label>
+          <input type="text" id="live-confirm" placeholder="Type CONFIRM here" oninput="checkLiveConfirm()">
+          <button class="btn btn-live" id="btn-live" onclick="startPush('live')" disabled>
+            🚀 Push <span id="live-count">0</span> records to LIVE sheet
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Progress ── -->
+  <div class="card" id="progress-section">
+    <div class="card-header">
+      <div class="step-badge">⚙</div>
+      <div>
+        <h2>Sending Records</h2>
+        <p id="progress-target"></p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="progress-status" id="progress-status">Preparing…</div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progress-bar"></div>
+      </div>
+      <div id="results-container"></div>
+    </div>
+  </div>
+
+  <!-- ── Setup Guide ── -->
+  <div class="card" id="card-guide">
+    <div class="card-body">
+      <div class="guide-toggle" onclick="toggleGuide()">
+        <strong>📖 Setup Guide — How to create a Test Sheet</strong>
+        <span id="guide-arrow">▼</span>
+      </div>
+      <div class="guide-body" id="guide-body">
+        <ol>
+          <li>Open your live Google Sheet:<br>
+            <a href="https://docs.google.com/spreadsheets/d/1_pbyhKL1IElgneBZHFIWG76Cv6hNKdUw0fgSHQjMN6M" target="_blank">
+              https://docs.google.com/spreadsheets/d/1_pbyhKL1IElgneBZHFIWG76Cv6hNKdUw0fgSHQjMN6M
+            </a>
+          </li>
+          <li>Click <code>File → Make a copy</code> and name it <strong>"DCFS Memorial Tracker — TEST"</strong></li>
+          <li>In the copy, go to <code>Extensions → Apps Script</code></li>
+          <li>Copy the script from your live deployment (or paste the same Code.gs contents)</li>
+          <li>Click <code>Deploy → New deployment → Web app</code></li>
+          <li>Set <em>Execute as:</em> <strong>Me</strong> and <em>Who has access:</em> <strong>Anyone</strong></li>
+          <li>Click <strong>Deploy</strong> and copy the URL that appears</li>
+          <li>Paste that URL into the <em>Test URL</em> field above</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let allRecords = [];       // transformed JSON objects
+let showingAll = false;
+const BATCH_DELAY_MS = 200;
+
+const LIVE_URL = 'https://script.google.com/macros/s/AKfycbwoD6BDLRLZeWyVuuof48f7cMuu97K-oNHulf0DDdDwbxdfaxkh12-Ht-ZHolfGd_k/exec';
+
+// ============================================================
+// FILE INPUT HANDLER
+// ============================================================
+document.getElementById('file-input').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('file-name').textContent = '📄 ' + file.name;
+
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    try {
+      processWorkbook(evt.target.result);
+    } catch(err) {
+      alert('Error reading file: ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+// ============================================================
+// WORKBOOK PROCESSING
+// ============================================================
+function processWorkbook(arrayBuffer) {
+  const data = new Uint8Array(arrayBuffer);
+  const wb = XLSX.read(data, { type: 'array', cellDates: false });
+
+  // ── Find main sheet ──
+  const mainSheetName = wb.SheetNames.find(n =>
+    n.toLowerCase().includes('memorialenquiry') ||
+    n.toLowerCase().includes('memorial enquiry') ||
+    n.toLowerCase().includes('enquiry')
+  ) || wb.SheetNames[0];
+
+  const mainWS = wb.Sheets[mainSheetName];
+  const mainRows = XLSX.utils.sheet_to_json(mainWS, { defval: '' });
+
+  // ── Find Table sheet ──
+  const tableSheetName = wb.SheetNames.find(n =>
+    n.toLowerCase() === 'table' || n.toLowerCase().includes('note') || n.toLowerCase().includes('log')
+  );
+  let tableRows = [];
+  if (tableSheetName) {
+    tableRows = XLSX.utils.sheet_to_json(wb.Sheets[tableSheetName], { defval: '' });
+  }
+
+  // ── Find LineItems sheet ──
+  const lineSheetName = wb.SheetNames.find(n =>
+    n.toLowerCase().includes('lineitem') || n.toLowerCase().includes('line item')
+  );
+  let lineRows = [];
+  if (lineSheetName) {
+    lineRows = XLSX.utils.sheet_to_json(wb.Sheets[lineSheetName], { defval: '' });
+  }
+
+  // ── Transform main records ──
+  const ordersMap = {};
+  allRecords = mainRows.map(row => {
+    const rec = transformRecord(row);
+    ordersMap[row['MemorialEnquiryAndEstimate_Id']] = rec;
+    return rec;
+  }).filter(r => r !== null);
+
+  // ── Cross-reference Table sheet notes ──
+  tableRows.forEach(row => {
+    const legacyId = row['MemorialEnquiryAndEstimate_Id'] || row['EnquiryId'] || row['ID'] || row['Id'];
+    const order = ordersMap[legacyId];
+    if (!order) return;
+    const noteText = row['Notes'] || row['Note'] || row['Comment'] || '';
+    if (!noteText) return;
+    const dateVal = row['Date'] || row['CreatedDate'] || row['DateCreated'] || '';
+    order.masonNoteEntries.push({
+      ts: (excelDateToISO(dateVal) || new Date().toISOString().split('T')[0]) + 'T00:00:00Z',
+      author: row['Name'] || row['Author'] || row['CreatedBy'] || 'Unknown',
+      text: String(noteText)
+    });
+  });
+
+  // ── Cross-reference LineItems ──
+  lineRows.forEach(row => {
+    const legacyId = row['MemorialEnquiryAndEstimate_Id'] || row['EnquiryId'] || row['ID'] || row['Id'];
+    const order = ordersMap[legacyId];
+    if (!order) return;
+    order.extraCharges.push({
+      id: Date.now() + Math.random(),
+      type: 'charge',
+      description: row['Name'] || row['Description'] || 'Part Payment / Deposit',
+      amount: 0,
+      applyToCustomer: true,
+      applyToMason: false,
+      note: 'Legacy line item — amount not migrated'
+    });
+  });
+
+  renderPreview();
+}
+
+// ============================================================
+// TRANSFORM RECORD
+// ============================================================
+function excelDateToISO(serial) {
+  if (!serial || isNaN(serial)) return '';
+  try {
+    const date = new Date((serial - 25569) * 86400 * 1000);
+    return date.toISOString().split('T')[0];
+  } catch(e) { return ''; }
+}
+
+function cleanPhone(p) {
+  if (!p) return '';
+  return String(p).replace(/\s+/g, '').replace(/^0\s/, '0');
+}
+
+function buildName(prefix, first, middle, last) {
+  return [prefix, first, last].filter(Boolean).join(' ').trim();
+}
+
+function buildAddress(line1, line2, city, state, postcode) {
+  return [line1, line2, city, state, postcode].filter(Boolean).join(', ').trim();
+}
+
+function mapStatus(entryStatus) {
+  const s = (entryStatus || '').toLowerCase();
+  if (s === 'complete') return 'Installed';
+  if (s === 'submitted') return 'Confirmed';
+  if (s === 'void') return 'Enquiry';
+  return 'Enquiry';
+}
+
+function mapInscriptionType(typeOfWork) {
+  const t = (typeOfWork || '').toLowerCase();
+  if (t.includes('additional inscription')) return 'additional';
+  return 'new';
+}
+
+function mapColour(granite) {
+  const g = (granite || '').toLowerCase();
+  if (g.includes('black')) return 'black';
+  if (g.includes('south african')) return 'sa-grey';
+  if (g.includes('chinese grey')) return 'chinese-grey';
+  if (g.includes('blue pearl')) return 'blue-pearl';
+  return granite || '';
+}
+
+function transformRecord(row) {
+  const extraCharges = [];
+
+  if (row['AdditionalCharges'] === 'Yes' && row['AdditonalChargesBreakdown']) {
+    extraCharges.push({
+      id: Date.now() + Math.random(),
+      type: 'charge',
+      description: row['AdditonalChargesBreakdown'] || 'Additional charge',
+      amount: parseFloat(row['AdditionalCosts']) || 0,
+      applyToCustomer: true,
+      applyToMason: false
+    });
+  }
+
+  if (row['Discount'] === 'Yes') {
+    extraCharges.push({
+      id: Date.now() + Math.random(),
+      type: 'discount',
+      description: 'Discount applied',
+      amount: 0,
+      applyToCustomer: true,
+      applyToMason: false
+    });
+  }
+
+  const masonNoteParts = [];
+  if (row['Notes']) masonNoteParts.push(row['Notes']);
+  if (row['AdditionalInformation']) masonNoteParts.push('Additional info: ' + row['AdditionalInformation']);
+  if (row['InternalUseOnly'] && row['InternalUseOnly'] !== 'Yes') masonNoteParts.push('Internal: ' + row['InternalUseOnly']);
+  if (row['BaseType'] && row['BaseType'] !== 'Standard') masonNoteParts.push('Base type: ' + row['BaseType']);
+  if (row['Lettering'] && row['Lettering'] !== 'Gold') masonNoteParts.push('Lettering colour: ' + row['Lettering']);
+  if (row['NumberOfBags']) masonNoteParts.push('Stone bags: ' + row['NumberOfBags']);
+  if (row['VaseHolder'] && row['VaseHolder'] !== 'None') masonNoteParts.push('Vase holder: ' + row['VaseHolder']);
+  if ((row['Entry_Status'] || '').toLowerCase() === 'void') masonNoteParts.push('⚠️ VOID in old system');
+  if (row['Order_Id']) masonNoteParts.push('Legacy Order ID: ' + row['Order_Id']);
+
+  const accessories = [];
+  if (row['VaseHolder'] && row['VaseHolder'] !== 'None') {
+    accessories.push('Vase Holder (' + row['VaseHolder'] + ')');
+  }
+
+  const id = row['MemorialEnquiryAndEstimate_Id'];
+
+  return {
+    orderId: 'LEGACY-' + id,
+    orderRef: row['OurRef'] || ('LEG-' + id),
+    orderDate: excelDateToISO(row['OrderDate']) || excelDateToISO(row['Entry_DateCreated']) || new Date().toISOString().split('T')[0],
+    status: mapStatus(row['Entry_Status']),
+    customerName: buildName(row['ClientName_Prefix'], row['ClientName_First'], row['ClientName_Middle'], row['ClientName_Last']),
+    phone: cleanPhone(row['Phone']),
+    email: row['Email'] || '',
+    address: buildAddress(row['Address_Line1'], row['Address_Line2'], row['Address_City'], row['Address_State'], row['Address_PostalCode']),
+    deceasedName: row['SurnameCemeteryGraveNo'] || '',
+    cemetery: row['CemeteryLocation'] || row['Cemetery'] || '',
+    graveNumber: row['GraveNumer'] || '',
+    installDate: excelDateToISO(row['CompletionDate']) || '',
+    hsType: row['HeadstoneStyle'] || '',
+    hsSize: row['Size'] || '',
+    hsColour: mapColour(row['GraniteSelection']),
+    hsFinish: row['Lettering'] || '',
+    surroundType: row['Surrounds'] && row['Surrounds'] !== 'Other' ? row['Surrounds'] : '',
+    stoneType: row['StoneChippins'] || '',
+    inscriptionType: mapInscriptionType(row['TypeOfWork']),
+    inscriptionText: row['Inscription'] || '',
+    accessories: accessories,
+    extraCharges: extraCharges,
+    masonNotes: masonNoteParts.join('\n').trim(),
+    masonNoteEntries: [],
+    amendments: [],
+    files: [],
+    depositPaid: parseFloat(row['PartPaymentDeposit']) || 0,
+    totalSellPrice: parseFloat(row['TotalPriceErrected']) || parseFloat(row['BespokePrice']) || 0,
+    balanceDue: parseFloat(row['Balance']) || 0,
+    log: [{
+      id: 'migration-' + id,
+      ts: new Date().toISOString(),
+      author: 'Migration',
+      text: 'Imported from legacy system (Legacy ID: ' + id + ', Type: ' + (row['TypeOfWork'] || 'Unknown') + ')'
+    }],
+    _legacy: true,
+    _legacyId: id
+  };
+}
+
+// ============================================================
+// RENDER PREVIEW
+// ============================================================
+function renderPreview() {
+  const total = allRecords.length;
+  const withInscription = allRecords.filter(r => r.inscriptionText && r.inscriptionText.trim()).length;
+  const installed = allRecords.filter(r => r.status === 'Installed').length;
+  const noName = allRecords.filter(r => !r.customerName).length;
+  const withNotes = allRecords.filter(r => r.masonNoteEntries.length > 0).length;
+
+  // Stats
+  const statsRow = document.getElementById('stats-row');
+  statsRow.innerHTML = `
+    <div class="stat-chip">${total} records found</div>
+    <div class="stat-chip">${withInscription} with inscriptions</div>
+    <div class="stat-chip">${installed} installed</div>
+    <div class="stat-chip">${withNotes} with table notes</div>
+  `;
+
+  // Warnings
+  const warnContainer = document.getElementById('warnings-container');
+  const warnings = [];
+  if (noName > 0) warnings.push(`${noName} record(s) have no customer name`);
+  const noRef = allRecords.filter(r => !r.orderRef || r.orderRef.startsWith('LEG-')).length;
+  if (noRef > 0) warnings.push(`${noRef} record(s) are using auto-generated refs (no OurRef in data)`);
+  const voided = allRecords.filter(r => r.masonNotes.includes('VOID')).length;
+  if (voided > 0) warnings.push(`${voided} record(s) were marked VOID in the old system (imported as Enquiry)`);
+
+  if (warnings.length) {
+    warnContainer.innerHTML = `<div class="warnings-box">
+      ⚠️ <strong>Warnings:</strong>
+      <ul>${warnings.map(w => `<li>${w}</li>`).join('')}</ul>
+    </div>`;
+  } else {
+    warnContainer.innerHTML = '';
+  }
+
+  // Table rows
+  renderTableRows(false);
+
+  // Toggle link
+  const toggleEl = document.getElementById('toggle-all');
+  if (total > 20) {
+    toggleEl.classList.remove('hidden');
+    toggleEl.textContent = `Show all ${total} records`;
+  }
+
+  // Update counts
+  document.getElementById('test-count').textContent = total;
+  document.getElementById('live-count').textContent = total;
+
+  // Show cards
+  document.getElementById('card-preview').classList.remove('hidden');
+  document.getElementById('card-push').classList.remove('hidden');
+
+  // Enable test button (requires URL)
+  document.getElementById('test-url').addEventListener('input', checkTestUrl);
+  checkTestUrl();
+}
+
+function renderTableRows(showAll) {
+  const tbody = document.getElementById('preview-tbody');
+  const rows = showAll ? allRecords : allRecords.slice(0, 20);
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const statusClass = r.status === 'Installed' ? 's-installed' : r.status === 'Confirmed' ? 's-confirmed' : 's-enquiry';
+    const hasInscription = r.inscriptionText && r.inscriptionText.trim() ? '✅' : '—';
+    const noteCount = r.masonNoteEntries.length;
+    const noteBadge = noteCount > 0 ? `<span title="${noteCount} note(s)">${noteCount} note${noteCount > 1 ? 's' : ''}</span>` : '—';
+    return `<tr>
+      <td>${i + 1}</td>
+      <td><strong>${escHtml(r.orderRef)}</strong></td>
+      <td>${escHtml(r.customerName) || '<em style="color:#9ca3af">Unknown</em>'}</td>
+      <td>${escHtml(r.deceasedName) || '—'}</td>
+      <td>${escHtml(r.inscriptionType)}</td>
+      <td><span class="badge-status ${statusClass}">${r.status}</span></td>
+      <td>${escHtml(r.cemetery) || '—'}</td>
+      <td>${hasInscription}</td>
+      <td>${noteBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleAllRows() {
+  showingAll = !showingAll;
+  renderTableRows(showingAll);
+  const toggle = document.getElementById('toggle-all');
+  toggle.textContent = showingAll ? 'Show fewer records' : `Show all ${allRecords.length} records`;
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ============================================================
+// PUSH CONTROLS
+// ============================================================
+function checkTestUrl() {
+  const url = document.getElementById('test-url').value.trim();
+  document.getElementById('btn-test').disabled = !url;
+}
+
+function checkLiveConfirm() {
+  const val = document.getElementById('live-confirm').value.trim();
+  document.getElementById('btn-live').disabled = val !== 'CONFIRM';
+}
+
+// ============================================================
+// PUSH TO SHEET
+// ============================================================
+async function startPush(mode) {
+  const url = mode === 'test'
+    ? document.getElementById('test-url').value.trim()
+    : document.getElementById('live-url').value.trim();
+
+  if (!url) {
+    alert('Please enter a valid Apps Script URL.');
+    return;
+  }
+  if (!allRecords.length) {
+    alert('No records to send.');
+    return;
+  }
+
+  // Disable buttons
+  document.getElementById('btn-test').disabled = true;
+  document.getElementById('btn-live').disabled = true;
+
+  // Show progress section
+  const progressSection = document.getElementById('progress-section');
+  progressSection.style.display = '';
+  document.getElementById('progress-target').textContent =
+    'Sending to: ' + (mode === 'test' ? 'TEST sheet' : 'LIVE sheet');
+  document.getElementById('results-container').innerHTML = '';
+
+  const total = allRecords.length;
+  let sent = 0;
+  let failed = 0;
+  const failures = [];
+
+  for (let i = 0; i < total; i++) {
+    const rec = allRecords[i];
+    document.getElementById('progress-status').textContent =
+      `Sending record ${i + 1} of ${total} (${rec.orderRef})…`;
+    document.getElementById('progress-bar').style.width = ((i / total) * 100).toFixed(1) + '%';
+
+    try {
+      await sendRecord(url, rec);
+      sent++;
+    } catch(err) {
+      failed++;
+      failures.push(`#${i + 1} ${rec.orderRef}: ${err.message}`);
+    }
+
+    // Delay between records
+    if (i < total - 1) {
+      await delay(BATCH_DELAY_MS);
+    }
+  }
+
+  // Done
+  document.getElementById('progress-bar').style.width = '100%';
+  document.getElementById('progress-status').textContent = 'Complete!';
+
+  let resultsHTML = `<div class="results-box">
+    ✅ <strong>${sent}</strong> sent successfully`;
+  if (failed > 0) {
+    resultsHTML += `<div class="fail">❌ <strong>${failed}</strong> failed:</div>`;
+    failures.forEach(f => {
+      resultsHTML += `<div class="fail-item">• ${escHtml(f)}</div>`;
+    });
+  }
+  resultsHTML += `</div>`;
+  document.getElementById('results-container').innerHTML = resultsHTML;
+
+  // Re-enable
+  checkTestUrl();
+  checkLiveConfirm();
+}
+
+async function sendRecord(url, record) {
+  // Using no-cors — we can't read the response, so assume success on network completion
+  await fetch(url, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'upsert', order: record })
+  });
+  // With no-cors we get an opaque response — treat completion as success
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ============================================================
+// SETUP GUIDE TOGGLE
+// ============================================================
+function toggleGuide() {
+  const body = document.getElementById('guide-body');
+  const arrow = document.getElementById('guide-arrow');
+  const open = body.style.display === 'block';
+  body.style.display = open ? 'none' : 'block';
+  arrow.textContent = open ? '▼' : '▲';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DCFS Memorial Tracker — Data Migration Mapping</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #1a1a1a;
+      background: #f0f2f0;
+    }
+
+    .page-wrap {
+      max-width: 1100px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+
+    /* ── Header card ── */
+    .doc-header {
+      background: #5a8f2e;
+      color: #fff;
+      border-radius: 8px 8px 0 0;
+      padding: 2rem 2.5rem 1.75rem;
+    }
+    .doc-header h1 {
+      font-size: 1.65rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.3rem;
+    }
+    .doc-header .subtitle {
+      font-size: 0.95rem;
+      opacity: 0.88;
+      margin-bottom: 0.75rem;
+    }
+    .doc-header .meta-row {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+      font-size: 0.85rem;
+      opacity: 0.82;
+    }
+    .doc-header .note-pill {
+      display: inline-block;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 20px;
+      padding: 0.2rem 0.85rem;
+      font-size: 0.82rem;
+      margin-top: 0.75rem;
+    }
+
+    /* ── White card body ── */
+    .card {
+      background: #fff;
+      border-radius: 0 0 8px 8px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+      padding: 2rem 2.5rem;
+    }
+
+    /* ── Section headings ── */
+    .section {
+      margin-bottom: 2.5rem;
+    }
+    .section-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #2d5a0e;
+      border-left: 4px solid #5a8f2e;
+      padding-left: 0.75rem;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    /* ── Summary stats ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+    }
+    .stat-box {
+      background: #f3f8ee;
+      border: 1px solid #c8e2a8;
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      text-align: center;
+    }
+    .stat-box .stat-num {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: #5a8f2e;
+      line-height: 1.1;
+    }
+    .stat-box .stat-label {
+      font-size: 0.78rem;
+      color: #555;
+      margin-top: 0.25rem;
+    }
+
+    /* ── Tables ── */
+    .mapping-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      margin-top: 0.5rem;
+    }
+    .mapping-table thead th {
+      background: #5a8f2e;
+      color: #fff;
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .mapping-table tbody tr:nth-child(even) { background: #f9fafb; }
+    .mapping-table tbody tr:nth-child(odd)  { background: #fff; }
+    .mapping-table tbody tr:hover { background: #f0f7e8; }
+    .mapping-table td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #e8eae8;
+      vertical-align: top;
+    }
+    .mapping-table td:first-child { font-weight: 600; color: #2a2a2a; }
+
+    /* Group header rows */
+    .mapping-table .group-row td {
+      background: #e8f0dc;
+      color: #2d5a0e;
+      font-weight: 700;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.4rem 0.75rem;
+      border-bottom: 1px solid #c0d8a0;
+    }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-block;
+      border-radius: 12px;
+      padding: 0.18rem 0.65rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .badge-direct    { background: #d4edda; color: #1a6630; border: 1px solid #a8d5b5; }
+    .badge-transform { background: #fff3cd; color: #7a5500; border: 1px solid #f0d080; }
+    .badge-nomatch   { background: #fde8e8; color: #8b1a1a; border: 1px solid #f0b0b0; }
+    .badge-combine   { background: #dce8fb; color: #1a3a7a; border: 1px solid #a8c0f0; }
+
+    /* ── Simple mapping tables (sections 3-6) ── */
+    .map-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .map-table thead th {
+      background: #5a8f2e;
+      color: #fff;
+      padding: 0.5rem 0.85rem;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .map-table tbody tr:nth-child(even) { background: #f9fafb; }
+    .map-table tbody tr:nth-child(odd)  { background: #fff; }
+    .map-table td {
+      padding: 0.45rem 0.85rem;
+      border-bottom: 1px solid #e8eae8;
+    }
+    .arrow { color: #5a8f2e; font-weight: 700; }
+
+    /* ── Data Lost box ── */
+    .lost-box {
+      border: 2px solid #e06060;
+      border-radius: 6px;
+      padding: 1.25rem 1.5rem;
+      background: #fff8f8;
+    }
+    .lost-box ul {
+      list-style: none;
+      padding: 0;
+    }
+    .lost-box ul li {
+      padding: 0.3rem 0;
+      border-bottom: 1px solid #f5dada;
+      padding-left: 1.25rem;
+      position: relative;
+      font-size: 0.87rem;
+    }
+    .lost-box ul li:last-child { border-bottom: none; }
+    .lost-box ul li::before {
+      content: "✕";
+      position: absolute;
+      left: 0;
+      color: #c04040;
+      font-weight: 700;
+      font-size: 0.78rem;
+      top: 0.35rem;
+    }
+
+    /* ── Date conversion box ── */
+    .info-box {
+      background: #f3f8ee;
+      border: 1px solid #c8e2a8;
+      border-radius: 6px;
+      padding: 1.25rem 1.5rem;
+    }
+    .info-box code {
+      display: inline-block;
+      background: #2d3a1e;
+      color: #a8d878;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.85rem;
+      margin: 0.5rem 0;
+    }
+    .info-box p { margin-bottom: 0.5rem; }
+
+    /* ── Before/After example ── */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+    }
+    .ba-panel {
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .ba-panel .ba-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.45rem 1rem;
+    }
+    .ba-panel.before .ba-label { background: #e0e4e8; color: #3a3a3a; }
+    .ba-panel.after  .ba-label { background: #2d5a0e; color: #fff; }
+    .ba-panel pre {
+      margin: 0;
+      padding: 1rem;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.76rem;
+      line-height: 1.55;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .ba-panel.before pre { background: #f4f6f8; color: #2a2a2a; border: 1px solid #d0d4d8; border-top: none; }
+    .ba-panel.after  pre { background: #1a2810; color: #a8d878; border: 1px solid #2d5a0e; border-top: none; }
+
+    /* ── Checklist ── */
+    .checklist {
+      list-style: none;
+      padding: 0;
+      counter-reset: check-counter;
+    }
+    .checklist li {
+      counter-increment: check-counter;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.55rem 0;
+      border-bottom: 1px solid #eee;
+      font-size: 0.88rem;
+    }
+    .checklist li:last-child { border-bottom: none; }
+    .checklist li::before {
+      content: counter(check-counter);
+      flex-shrink: 0;
+      width: 1.5rem;
+      height: 1.5rem;
+      background: #5a8f2e;
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-top: 0.05rem;
+    }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+      font-size: 0.8rem;
+    }
+    .legend-item { display: flex; align-items: center; gap: 0.4rem; }
+
+    /* ── code inline ── */
+    code.inline {
+      background: #f0f2f0;
+      border: 1px solid #d0d4d0;
+      border-radius: 3px;
+      padding: 0.05rem 0.35rem;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82em;
+      color: #2d5a0e;
+    }
+
+    /* ── Print styles ── */
+    @media print {
+      body { background: #fff; font-size: 11px; }
+      .page-wrap { margin: 0; padding: 0; max-width: none; }
+      .card { box-shadow: none; border-radius: 0; padding: 1.5rem; }
+      .doc-header { border-radius: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .mapping-table thead th,
+      .map-table thead th,
+      .checklist li::before,
+      .stat-box,
+      .ba-panel.after .ba-label { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .ba-panel pre { font-size: 0.68rem; }
+      .section { page-break-inside: avoid; }
+      .before-after { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+  <!-- ══ HEADER ══ -->
+  <div class="doc-header">
+    <h1>DCFS Memorial Tracker — Data Migration Mapping</h1>
+    <div class="subtitle">Old System (MemorialEnquiryAndEstimate) → New System (tracker.crymbleandsons.com)</div>
+    <div class="meta-row">
+      <span>Date: April 2026</span>
+      <span>Prepared by: Crymble &amp; Sons</span>
+    </div>
+    <div class="note-pill">163 records across 6 sheets. Migration not yet applied — for review only.</div>
+  </div>
+
+  <div class="card">
+
+    <!-- ══ SECTION 1: Summary Stats ══ -->
+    <div class="section">
+      <div class="section-title">Section 1 — Summary Statistics</div>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-num">163</div>
+          <div class="stat-label">Enquiry / Order Records</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num">405</div>
+          <div class="stat-label">File Attachments<br>(images, PDFs, Word docs)</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num">125</div>
+          <div class="stat-label">Internal Notes /<br>Activity Log Entries</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num">6</div>
+          <div class="stat-label">Sheets Total</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num">~6</div>
+          <div class="stat-label">Records with Online<br>Payments Recorded</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ SECTION 2: Main Field Mapping Table ══ -->
+    <div class="section">
+      <div class="section-title">Section 2 — Main Field Mapping Table</div>
+
+      <div class="legend">
+        <div class="legend-item"><span class="badge badge-direct">DIRECT</span> No transformation needed</div>
+        <div class="legend-item"><span class="badge badge-transform">TRANSFORM</span> Data conversion required</div>
+        <div class="legend-item"><span class="badge badge-nomatch">NO MATCH</span> Field lost / not imported</div>
+        <div class="legend-item"><span class="badge badge-combine">COMBINE</span> Multiple fields merged</div>
+      </div>
+
+      <table class="mapping-table">
+        <thead>
+          <tr>
+            <th style="width:14%">Old Field (Sheet)</th>
+            <th style="width:17%">Old Column</th>
+            <th style="width:15%">New System Field</th>
+            <th style="width:10%">Mapping Type</th>
+            <th>Notes / Transform Required</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- IDENTITY -->
+          <tr class="group-row"><td colspan="5">Identity / Reference</td></tr>
+          <tr>
+            <td>Record ID</td>
+            <td><code class="inline">MemorialEnquiryAndEstimate_Id</code> (integer)</td>
+            <td><code class="inline">orderId</code></td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Prefix with "LEGACY-" e.g. <code class="inline">LEGACY-251</code></td>
+          </tr>
+          <tr>
+            <td>Our Reference</td>
+            <td><code class="inline">OurRef</code></td>
+            <td><code class="inline">orderRef</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td>Use as-is; blank records get auto-ref on import</td>
+          </tr>
+          <tr>
+            <td>Order Date</td>
+            <td><code class="inline">OrderDate</code> (Excel serial)</td>
+            <td><code class="inline">orderDate</code></td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Convert Excel serial to ISO date (e.g. 46125 → 2026-04-14)</td>
+          </tr>
+          <tr>
+            <td>Old Order ID</td>
+            <td><code class="inline">Order_Id</code> (e.g. F28E251T1)</td>
+            <td>—</td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>Store in <code class="inline">masonNotes</code> as "Legacy Order ID: F28E251T1"</td>
+          </tr>
+
+          <!-- CUSTOMER -->
+          <tr class="group-row"><td colspan="5">Customer</td></tr>
+          <tr>
+            <td>Customer First Name</td>
+            <td><code class="inline">ClientName_First</code></td>
+            <td><code class="inline">customerName</code> (part)</td>
+            <td><span class="badge badge-combine">COMBINE</span></td>
+            <td>Combine First + Last + Prefix into one field</td>
+          </tr>
+          <tr>
+            <td>Customer Last Name</td>
+            <td><code class="inline">ClientName_Last</code></td>
+            <td><code class="inline">customerName</code> (part)</td>
+            <td><span class="badge badge-combine">COMBINE</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Customer Prefix</td>
+            <td><code class="inline">ClientName_Prefix</code></td>
+            <td><code class="inline">customerName</code> (part)</td>
+            <td><span class="badge badge-combine">COMBINE</span></td>
+            <td>e.g. "Mr Jim Boyd"</td>
+          </tr>
+          <tr>
+            <td>Customer Middle</td>
+            <td><code class="inline">ClientName_Middle</code></td>
+            <td>—</td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>Drop (rarely populated)</td>
+          </tr>
+          <tr>
+            <td>Phone</td>
+            <td><code class="inline">Phone</code></td>
+            <td><code class="inline">phone</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td>Strip formatting inconsistencies (e.g. "0 7974…" → "07974…")</td>
+          </tr>
+          <tr>
+            <td>Email</td>
+            <td><code class="inline">Email</code> (col AC)</td>
+            <td><code class="inline">email</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Address Line 1</td>
+            <td><code class="inline">Address_Line1</code></td>
+            <td><code class="inline">address</code> (part)</td>
+            <td><span class="badge badge-combine">COMBINE</span></td>
+            <td>Join Line1, Line2, City, PostalCode into one address string</td>
+          </tr>
+          <tr>
+            <td>Address Line 2</td>
+            <td><code class="inline">Address_Line2</code></td>
+            <td><code class="inline">address</code> (part)</td>
+            <td><span class="badge badge-combine">COMBINE</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>City</td>
+            <td><code class="inline">Address_City</code></td>
+            <td><code class="inline">address</code> (part)</td>
+            <td><span class="badge badge-combine">COMBINE</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Postal Code</td>
+            <td><code class="inline">Address_PostalCode</code></td>
+            <td><code class="inline">address</code> (part)</td>
+            <td><span class="badge badge-combine">COMBINE</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Country</td>
+            <td><code class="inline">Address_Country</code> / <code class="inline">CountryCode</code></td>
+            <td>—</td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>Assumed NI/UK — drop</td>
+          </tr>
+
+          <!-- DECEASED -->
+          <tr class="group-row"><td colspan="5">Deceased / Memorial</td></tr>
+          <tr>
+            <td>Deceased Surname</td>
+            <td><code class="inline">SurnameCemeteryGraveNo</code></td>
+            <td><code class="inline">deceasedName</code></td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Contains surname only (e.g. "SOMERVILLE"). Full name may be in Inscription field</td>
+          </tr>
+          <tr>
+            <td>Inscription (full text)</td>
+            <td><code class="inline">Inscription</code> (col BO)</td>
+            <td><code class="inline">inscriptionText</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td>Multi-line text — preserve line breaks</td>
+          </tr>
+          <tr>
+            <td>Deceased DOB</td>
+            <td>—</td>
+            <td><code class="inline">deceasedDob</code></td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>Not recorded in old system</td>
+          </tr>
+          <tr>
+            <td>Deceased DOD</td>
+            <td>—</td>
+            <td><code class="inline">deceasedDod</code></td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>Not recorded in old system (dates appear only within inscription text)</td>
+          </tr>
+
+          <!-- CEMETERY -->
+          <tr class="group-row"><td colspan="5">Cemetery / Location</td></tr>
+          <tr>
+            <td>Cemetery Location (free text)</td>
+            <td><code class="inline">CemeteryLocation</code> (col I)</td>
+            <td><code class="inline">cemetery</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td>Combined name+plot e.g. "Roselawn - T 2280"</td>
+          </tr>
+          <tr>
+            <td>Cemetery (dropdown)</td>
+            <td><code class="inline">Cemetery</code> (col AZ)</td>
+            <td>—</td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>Old dropdown value (e.g. "Other/See additional Charges") — redundant with above</td>
+          </tr>
+          <tr>
+            <td>Grave Number</td>
+            <td><code class="inline">GraveNumer</code> (col BB)</td>
+            <td><code class="inline">graveNumber</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td>Note: old field has typo "Numer" not "Number"</td>
+          </tr>
+          <tr>
+            <td>Grave Owner Name</td>
+            <td><code class="inline">GraveOwnerDetails_First/Last</code></td>
+            <td>—</td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>Rarely populated — drop or store in <code class="inline">masonNotes</code></td>
+          </tr>
+          <tr>
+            <td>Completion/Install Date</td>
+            <td><code class="inline">CompletionDate</code> (Excel serial)</td>
+            <td><code class="inline">installDate</code></td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Convert Excel serial to ISO date</td>
+          </tr>
+
+          <!-- HEADSTONE -->
+          <tr class="group-row"><td colspan="5">Headstone / Product</td></tr>
+          <tr>
+            <td>Headstone Style</td>
+            <td><code class="inline">HeadstoneStyle</code></td>
+            <td><code class="inline">hsType</code></td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Old values: OG, G3, G1, 1/2 Densmore, Other → map to new price book types or store as-is</td>
+          </tr>
+          <tr>
+            <td>Size</td>
+            <td><code class="inline">Size</code></td>
+            <td><code class="inline">hsSize</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td>Free text e.g. "30"×30"×4"" — store as-is</td>
+          </tr>
+          <tr>
+            <td>Granite Selection</td>
+            <td><code class="inline">GraniteSelection</code></td>
+            <td><code class="inline">hsColour</code></td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Old: "Black", "South African Grey", "Chinese Grey", "Blue Pearl" → map to new colour codes</td>
+          </tr>
+          <tr>
+            <td>Lettering</td>
+            <td><code class="inline">Lettering</code></td>
+            <td><code class="inline">hsFinish</code></td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Old: "Gold", "Silver", "White", "Raised Panel Silver" — closest match is hsFinish field</td>
+          </tr>
+          <tr>
+            <td>Base Type</td>
+            <td><code class="inline">BaseType</code></td>
+            <td>—</td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>"Standard" / "Ogee" — add to <code class="inline">masonNotes</code> as "Base: Standard"</td>
+          </tr>
+          <tr>
+            <td>Vase Holder</td>
+            <td><code class="inline">VaseHolder</code></td>
+            <td><code class="inline">accessories</code> (array)</td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>If not "None" → add to accessories array e.g. "Vase Holder (Centre)"</td>
+          </tr>
+          <tr>
+            <td>Bespoke Price</td>
+            <td><code class="inline">BespokePrice</code></td>
+            <td><code class="inline">totalSellPrice</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td>If populated, use as override total</td>
+          </tr>
+
+          <!-- SURROUND -->
+          <tr class="group-row"><td colspan="5">Surround / Stone</td></tr>
+          <tr>
+            <td>Surrounds</td>
+            <td><code class="inline">Surrounds</code></td>
+            <td><code class="inline">surroundType</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td>e.g. "Granite Garden", "Concrete Garden"</td>
+          </tr>
+          <tr>
+            <td>Surround Amount</td>
+            <td><code class="inline">Surrounds_Amount</code></td>
+            <td>—</td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>Per user: don't migrate costs</td>
+          </tr>
+          <tr>
+            <td>Stone Chippings</td>
+            <td><code class="inline">StoneChippins</code></td>
+            <td><code class="inline">stoneType</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td>"White", "Grey" — map to new stoneType field</td>
+          </tr>
+          <tr>
+            <td>Number of Bags</td>
+            <td><code class="inline">NumberOfBags</code></td>
+            <td>—</td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>Add to <code class="inline">masonNotes</code> as "Stone bags: N"</td>
+          </tr>
+
+          <!-- INSCRIPTION -->
+          <tr class="group-row"><td colspan="5">Inscription</td></tr>
+          <tr>
+            <td>Type of Work</td>
+            <td><code class="inline">TypeOfWork</code></td>
+            <td><code class="inline">inscriptionType</code></td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>"Additional Inscription" → "additional"; "New Stone" → "new"; others → note</td>
+          </tr>
+          <tr>
+            <td>Lettering Costs</td>
+            <td><code class="inline">LetteringCosts</code></td>
+            <td>—</td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>Per user: don't migrate costs</td>
+          </tr>
+
+          <!-- FINANCIALS -->
+          <tr class="group-row"><td colspan="5">Financials</td></tr>
+          <tr>
+            <td>Total Price Erected</td>
+            <td><code class="inline">TotalPriceErrected</code></td>
+            <td><code class="inline">totalSellPrice</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td>Use as sell price total</td>
+          </tr>
+          <tr>
+            <td>Part Payment / Deposit</td>
+            <td><code class="inline">PartPaymentDeposit</code></td>
+            <td><code class="inline">depositPaid</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Balance</td>
+            <td><code class="inline">Balance</code></td>
+            <td><code class="inline">balanceDue</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Discount</td>
+            <td><code class="inline">Discount</code> (Yes/No flag)</td>
+            <td><code class="inline">extraCharges</code> (array)</td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>If "Yes", add a discount entry to extraCharges; amount from Discount field</td>
+          </tr>
+          <tr>
+            <td>Additional Charges</td>
+            <td><code class="inline">AdditionalCharges</code> (Yes/No)</td>
+            <td><code class="inline">extraCharges</code> (array)</td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>If "Yes", add charge entry; description from <code class="inline">AdditonalChargesBreakdown</code></td>
+          </tr>
+          <tr>
+            <td>Additional Charges Breakdown</td>
+            <td><code class="inline">AdditonalChargesBreakdown</code></td>
+            <td><code class="inline">extraCharges[].description</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Staff Discount</td>
+            <td><code class="inline">StaffDiscount</code></td>
+            <td>—</td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>Drop</td>
+          </tr>
+          <tr>
+            <td>Cemetery Fee</td>
+            <td><code class="inline">Cemetery_Amount</code></td>
+            <td><code class="inline">cemeteryFee</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td>If populated</td>
+          </tr>
+          <tr>
+            <td>Online Payment Amount</td>
+            <td><code class="inline">Order.LineItems → Amount</code></td>
+            <td><code class="inline">extraCharges</code> (array)</td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Add as "Part Payment / Deposit" line item in additional items. No cost figures needed</td>
+          </tr>
+          <tr>
+            <td>Processing Fees</td>
+            <td><code class="inline">Order.Fees → Amount</code></td>
+            <td>—</td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>Drop — internal payment processor fee</td>
+          </tr>
+
+          <!-- STATUS -->
+          <tr class="group-row"><td colspan="5">Status</td></tr>
+          <tr>
+            <td>Entry Status</td>
+            <td><code class="inline">Entry_Status</code></td>
+            <td><code class="inline">status</code></td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>"Complete" → "Installed"; "Submitted" → "Confirmed"; "Incomplete" → "Enquiry"; "Void" → "Enquiry" + note "VOID in old system"</td>
+          </tr>
+          <tr>
+            <td>Invoiced flag</td>
+            <td><code class="inline">Invoiced</code> (Yes/No)</td>
+            <td>—</td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>Add to log entry as "Invoiced: Yes" if set</td>
+          </tr>
+          <tr>
+            <td>PD (Paid) flag</td>
+            <td><code class="inline">PD</code> (Yes/No)</td>
+            <td>—</td>
+            <td><span class="badge badge-nomatch">NO MATCH</span></td>
+            <td>If "Yes" and balance=0, reflect in depositPaid matching total</td>
+          </tr>
+
+          <!-- NOTES -->
+          <tr class="group-row"><td colspan="5">Notes &amp; Activity Log</td></tr>
+          <tr>
+            <td>Notes (main record)</td>
+            <td><code class="inline">Notes</code> (col AA)</td>
+            <td><code class="inline">masonNotes</code></td>
+            <td><span class="badge badge-direct">DIRECT</span></td>
+            <td>Plain text note</td>
+          </tr>
+          <tr>
+            <td>Internal Use Only</td>
+            <td><code class="inline">InternalUseOnly</code></td>
+            <td><code class="inline">masonNotes</code> (append)</td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Append to masonNotes if populated</td>
+          </tr>
+          <tr>
+            <td>Additional Information</td>
+            <td><code class="inline">AdditionalInformation</code></td>
+            <td><code class="inline">masonNotes</code> (append)</td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Append to masonNotes</td>
+          </tr>
+          <tr>
+            <td>Activity/Notes Log</td>
+            <td><code class="inline">Table sheet → Notes + Name + Date</code></td>
+            <td><code class="inline">masonNoteEntries</code> (array)</td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Each row becomes <code class="inline">{ts, author, text}</code>. Convert Excel serial date.</td>
+          </tr>
+
+          <!-- FILES -->
+          <tr class="group-row"><td colspan="5">Files / Attachments</td></tr>
+          <tr>
+            <td>Reference images</td>
+            <td><code class="inline">AdditonalInfoPicturesEtc</code> sheet</td>
+            <td><code class="inline">files</code> (array)</td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Metadata only (filename, size, type). Actual files stored externally — not importable. Map ContentType to new file type dropdown.</td>
+          </tr>
+          <tr>
+            <td>Completed job photos</td>
+            <td><code class="inline">ImageOfCompletedJob</code> sheet</td>
+            <td><code class="inline">files</code> (array)</td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Same as above — tag as "Completed Job Photo" type</td>
+          </tr>
+          <tr>
+            <td>PDF / Word files</td>
+            <td><code class="inline">AdditonalInfoPicturesEtc</code> (PDF/DOCX)</td>
+            <td><code class="inline">files</code> (array)</td>
+            <td><span class="badge badge-transform">TRANSFORM</span></td>
+            <td>Tag as "Document" type</td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ══ SECTION 3: Status Mapping ══ -->
+    <div class="section">
+      <div class="section-title">Section 3 — Status Mapping</div>
+      <table class="map-table">
+        <thead>
+          <tr>
+            <th>Old <code style="font-size:0.82em;color:#d4f0a0">Entry_Status</code></th>
+            <th class="arrow">→</th>
+            <th>New <code style="font-size:0.82em;color:#d4f0a0">status</code></th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Complete</td><td class="arrow">→</td><td><code class="inline">Installed</code></td><td></td></tr>
+          <tr><td>Submitted</td><td class="arrow">→</td><td><code class="inline">Confirmed</code></td><td></td></tr>
+          <tr><td>Incomplete</td><td class="arrow">→</td><td><code class="inline">Enquiry</code></td><td></td></tr>
+          <tr><td>Void</td><td class="arrow">→</td><td><code class="inline">Enquiry</code></td><td>Add note "VOID" in <code class="inline">masonNotes</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ══ SECTION 4: Type of Work Mapping ══ -->
+    <div class="section">
+      <div class="section-title">Section 4 — Type of Work → Inscription Type Mapping</div>
+      <table class="map-table">
+        <thead>
+          <tr>
+            <th>Old <code style="font-size:0.82em;color:#d4f0a0">TypeOfWork</code></th>
+            <th class="arrow">→</th>
+            <th>New <code style="font-size:0.82em;color:#d4f0a0">inscriptionType</code></th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Additional Inscription</td><td class="arrow">→</td><td><code class="inline">"additional"</code></td><td></td></tr>
+          <tr><td>New Stone</td><td class="arrow">→</td><td><code class="inline">"new"</code></td><td>Full headstone order</td></tr>
+          <tr><td>Accessories</td><td class="arrow">→</td><td>—</td><td>Accessories-only — note in <code class="inline">masonNotes</code></td></tr>
+          <tr><td>Tidy up</td><td class="arrow">→</td><td>—</td><td>Note in <code class="inline">masonNotes</code>: "Tidy up job"</td></tr>
+          <tr><td>Other</td><td class="arrow">→</td><td>—</td><td>Note in <code class="inline">masonNotes</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ══ SECTION 5: Granite/Colour Mapping ══ -->
+    <div class="section">
+      <div class="section-title">Section 5 — Colour / Granite Mapping</div>
+      <table class="map-table">
+        <thead>
+          <tr>
+            <th>Old <code style="font-size:0.82em;color:#d4f0a0">GraniteSelection</code></th>
+            <th class="arrow">→</th>
+            <th>New <code style="font-size:0.82em;color:#d4f0a0">hsColour</code> Code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Black</td><td class="arrow">→</td><td><code class="inline">black</code></td></tr>
+          <tr><td>South African Grey</td><td class="arrow">→</td><td><code class="inline">sa-grey</code> (or closest)</td></tr>
+          <tr><td>Chinese Grey</td><td class="arrow">→</td><td><code class="inline">chinese-grey</code></td></tr>
+          <tr><td>Blue Pearl</td><td class="arrow">→</td><td><code class="inline">blue-pearl</code></td></tr>
+          <tr><td>Other</td><td class="arrow">→</td><td>Store raw value in <code class="inline">masonNotes</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ══ SECTION 6: Lettering/Finish Mapping ══ -->
+    <div class="section">
+      <div class="section-title">Section 6 — Lettering → Finish / Colour Mapping</div>
+      <table class="map-table">
+        <thead>
+          <tr>
+            <th>Old <code style="font-size:0.82em;color:#d4f0a0">Lettering</code></th>
+            <th class="arrow">→</th>
+            <th>New <code style="font-size:0.82em;color:#d4f0a0">hsFinish</code> / Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Gold</td><td class="arrow">→</td><td>Gold lettering (<code class="inline">hsFinish</code> or note)</td></tr>
+          <tr><td>Silver</td><td class="arrow">→</td><td>Silver lettering</td></tr>
+          <tr><td>White</td><td class="arrow">→</td><td>White lettering</td></tr>
+          <tr><td>Raised Panel Silver</td><td class="arrow">→</td><td>Raised Panel Silver (note in <code class="inline">masonNotes</code>)</td></tr>
+          <tr><td>Other</td><td class="arrow">→</td><td>Store raw value in <code class="inline">masonNotes</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ══ SECTION 7: Data Lost ══ -->
+    <div class="section">
+      <div class="section-title">Section 7 — Fields That Cannot Be Migrated (Data Lost)</div>
+      <div class="lost-box">
+        <ul>
+          <li>Actual file/image content (only metadata available — filenames, sizes, types)</li>
+          <li>Grave owner contact details (<code class="inline">GraveOwnerDetails_*</code>, <code class="inline">GraveOwnerAddress_*</code>)</li>
+          <li>Deceased DOB/DOD as structured fields (only embedded in inscription text)</li>
+          <li>Online payment confirmation numbers, refund data</li>
+          <li>Processing fee records</li>
+          <li>Staff discount flag (<code class="inline">StaffDiscount</code>)</li>
+          <li>Customer middle name (<code class="inline">ClientName_Middle</code>)</li>
+          <li>Address country (<code class="inline">Address_Country</code>) — assumed UK/NI</li>
+          <li>Internal form system IDs (<code class="inline">Order_OrderId</code>, <code class="inline">Table_Id</code>, etc.)</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ══ SECTION 8: Date Conversion ══ -->
+    <div class="section">
+      <div class="section-title">Section 8 — Date Conversion Note</div>
+      <div class="info-box">
+        <p>Excel serial dates must be converted to ISO dates before import. Subtract the Unix epoch offset (25569) then multiply by the number of milliseconds in a day.</p>
+        <p><strong>Formula:</strong></p>
+        <code>new Date((serial - 25569) * 86400 * 1000)</code>
+        <p style="margin-top:0.75rem"><strong>Example:</strong> Serial <code class="inline">46125</code> → <strong>14 April 2026</strong></p>
+        <p style="margin-top:0.5rem;font-size:0.82rem;color:#555">Apply to: <code class="inline">OrderDate</code>, <code class="inline">CompletionDate</code>, and all date fields in the Table (notes log) sheet.</p>
+      </div>
+    </div>
+
+    <!-- ══ SECTION 9: Before/After Example ══ -->
+    <div class="section">
+      <div class="section-title">Section 9 — What a Migrated Record Looks Like (ID 250 — Boyd)</div>
+      <div class="before-after">
+        <div class="ba-panel before">
+          <div class="ba-label">Before — Old System Raw Values</div>
+          <pre>MemorialEnquiryAndEstimate_Id: 250
+OurRef: E177
+ClientName_First: Jim
+ClientName_Last:  Boyd
+Phone: 07746 291681
+TypeOfWork: Additional Inscription
+CemeteryLocation: Roselawn 177
+GraveNumer: E177
+GraniteSelection: Black
+Lettering: Other
+Inscription: "And their daughter Jean
+              Died 9th Oct 2025"
+TotalPriceErrected: 0
+Entry_Status: Submitted
+
+Notes (Table sheet):
+  - "received info from family"
+  - "look at stone first"
+  - "rang client"
+  - "emailed BC"</pre>
+        </div>
+        <div class="ba-panel after">
+          <div class="ba-label">After — New System JSON</div>
+          <pre>{
+  "orderId": "LEGACY-250",
+  "orderRef": "E177",
+  "customerName": "Jim Boyd",
+  "phone": "07746291681",
+  "cemetery": "Roselawn 177",
+  "graveNumber": "E177",
+  "hsColour": "black",
+  "inscriptionType": "additional",
+  "inscriptionText": "And their daughter Jean\nDied 9th Oct 2025",
+  "status": "Confirmed",
+  "masonNotes": "Lettering: Other",
+  "masonNoteEntries": [
+    {
+      "ts": "2026-04-04T00:00:00Z",
+      "author": "sh",
+      "text": "received info from family"
+    },
+    {
+      "ts": "2026-04-04T00:00:00Z",
+      "author": "sh",
+      "text": "look at stone first"
+    },
+    {
+      "ts": "2026-04-04T00:00:00Z",
+      "author": "Andrew",
+      "text": "rang client"
+    },
+    {
+      "ts": "2026-04-04T00:00:00Z",
+      "author": "Andrew",
+      "text": "emailed BC"
+    }
+  ],
+  "log": [
+    {
+      "ts": "2026-04-17T00:00:00Z",
+      "author": "Migration",
+      "text": "Imported from legacy system (ID: 250)"
+    }
+  ]
+}</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ SECTION 10: Migration Checklist ══ -->
+    <div class="section">
+      <div class="section-title">Section 10 — Migration Checklist (when ready to proceed)</div>
+      <ol class="checklist">
+        <li>Export a fresh copy of Excel from the old system</li>
+        <li>Convert all Excel date serials to ISO dates</li>
+        <li>Combine name fields (Prefix + First + Last) into a single <code class="inline">customerName</code> string</li>
+        <li>Combine address fields (Line1, Line2, City, PostalCode) into a single address string</li>
+        <li>Map <code class="inline">Entry_Status</code> values to new status values per the mapping table</li>
+        <li>Map <code class="inline">TypeOfWork</code> values to <code class="inline">inscriptionType</code></li>
+        <li>Map <code class="inline">HeadstoneStyle</code>, <code class="inline">GraniteSelection</code>, and <code class="inline">Lettering</code> to new price book codes</li>
+        <li>Convert Table sheet notes into <code class="inline">masonNoteEntries</code> arrays per order</li>
+        <li>Flag "Void" records — confirm with team whether to import or skip</li>
+        <li>Add a migration log entry to each imported record</li>
+        <li>Handle duplicates — check if any <code class="inline">OurRef</code> values already exist in the new system</li>
+        <li>File attachments — note filenames only; re-upload originals manually if needed</li>
+        <li>Test with 5 records first before bulk import</li>
+        <li>Back up the Google Sheet before running the import</li>
+      </ol>
+    </div>
+
+  </div><!-- /card -->
+</div><!-- /page-wrap -->
+
+</body>
+</html>
