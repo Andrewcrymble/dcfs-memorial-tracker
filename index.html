@@ -138,7 +138,7 @@
             }).join('');
         }
 
-        // Called by the main app after orders load — caches activity for login screen
+        // Called by the main app after orders load — caches activity + stats for login screen
         window.cacheActivityForLogin = function(orders) {
             try {
                 var entries = [];
@@ -149,8 +149,44 @@
                 });
                 entries.sort(function(a,b){ return new Date(b.ts) - new Date(a.ts); });
                 localStorage.setItem('dcfs_activity_cache', JSON.stringify(entries.slice(0, 30)));
+
+                // Cache stats
+                var stats = { total: orders.length, Enquiry:0, Quoted:0, Confirmed:0, 'In Design':0, Production:0, Ready:0, Installed:0 };
+                (orders || []).forEach(function(o) {
+                    var s = o.status || 'Enquiry';
+                    if (stats[s] !== undefined) stats[s]++;
+                });
+                localStorage.setItem('dcfs_stats_cache', JSON.stringify(stats));
+                renderLoginStats();
             } catch(e){}
         };
+
+        function renderLoginStats() {
+            try {
+                var cached = localStorage.getItem('dcfs_stats_cache');
+                if (!cached) return;
+                var s = JSON.parse(cached);
+                var el = document.getElementById('loginStats');
+                if (!el) return;
+                var chips = [
+                    { label: 'Total', val: s.total, color: '#fff' },
+                    { label: 'Enquiry', val: s.Enquiry, color: '#94a3b8' },
+                    { label: 'Quoted', val: s.Quoted, color: '#f59e0b' },
+                    { label: 'Confirmed', val: s.Confirmed, color: '#0097a7' },
+                    { label: 'In Design', val: s['In Design'], color: '#8b5cf6' },
+                    { label: 'Production', val: s.Production, color: '#f97316' },
+                    { label: 'Ready', val: s.Ready, color: '#16a34a' },
+                    { label: 'Installed', val: s.Installed, color: '#5a8f2e' }
+                ];
+                el.innerHTML = chips.map(function(c) {
+                    return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:52px;">'
+                        + '<span style="font-size:1.3rem;font-weight:800;color:' + c.color + ';">' + (c.val || 0) + '</span>'
+                        + '<span style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.05em;color:rgba(255,255,255,0.6);">' + c.label + '</span>'
+                        + '</div>';
+                }).join('<div style="width:1px;background:rgba(255,255,255,0.15);align-self:stretch;"></div>');
+                el.style.display = 'flex';
+            } catch(e){}
+        }
 
         document.addEventListener('DOMContentLoaded', function() {
             var existing = getSessionUser();
@@ -160,6 +196,7 @@
             } else {
                 showLogin();
                 renderLoginActivity();
+                renderLoginStats();
             }
             // Enter key on password field
             var inp = document.getElementById('loginPwInput');
@@ -1039,6 +1076,9 @@
             </div>
             <div id="loginError"></div>
             <button id="loginSubmit" disabled onclick="loginSubmit()">Select a name first</button>
+            <!-- Stats strip -->
+            <div id="loginStats" style="display:none;flex-wrap:wrap;justify-content:center;gap:0 4px;margin-top:1rem;padding:0.75rem 0.5rem;background:rgba(0,0,0,0.2);border-radius:10px;width:100%;"></div>
+
             <div class="login-footer">David Crymble &amp; Sons Memorial Masons · Belfast</div>
         </div>
 
