@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Memorial Proof — David Crymble &amp; Sons</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green:  #4a7c2f;
+    --green2: #3d6b26;
+    --gold:   #c8a84b;
+    --bg:     #f2f2f7;
+    --card:   #ffffff;
+    --text:   #1c1c1e;
+    --sub:    #6c6c70;
+    --border: rgba(60,60,67,0.18);
+    --radius: 16px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── HEADER ── */
+  .site-header {
+    background: var(--green);
+    color: white;
+    text-align: center;
+    padding: 1.1rem 1.25rem 1rem;
+  }
+  .site-header .logo-line {
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+  .site-header .sub-line {
+    font-size: 0.72rem;
+    opacity: 0.75;
+    margin-top: 2px;
+  }
+
+  /* ── CONTENT WRAPPER ── */
+  .container {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 1.25rem 1rem 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  /* ── STATUS BADGE ── */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 980px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    align-self: flex-start;
+  }
+  .badge-pending  { background: #fff3cd; color: #856404; }
+  .badge-approved { background: #d1e7dd; color: #0f5132; }
+  .badge-changes  { background: #f8d7da; color: #842029; }
+
+  /* ── SECTION CARD ── */
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 0.5px rgba(0,0,0,0.06);
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 0.6rem 1rem;
+    border-bottom: 0.5px solid var(--border);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--sub);
+    background: #fafafa;
+  }
+  .card-body { padding: 1rem; }
+
+  /* ── ORDER DETAIL ROWS ── */
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.7rem 1.2rem;
+  }
+  .detail-item label {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--sub);
+    display: block;
+    margin-bottom: 2px;
+  }
+  .detail-item .val {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* ── CANVAS / PROOF IMAGE ── */
+  .canvas-wrap {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #1c1c1e;
+    border-radius: var(--radius);
+    overflow: hidden;
+    min-height: 200px;
+  }
+  .canvas-wrap canvas {
+    max-width: 100%;
+    display: block;
+    border-radius: var(--radius);
+  }
+  .canvas-placeholder {
+    color: rgba(255,255,255,0.4);
+    font-size: 0.85rem;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  /* ── INSCRIPTION BOX ── */
+  .insc-box {
+    background: linear-gradient(135deg, #1a2e0e 0%, #2a4a18 100%);
+    border-radius: 12px;
+    padding: 1.5rem 1.25rem;
+    text-align: center;
+    border: 1px solid rgba(200,168,75,0.3);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .insc-box .insc-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(200,168,75,0.6);
+    margin-bottom: 0.85rem;
+  }
+  .insc-box .insc-text {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-size: 1.05rem;
+    line-height: 1.75;
+    letter-spacing: 0.04em;
+    white-space: pre-line;
+    color: #c8a84b; /* updated dynamically */
+  }
+  .insc-box .insc-colour-note {
+    font-size: 0.68rem;
+    font-weight: 600;
+    margin-top: 0.85rem;
+    opacity: 0.6;
+    color: rgba(255,255,255,0.7);
+  }
+
+  /* ── CHECKLIST ── */
+  .check-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .check-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+    color: var(--text);
+    line-height: 1.45;
+  }
+  .check-list li .check-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #d1e7dd;
+    color: #0f5132;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.95rem 1.5rem;
+    border: none;
+    border-radius: 14px;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.01em;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-approve {
+    background: #2e7d32;
+    color: white;
+    box-shadow: 0 4px 16px rgba(46,125,50,0.35);
+  }
+  .btn-approve:hover:not(:disabled) { background: #1b5e20; }
+
+  .btn-changes {
+    background: white;
+    color: #c0392b;
+    border: 2px solid #e74c3c;
+    box-shadow: 0 2px 8px rgba(231,76,60,0.15);
+  }
+  .btn-changes:hover:not(:disabled) { background: #fff5f5; }
+
+  .btn-submit {
+    background: var(--green);
+    color: white;
+    box-shadow: 0 4px 16px rgba(74,124,47,0.3);
+  }
+  .btn-submit:hover:not(:disabled) { background: var(--green2); }
+
+  .btn-cancel {
+    background: transparent;
+    color: var(--sub);
+    border: none;
+    font-size: 0.88rem;
+    padding: 0.5rem;
+    cursor: pointer;
+    font-family: inherit;
+    text-decoration: underline;
+    width: 100%;
+    text-align: center;
+    margin-top: 0.25rem;
+  }
+
+  /* ── TEXTAREA ── */
+  textarea.feedback {
+    width: 100%;
+    min-height: 120px;
+    padding: 0.75rem;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: vertical;
+    background: #fafafa;
+    color: var(--text);
+    line-height: 1.5;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  textarea.feedback:focus { border-color: var(--green); background: white; }
+
+  /* ── ACTION SECTION ── */
+  .action-section { display: flex; flex-direction: column; gap: 0.75rem; }
+
+  /* ── CHANGES PANEL (hidden by default) ── */
+  #changesPanel {
+    display: none;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  #changesPanel.open { display: flex; }
+
+  /* ── THANK YOU STATE ── */
+  #thankYouView { display: none; flex-direction: column; gap: 1rem; }
+  #thankYouView.visible { display: flex; }
+
+  .ty-icon {
+    font-size: 4rem;
+    text-align: center;
+    line-height: 1;
+  }
+  .ty-heading {
+    font-size: 1.5rem;
+    font-weight: 800;
+    text-align: center;
+    color: var(--text);
+  }
+  .ty-sub {
+    font-size: 0.9rem;
+    text-align: center;
+    color: var(--sub);
+    line-height: 1.55;
+  }
+  .ty-contact {
+    background: #f0f7e6;
+    border-radius: 12px;
+    border-left: 4px solid var(--green);
+    padding: 1rem 1.1rem;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .ty-contact strong { color: var(--green); }
+
+  /* ── MAIN VIEW ── */
+  #mainView { display: flex; flex-direction: column; gap: 1rem; }
+  #mainView.hidden { display: none; }
+
+  /* ── LOADING / ERROR ── */
+  #loadingView {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    color: var(--sub);
+  }
+  #loadingView .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto 1rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #errorView {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    color: #842029;
+    display: none;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  #errorView.visible { display: flex; }
+  #errorView .err-icon { font-size: 2.5rem; }
+
+  /* ── ALREADY RESPONDED ── */
+  .already-badge {
+    border-radius: 14px;
+    padding: 1.25rem;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  .already-approved { background: #d1e7dd; color: #0f5132; }
+  .already-changes  { background: #f8d7da; color: #842029; }
+
+  /* ── FOOTER ── */
+  .site-footer {
+    text-align: center;
+    padding: 1.5rem 1rem 0.5rem;
+    font-size: 0.7rem;
+    color: var(--sub);
+    line-height: 1.6;
+  }
+  .site-footer a { color: var(--green); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="site-header">
+  <div class="logo-line">David Crymble &amp; Sons</div>
+  <div class="sub-line">Funeral Directors &amp; Memorial Masons · Established 1947</div>
+</div>
+
+<!-- LOADING -->
+<div class="container" id="loadingView">
+  <div class="spinner"></div>
+  <p>Loading your proof…</p>
+</div>
+
+<!-- ERROR -->
+<div class="container" id="errorView">
+  <div class="err-icon">⚠️</div>
+  <p id="errorMsg">We couldn't find this proof. Please check the link or contact us.</p>
+  <div class="ty-contact">
+    <strong>T.</strong> 028 9066 7784<br>
+    <strong>E.</strong> info@Crymbleandsons.com
+  </div>
+</div>
+
+<!-- MAIN VIEW -->
+<div class="container" id="mainView" style="display:none;">
+
+  <!-- Ref + status -->
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--sub);">Memorial Proof</div>
+      <div style="font-size:1.1rem;font-weight:800;color:var(--text);" id="refDisplay">—</div>
+    </div>
+    <span class="status-badge badge-pending" id="statusBadge">⏳ Awaiting Approval</span>
+  </div>
+
+  <!-- Greeting -->
+  <p style="font-size:0.92rem;color:var(--sub);line-height:1.6;" id="greetingText">
+    Please review the memorial proof below carefully before approving.
+  </p>
+
+  <!-- Already responded notice (shown when status is already set) -->
+  <div id="alreadyNotice" style="display:none;"></div>
+
+  <!-- Order details card -->
+  <div class="card">
+    <div class="card-header">📋 Order Details</div>
+    <div class="card-body">
+      <div class="detail-grid">
+        <div class="detail-item">
+          <label>In Memory Of</label>
+          <div class="val" id="deceasedName">—</div>
+        </div>
+        <div class="detail-item">
+          <label>Stone Type</label>
+          <div class="val" id="hsType">—</div>
+        </div>
+        <div class="detail-item">
+          <label>Size</label>
+          <div class="val" id="hsSize">—</div>
+        </div>
+        <div class="detail-item">
+          <label>Colour</label>
+          <div class="val" id="hsColour">—</div>
+        </div>
+        <div class="detail-item">
+          <label>Inscription Colour</label>
+          <div class="val" id="inscColourLabel">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stone proof canvas -->
+  <div class="card">
+    <div class="card-header">🪨 Visual Proof — Headstone with Inscription</div>
+    <div class="card-body" style="padding:0.75rem;">
+      <div class="canvas-wrap" id="canvasWrap">
+        <div class="canvas-placeholder" id="canvasPlaceholder">Loading headstone image…</div>
+        <canvas id="proofCanvas" style="display:none;"></canvas>
+      </div>
+      <p style="font-size:0.72rem;color:var(--sub);text-align:center;margin-top:0.6rem;line-height:1.5;">
+        This is a digital representation of the inscription placement. Exact positioning and sizing may vary slightly on the final stone.
+      </p>
+    </div>
+  </div>
+
+  <!-- Inscription text box -->
+  <div class="card">
+    <div class="card-header">✍️ Inscription Text</div>
+    <div class="card-body" style="padding:0.75rem;">
+      <div class="insc-box">
+        <div class="insc-label">As it will appear on the stone</div>
+        <div class="insc-text" id="inscriptionDisplay">—</div>
+        <div class="insc-colour-note" id="inscColourNote"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Checklist -->
+  <div class="card">
+    <div class="card-header">✅ Before You Approve — Please Check</div>
+    <div class="card-body">
+      <ul class="check-list">
+        <li><span class="check-icon">✓</span><span>All <strong>names are spelled correctly</strong> (including middle names if applicable)</span></li>
+        <li><span class="check-icon">✓</span><span>All <strong>dates are correct</strong> (birth date, passing date)</span></li>
+        <li><span class="check-icon">✓</span><span>The <strong>inscription wording</strong> reflects exactly what you want</span></li>
+        <li><span class="check-icon">✓</span><span>The <strong>letter colour</strong> is correct for your headstone</span></li>
+        <li><span class="check-icon">✓</span><span>You are <strong>happy with the layout</strong> shown</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="action-section" id="actionSection">
+
+    <div id="approvalButtons">
+      <div style="display:flex;flex-direction:column;gap:0.75rem;">
+        <button class="btn btn-approve" id="btnApprove" onclick="handleApprove()">
+          ✅ Approve — Everything Is Correct
+        </button>
+        <button class="btn btn-changes" id="btnChanges" onclick="showChangesPanel()">
+          ✏️ Request Changes
+        </button>
+      </div>
+    </div>
+
+    <!-- Changes panel -->
+    <div id="changesPanel">
+      <div class="card">
+        <div class="card-header">✏️ What Would You Like Changed?</div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:0.75rem;">
+          <p style="font-size:0.85rem;color:var(--sub);line-height:1.5;">
+            Please describe clearly what you'd like us to change. We'll contact you to confirm before proceeding.
+          </p>
+          <textarea class="feedback" id="changesText" placeholder="e.g. Please correct 'Beloved' to 'Dearly Beloved' on line 3, and change the birth year from 1942 to 1943."></textarea>
+          <button class="btn btn-submit" id="btnSubmitChanges" onclick="handleChanges()">
+            Send Change Request
+          </button>
+          <button class="btn-cancel" onclick="hideChangesPanel()">← Back</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Contact footer inside main view -->
+  <div class="ty-contact" style="margin-top:0.5rem;">
+    <strong>Questions?</strong> Contact us:<br>
+    <strong>T.</strong> 028 9066 7784 &nbsp;·&nbsp; <strong>E.</strong> <a href="mailto:info@Crymbleandsons.com" style="color:var(--green);">info@Crymbleandsons.com</a>
+  </div>
+
+</div><!-- /mainView -->
+
+<!-- THANK YOU VIEW -->
+<div class="container" id="thankYouView">
+  <div class="ty-icon" id="tyIcon">✅</div>
+  <div class="ty-heading" id="tyHeading">Proof Approved</div>
+  <p class="ty-sub" id="tySub">
+    Thank you for confirming your memorial proof. We will now proceed with production and will be in touch regarding your installation date.
+  </p>
+  <div class="ty-contact">
+    <strong>David Crymble &amp; Sons</strong><br>
+    <strong>T.</strong> 028 9066 7784<br>
+    <strong>E.</strong> info@Crymbleandsons.com<br>
+    <strong>W.</strong> <a href="https://Crymbleandsons.com">Crymbleandsons.com</a>
+  </div>
+  <p style="font-size:0.75rem;color:var(--sub);text-align:center;font-style:italic;line-height:1.6;">
+    'Our God will take care of everything you need.' — Phil 4:19
+  </p>
+</div>
+
+<div class="site-footer">
+  David Crymble &amp; Sons · Funeral Directors &amp; Memorial Masons<br>
+  <a href="https://Crymbleandsons.com">Crymbleandsons.com</a> · 028 9066 7784
+</div>
+
+<script>
+// ── CONFIG ──
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwoD6BDLRLZeWyVuuof48f7cMuu97K-oNHulf0DDdDwbxdfaxkh12-Ht-ZHolfGd_k/exec';
+
+// ── STATE ──
+let proof = null;
+let hsImage = null;
+
+// ── COLOUR MAP ──
+function colourToHex(name) {
+  const map = {
+    'gold':       '#c8a84b',
+    'light gold': '#e8d5a3',
+    'silver':     '#e0e0e0',
+    'white':      '#ffffff',
+    'deep gold':  '#d4af37',
+    'black':      '#1c1c1e'
+  };
+  return map[(name || '').toLowerCase().trim()] || '#c8a84b';
+}
+
+// ── INIT ──
+window.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const orderId = params.get('id');
+
+  if (!orderId) {
+    showError('No proof ID found in the link. Please check the URL or contact us.');
+    return;
+  }
+
+  loadProof(orderId);
+});
+
+// ── LOAD PROOF VIA JSONP ──
+function loadProof(orderId) {
+  const callbackName = '__proofCb_' + Date.now();
+  const bust = '&_=' + Date.now();
+  const url = SCRIPT_URL + '?action=getProofData&id=' + encodeURIComponent(orderId) + '&callback=' + callbackName + bust;
+
+  const timeout = setTimeout(() => {
+    showError('Request timed out. Please check your internet connection and try again.');
+    if (window[callbackName]) delete window[callbackName];
+  }, 15000);
+
+  window[callbackName] = function(response) {
+    clearTimeout(timeout);
+    delete window[callbackName];
+    if (response && response.success && response.proof) {
+      proof = response.proof;
+      renderProof(proof);
+    } else {
+      showError((response && response.message) || 'This proof could not be found. Please contact us.');
+    }
+  };
+
+  const script = document.createElement('script');
+  script.src = url;
+  script.onerror = () => {
+    clearTimeout(timeout);
+    showError('Could not connect to the server. Please try again later.');
+  };
+  document.head.appendChild(script);
+}
+
+// ── RENDER PROOF ──
+function renderProof(p) {
+  // Populate text fields
+  document.getElementById('refDisplay').textContent     = p.orderRef   || ('Order #' + p.orderId);
+  document.getElementById('deceasedName').textContent   = p.deceasedName || '—';
+  document.getElementById('hsType').textContent         = p.hsType     || '—';
+  document.getElementById('hsSize').textContent         = p.hsSize     || '—';
+  document.getElementById('hsColour').textContent       = p.hsColour   || '—';
+  document.getElementById('inscColourLabel').textContent = p.inscriptionColour || 'Gold';
+
+  // Greeting
+  if (p.customerFirstName) {
+    document.getElementById('greetingText').textContent =
+      'Dear ' + p.customerFirstName + ', please review the memorial proof below carefully before approving.';
+  }
+
+  // Inscription box
+  const inscEl = document.getElementById('inscriptionDisplay');
+  inscEl.textContent = p.inscriptionText || '(No inscription text on file)';
+  const hexColour = colourToHex(p.inscriptionColour);
+  inscEl.style.color = hexColour;
+  document.getElementById('inscColourNote').textContent =
+    'Letter colour: ' + (p.inscriptionColour || 'Gold');
+
+  // Proof status
+  const statusEl = document.getElementById('statusBadge');
+  const noticeEl = document.getElementById('alreadyNotice');
+  const actionEl = document.getElementById('actionSection');
+
+  if (p.proofStatus === 'approved') {
+    statusEl.className = 'status-badge badge-approved';
+    statusEl.textContent = '✅ Approved';
+    noticeEl.innerHTML = '<div class="already-badge already-approved">✅ You have already approved this proof. Thank you!</div>';
+    noticeEl.style.display = 'block';
+    actionEl.style.display = 'none';
+  } else if (p.proofStatus === 'changes') {
+    statusEl.className = 'status-badge badge-changes';
+    statusEl.textContent = '✏️ Changes Requested';
+    noticeEl.innerHTML = '<div class="already-badge already-changes">✏️ You have already requested changes. We\'ll be in touch soon.</div>';
+    noticeEl.style.display = 'block';
+    actionEl.style.display = 'none';
+  } else {
+    statusEl.className = 'status-badge badge-pending';
+    statusEl.textContent = '⏳ Awaiting Your Approval';
+  }
+
+  // Show main view
+  document.getElementById('loadingView').style.display = 'none';
+  document.getElementById('mainView').style.display   = 'flex';
+
+  // Load stone image and draw canvas
+  loadStoneCanvas(p);
+}
+
+// ── STONE CANVAS ──
+function loadStoneCanvas(p) {
+  // Determine stone image source — same logic as inscription-preview.html
+  // Try hsType-based image first, then fall back to generic headstone.png
+  const stoneImgSrc = 'headstone.png';
+
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    hsImage = img;
+    drawCanvas(p);
+    document.getElementById('canvasPlaceholder').style.display = 'none';
+    document.getElementById('proofCanvas').style.display = 'block';
+  };
+  img.onerror = () => {
+    document.getElementById('canvasPlaceholder').textContent =
+      '(Stone image preview not available)';
+    document.getElementById('canvasPlaceholder').style.color = 'rgba(255,255,255,0.3)';
+  };
+  img.src = stoneImgSrc;
+}
+
+function drawCanvas(p) {
+  const canvas = document.getElementById('proofCanvas');
+  const wrap   = document.getElementById('canvasWrap');
+
+  // Size canvas to available width
+  const maxW = Math.min(wrap.clientWidth - 24, 520);
+  const scale = maxW / hsImage.width;
+  canvas.width  = hsImage.width  * scale;
+  canvas.height = hsImage.height * scale;
+
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(hsImage, 0, 0, canvas.width, canvas.height);
+
+  // Inscription overlay
+  const text = (p.inscriptionText || '').trim();
+  if (!text) return;
+
+  const hexColour = colourToHex(p.inscriptionColour);
+  const lines = text.split('\n').filter(l => l.trim());
+
+  const fontSize    = Math.round(canvas.width * 0.042);
+  const lineSpacing = 1.7;
+  const scaledLineH = fontSize * lineSpacing;
+  const totalH      = lines.length * scaledLineH;
+
+  const cx     = canvas.width  * 0.50;
+  const startY = canvas.height * 0.44;
+  const topY   = startY - totalH / 2;
+  const maxTextW = canvas.width * 0.52;
+
+  ctx.save();
+  ctx.fillStyle    = hexColour;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font         = `italic ${fontSize}px 'Times New Roman', Georgia, serif`;
+  ctx.shadowColor  = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur   = 2.5;
+  ctx.shadowOffsetX = 1;
+  ctx.shadowOffsetY = 1;
+  ctx.globalAlpha  = 0.92;
+
+  lines.forEach((line, i) => {
+    const y = topY + i * scaledLineH + scaledLineH / 2;
+    drawSpaced(ctx, line.trim(), cx, y, maxTextW, 1.5);
+  });
+  ctx.restore();
+}
+
+function drawSpaced(ctx, text, cx, y, maxWidth, spacing) {
+  if (!text) return;
+  if (spacing === 0) { ctx.fillText(text, cx, y); return; }
+  let totalW = 0;
+  for (let i = 0; i < text.length; i++) {
+    totalW += ctx.measureText(text[i]).width + (i < text.length - 1 ? spacing : 0);
+  }
+  let scaleX = 1;
+  if (totalW > maxWidth) scaleX = maxWidth / totalW;
+  let x = cx - (totalW * scaleX) / 2;
+  for (let i = 0; i < text.length; i++) {
+    const cw = ctx.measureText(text[i]).width * scaleX;
+    ctx.fillText(text[i], x + cw / 2, y);
+    x += cw + spacing * scaleX;
+  }
+}
+
+// ── APPROVE ──
+function handleApprove() {
+  const btn = document.getElementById('btnApprove');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  submitResponse(true, '').then(ok => {
+    if (ok) {
+      showThankYou(true);
+    } else {
+      btn.disabled = false;
+      btn.textContent = '✅ Approve — Everything Is Correct';
+      alert('There was a problem submitting your approval. Please try again or contact us directly.');
+    }
+  });
+}
+
+// ── SHOW CHANGES PANEL ──
+function showChangesPanel() {
+  document.getElementById('approvalButtons').style.display = 'none';
+  document.getElementById('changesPanel').classList.add('open');
+  document.getElementById('changesText').focus();
+}
+
+function hideChangesPanel() {
+  document.getElementById('approvalButtons').style.display = 'block';
+  document.getElementById('changesPanel').classList.remove('open');
+}
+
+// ── SUBMIT CHANGES ──
+function handleChanges() {
+  const msgEl = document.getElementById('changesText');
+  const message = msgEl.value.trim();
+
+  if (!message) {
+    msgEl.style.borderColor = '#e74c3c';
+    msgEl.focus();
+    return;
+  }
+  msgEl.style.borderColor = '';
+
+  const btn = document.getElementById('btnSubmitChanges');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+
+  submitResponse(false, message).then(ok => {
+    if (ok) {
+      showThankYou(false);
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Send Change Request';
+      alert('There was a problem sending your changes. Please try again or contact us directly.');
+    }
+  });
+}
+
+// ── SUBMIT RESPONSE ──
+async function submitResponse(approved, message) {
+  try {
+    const body = {
+      action:   'submitProofResponse',
+      orderId:  proof.orderId,
+      approved: approved,
+      message:  message
+    };
+
+    // Try fetch first, fall back to JSONP-style form post if CORS blocks
+    const resp = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await resp.json();
+    return data && data.success;
+  } catch (err) {
+    // Fallback: use no-cors fetch (fire-and-forget)
+    try {
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode:   'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action:   'submitProofResponse',
+          orderId:  proof.orderId,
+          approved: approved,
+          message:  message
+        })
+      });
+      return true; // Optimistic — no-cors returns opaque response
+    } catch (e) {
+      return false;
+    }
+  }
+}
+
+// ── THANK YOU ──
+function showThankYou(approved) {
+  document.getElementById('mainView').style.display = 'none';
+
+  const tyView = document.getElementById('thankYouView');
+  if (approved) {
+    document.getElementById('tyIcon').textContent    = '✅';
+    document.getElementById('tyHeading').textContent = 'Proof Approved — Thank You!';
+    document.getElementById('tySub').textContent     =
+      'Thank you for confirming your memorial proof. We will now proceed with production and will be in touch regarding your installation date.';
+  } else {
+    document.getElementById('tyIcon').textContent    = '✏️';
+    document.getElementById('tyHeading').textContent = 'Change Request Received';
+    document.getElementById('tySub').textContent     =
+      'We\'ve received your requested changes. A member of our team will review and contact you shortly to confirm the amendments before proceeding.';
+  }
+  tyView.style.display = 'flex';
+}
+
+// ── ERROR ──
+function showError(msg) {
+  document.getElementById('loadingView').style.display = 'none';
+  document.getElementById('errorMsg').textContent = msg;
+  const errView = document.getElementById('errorView');
+  errView.style.display = 'flex';
+}
+</script>
+
+</body>
+</html>

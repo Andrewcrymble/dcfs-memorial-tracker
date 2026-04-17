@@ -2742,6 +2742,7 @@
                     <button class="btn btn-cyan" onclick="generateEstimate()">📄 Estimate</button>
                     <button class="btn btn-cyan" onclick="generateMasonJobCard()">🔨 Job Card</button>
                     <button class="btn btn-cyan" onclick="generateInvoice()">🧾 Invoice</button>
+                    <button class="btn" style="background:#7c3aed;color:white;" onclick="shareProofLink()">🔗 Share Proof</button>
                     <button class="btn" style="background:#635bff;color:white;" onclick="createPaymentLink()">💳 Payment Link</button>
                     <button class="btn" style="background:#16a34a;color:white;" onclick="recordPaymentManual()">💰 Record Payment</button>
                     <div class="spacer"></div>
@@ -4992,6 +4993,10 @@
                 `Ref: ${estRef}`,
                 `Total: £${totals.totalSell.toFixed(2)}`
             ]);
+            // Offer to email estimate to customer
+            window._lastEstimateDoc = doc;
+            window._lastEstimateRef = estRef;
+            showEmailEstimateModal();
         }
 
         
@@ -6096,6 +6101,155 @@
         }
 
         // ══════════════════════════════════════════════════════
+        // CUSTOMER PROOF LINK
+        // ══════════════════════════════════════════════════════
+        function getProofUrl(order) {
+            const id = (order || currentOrder || {}).orderId || '';
+            return `https://tracker.crymbleandsons.com/proof.html?id=${encodeURIComponent(id)}`;
+        }
+
+        function shareProofLink() {
+            if (!currentOrder) { alert('Please select an order first.'); return; }
+            const url = getProofUrl(currentOrder);
+
+            // Check for existing proof status in log entries array
+            let proofStatusNote = '';
+            const log = currentOrder.log || [];
+            const logFull = log.map(e => e.text || '').join(' | ');
+            if (logFull.includes('PROOF APPROVED')) {
+                proofStatusNote = '✅ Customer has already APPROVED this proof.';
+            } else if (logFull.includes('CHANGES REQUESTED')) {
+                proofStatusNote = '✏️ Customer has requested changes — check the activity log.';
+            }
+
+            document.getElementById('proofLinkUrl').textContent = url;
+            const noteEl = document.getElementById('proofStatusNote');
+            if (proofStatusNote) {
+                noteEl.textContent = proofStatusNote;
+                noteEl.style.display = 'block';
+            } else {
+                noteEl.style.display = 'none';
+            }
+
+            // WhatsApp link
+            const waText = encodeURIComponent(
+                `Hi ${currentOrder.customerFirstName || currentOrder.customerName || ''},\n\nPlease find your memorial proof for ${currentOrder.deceasedName || 'the memorial'} at the link below.\n\nKindly review all details carefully — you can approve or request changes directly on the page:\n\n${url}\n\nIf you have any questions, please don't hesitate to contact us.\n\nKind regards,\nDavid Crymble & Sons`
+            );
+            document.getElementById('whatsappProofLink').href = `https://wa.me/?text=${waText}`;
+
+            const overlay = document.getElementById('proofLinkOverlay');
+            overlay.style.display = 'flex';
+        }
+
+        function closeProofLinkModal() {
+            document.getElementById('proofLinkOverlay').style.display = 'none';
+        }
+
+        function copyProofLink() {
+            const url = document.getElementById('proofLinkUrl').textContent;
+            navigator.clipboard.writeText(url).then(() => {
+                const btn = document.getElementById('btnCopyProof');
+                const orig = btn.textContent;
+                btn.textContent = '✅ Copied!';
+                btn.style.background = '#16a34a';
+                setTimeout(() => { btn.textContent = orig; btn.style.background = '#7c3aed'; }, 2000);
+            }).catch(() => {
+                prompt('Copy this link:', url);
+            });
+        }
+
+        // ══════════════════════════════════════════════════════
+        // EMAIL ESTIMATE MODAL
+        // ══════════════════════════════════════════════════════
+        function showEmailEstimateModal() {
+            if (!currentOrder) return;
+
+            // Pre-fill email from order
+            const emailEl = document.getElementById('emailEstimateAddr');
+            emailEl.value = currentOrder.email || currentOrder.customerEmail || '';
+
+            // Proof URL preview
+            const proofUrl = getProofUrl(currentOrder);
+            document.getElementById('emailProofUrlText').textContent = proofUrl;
+
+            document.getElementById('emailEstimateStatus').style.display = 'none';
+            const btn = document.getElementById('btnSendEmail');
+            btn.textContent = '📧 Send Estimate Email';
+            btn.disabled = false;
+
+            document.getElementById('emailEstimateOverlay').style.display = 'flex';
+        }
+
+        function closeEmailEstimateModal() {
+            document.getElementById('emailEstimateOverlay').style.display = 'none';
+        }
+
+        async function sendEstimateEmailNow() {
+            const emailAddr = document.getElementById('emailEstimateAddr').value.trim();
+            if (!emailAddr || !emailAddr.includes('@')) {
+                document.getElementById('emailEstimateAddr').focus();
+                document.getElementById('emailEstimateAddr').style.borderColor = '#dc2626';
+                return;
+            }
+            document.getElementById('emailEstimateAddr').style.borderColor = '';
+
+            const includeProof = document.getElementById('emailIncludeProof').checked;
+            const proofUrl = includeProof ? getProofUrl(currentOrder) : '';
+
+            const btn = document.getElementById('btnSendEmail');
+            btn.disabled = true;
+            btn.textContent = '⏳ Sending…';
+
+            const statusEl = document.getElementById('emailEstimateStatus');
+            statusEl.style.display = 'none';
+
+            try {
+                const doc = window._lastEstimateDoc;
+                if (!doc) throw new Error('Estimate PDF not found — please regenerate the estimate first.');
+
+                const ref = window._lastEstimateRef || (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
+                const pdfBase64 = doc.output('datauristring');
+
+                const resp = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'sendEstimateEmail',
+                        email: emailAddr,
+                        customerName: currentOrder.customerFirstName || currentOrder.customerName || 'Customer',
+                        ref: ref,
+                        pdfBase64: pdfBase64,
+                        proofUrl: proofUrl
+                    })
+                });
+
+                const result = await resp.json();
+                if (result.success) {
+                    statusEl.style.cssText = 'display:block;text-align:center;font-size:0.85rem;font-weight:600;padding:0.6rem;border-radius:8px;background:#f0fdf4;color:#166534;border:1px solid #86efac;';
+                    statusEl.textContent = `✅ Estimate emailed to ${emailAddr}`;
+                    addActivityLog(`Estimate emailed to ${emailAddr}`);
+                    btn.textContent = '✅ Sent!';
+                    setTimeout(() => closeEmailEstimateModal(), 2500);
+                } else {
+                    throw new Error(result.message || 'Email failed');
+                }
+            } catch(err) {
+                statusEl.style.cssText = 'display:block;text-align:center;font-size:0.85rem;font-weight:600;padding:0.6rem;border-radius:8px;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;';
+                statusEl.textContent = `⚠ Failed: ${err.message}`;
+                btn.disabled = false;
+                btn.textContent = '📧 Send Estimate Email';
+            }
+        }
+
+        // Close modals on overlay click
+        document.getElementById('emailEstimateOverlay').addEventListener('click', function(e) {
+            if (e.target === this) closeEmailEstimateModal();
+        });
+        document.getElementById('proofLinkOverlay').addEventListener('click', function(e) {
+            if (e.target === this) closeProofLinkModal();
+        });
+
+        // ══════════════════════════════════════════════════════
         // INSCRIPTION DESIGNER MODAL
         // ══════════════════════════════════════════════════════
         let _idColour = '#c8a84b';
@@ -6452,6 +6606,96 @@
     </script>
 
     <!-- Diagnostic: runs AFTER main script, checks if it loaded correctly -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- EMAIL ESTIMATE MODAL                                        -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div id="emailEstimateOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;align-items:center;justify-content:center;padding:1rem;">
+      <div style="background:white;border-radius:18px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;">
+        <div style="background:#4a7c2f;padding:1.1rem 1.4rem;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="color:white;font-size:1.05rem;font-weight:800;">📧 Email Estimate to Customer</div>
+            <div style="color:rgba(255,255,255,0.75);font-size:0.75rem;margin-top:2px;">Send the PDF + proof link directly to the customer</div>
+          </div>
+          <button onclick="closeEmailEstimateModal()" style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+        </div>
+        <div style="padding:1.4rem;display:flex;flex-direction:column;gap:1rem;">
+
+          <!-- Estimate downloaded confirmation -->
+          <div style="display:flex;align-items:center;gap:0.6rem;background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:0.75rem 1rem;">
+            <span style="font-size:1.2rem;">✅</span>
+            <span style="font-size:0.85rem;color:#166534;font-weight:600;">Estimate PDF has been downloaded to your device</span>
+          </div>
+
+          <!-- Email field -->
+          <div>
+            <label style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#6c6c70;display:block;margin-bottom:5px;">Customer Email Address</label>
+            <input id="emailEstimateAddr" type="email" placeholder="customer@example.com"
+              style="width:100%;padding:0.65rem 0.85rem;border:1.5px solid rgba(60,60,67,0.2);border-radius:10px;font-size:0.95rem;font-family:inherit;outline:none;transition:border-color 0.15s;"
+              onfocus="this.style.borderColor='#4a7c2f'" onblur="this.style.borderColor='rgba(60,60,67,0.2)'">
+          </div>
+
+          <!-- Include proof link option -->
+          <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.88rem;color:#1c1c1e;font-weight:500;">
+            <input type="checkbox" id="emailIncludeProof" checked style="accent-color:#4a7c2f;width:18px;height:18px;cursor:pointer;">
+            Include customer approval proof link
+          </label>
+          <div id="emailProofUrlPreview" style="background:#f9f0ff;border-radius:8px;padding:0.6rem 0.85rem;font-size:0.75rem;color:#5b21b6;word-break:break-all;border:1px solid #e9d5ff;">
+            🔗 <span id="emailProofUrlText" style="font-weight:600;"></span>
+          </div>
+
+          <!-- Send button -->
+          <button id="btnSendEmail" onclick="sendEstimateEmailNow()"
+            style="width:100%;padding:0.9rem;background:#4a7c2f;color:white;border:none;border-radius:12px;font-size:1rem;font-weight:700;font-family:inherit;cursor:pointer;transition:background 0.15s;display:flex;align-items:center;justify-content:center;gap:0.5rem;">
+            📧 Send Estimate Email
+          </button>
+          <button onclick="closeEmailEstimateModal()" style="width:100%;padding:0.6rem;background:transparent;border:none;color:#6c6c70;font-size:0.88rem;font-family:inherit;cursor:pointer;text-decoration:underline;">
+            Skip — I'll email manually
+          </button>
+
+          <!-- Status message -->
+          <div id="emailEstimateStatus" style="display:none;text-align:center;font-size:0.85rem;font-weight:600;padding:0.5rem;border-radius:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- PROOF LINK MODAL                                            -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div id="proofLinkOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;align-items:center;justify-content:center;padding:1rem;">
+      <div style="background:white;border-radius:18px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;">
+        <div style="background:#7c3aed;padding:1.1rem 1.4rem;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="color:white;font-size:1.05rem;font-weight:800;">🔗 Customer Proof Link</div>
+            <div style="color:rgba(255,255,255,0.75);font-size:0.75rem;margin-top:2px;">Share this link for the customer to approve online</div>
+          </div>
+          <button onclick="closeProofLinkModal()" style="background:rgba(255,255,255,0.15);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+        </div>
+        <div style="padding:1.4rem;display:flex;flex-direction:column;gap:1rem;">
+          <p style="font-size:0.88rem;color:#3c3c43;line-height:1.55;">Send this link to the customer. They can open it on their phone to see the stone proof and inscription, then tap <strong>Approve</strong> or <strong>Request Changes</strong>.</p>
+
+          <!-- URL display -->
+          <div style="background:#f5f0ff;border:1.5px solid #c4b5fd;border-radius:12px;padding:0.85rem 1rem;font-size:0.82rem;color:#5b21b6;word-break:break-all;font-weight:600;" id="proofLinkUrl"></div>
+
+          <!-- Action buttons -->
+          <button onclick="copyProofLink()" id="btnCopyProof"
+            style="width:100%;padding:0.85rem;background:#7c3aed;color:white;border:none;border-radius:12px;font-size:0.95rem;font-weight:700;font-family:inherit;cursor:pointer;transition:background 0.15s;">
+            📋 Copy Link to Clipboard
+          </button>
+          <a id="whatsappProofLink" href="#" target="_blank"
+            style="width:100%;padding:0.85rem;background:#25d366;color:white;border:none;border-radius:12px;font-size:0.95rem;font-weight:700;font-family:inherit;cursor:pointer;text-align:center;text-decoration:none;display:block;box-sizing:border-box;">
+            💬 Share via WhatsApp
+          </a>
+          <button onclick="closeProofLinkModal()"
+            style="width:100%;padding:0.6rem;background:transparent;border:none;color:#6c6c70;font-size:0.88rem;font-family:inherit;cursor:pointer;text-decoration:underline;">
+            Close
+          </button>
+
+          <!-- Customer proof status note -->
+          <div id="proofStatusNote" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:0.7rem 0.9rem;font-size:0.8rem;color:#166534;font-weight:600;"></div>
+        </div>
+      </div>
+    </div>
+
     <script>
     (function() {
         var ok = typeof loadOrders === 'function' && typeof testConnection === 'function';
