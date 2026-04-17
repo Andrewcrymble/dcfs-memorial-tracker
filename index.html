@@ -6241,13 +6241,7 @@
             }
         }
 
-        // Close modals on overlay click
-        document.getElementById('emailEstimateOverlay').addEventListener('click', function(e) {
-            if (e.target === this) closeEmailEstimateModal();
-        });
-        document.getElementById('proofLinkOverlay').addEventListener('click', function(e) {
-            if (e.target === this) closeProofLinkModal();
-        });
+        // Close modals on overlay click — handled via onclick on the HTML elements
 
         // ══════════════════════════════════════════════════════
         // INSCRIPTION DESIGNER MODAL
@@ -6609,7 +6603,7 @@
     <!-- ═══════════════════════════════════════════════════════════ -->
     <!-- EMAIL ESTIMATE MODAL                                        -->
     <!-- ═══════════════════════════════════════════════════════════ -->
-    <div id="emailEstimateOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;align-items:center;justify-content:center;padding:1rem;">
+    <div id="emailEstimateOverlay" onclick="if(event.target===this)closeEmailEstimateModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;align-items:center;justify-content:center;padding:1rem;">
       <div style="background:white;border-radius:18px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;">
         <div style="background:#4a7c2f;padding:1.1rem 1.4rem;display:flex;align-items:center;justify-content:space-between;">
           <div>
@@ -6661,7 +6655,7 @@
     <!-- ═══════════════════════════════════════════════════════════ -->
     <!-- PROOF LINK MODAL                                            -->
     <!-- ═══════════════════════════════════════════════════════════ -->
-    <div id="proofLinkOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;align-items:center;justify-content:center;padding:1rem;">
+    <div id="proofLinkOverlay" onclick="if(event.target===this)closeProofLinkModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;align-items:center;justify-content:center;padding:1rem;">
       <div style="background:white;border-radius:18px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;">
         <div style="background:#7c3aed;padding:1.1rem 1.4rem;display:flex;align-items:center;justify-content:space-between;">
           <div>
