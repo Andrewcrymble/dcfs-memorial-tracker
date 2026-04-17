@@ -793,7 +793,7 @@ async function sendRecord(url, record) {
   await fetch(url, {
     method: 'POST',
     mode: 'no-cors',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify({ action: 'upsert', order: record })
   });
   // With no-cors we get an opaque response — treat completion as success
