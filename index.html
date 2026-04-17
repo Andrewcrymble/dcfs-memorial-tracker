@@ -3538,7 +3538,7 @@
                         <div class="stone-picker" id="stonePicker">
                             <div class="stone-picker-label">Select Stone Style</div>
                             <div class="stone-picker-cards" id="stonePickerCards">
-                                <div class="stone-card" data-type="OG" onclick="selectStone('OG')">
+                                <div class="stone-card" data-type="Ogee" onclick="selectStone('Ogee')">
                                     <img src="ogee.png" alt="Ogee">
                                     <span>Ogee</span>
                                 </div>
@@ -3923,12 +3923,13 @@
         }
 
         function selectStone(type) {
-            // Update the hidden/visible type select
+            // Store for inscription designer
+            window._selectedStoneType = type;
+            // Update the type dropdown
             const sel = document.getElementById('f_hsType');
             if (sel) {
                 sel.value = type;
-                // trigger the change handler to update sizes
-                onHsTypeChange();
+                onHsTypeChange(); // rebuilds size dropdown + syncs highlight
             }
             // Highlight selected card
             document.querySelectorAll('.stone-card').forEach(c => {
@@ -3941,6 +3942,7 @@
         function onHsTypeChange() {
             // Sync stone picker highlight when type select changes
             const currentType = document.getElementById('f_hsType')?.value;
+            window._selectedStoneType = currentType || null;
             document.querySelectorAll('.stone-card').forEach(c => {
                 c.classList.toggle('selected', c.dataset.type === currentType);
             });
