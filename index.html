@@ -279,40 +279,55 @@
         .btn-danger { background: #fff1f1; color: #dc2626; }
         .btn-danger:hover { background: #dc2626; color: white; }
 
-        /* ── LAYOUT ── */
-        .main-container { display: flex; height: calc(100vh - 52px - 48px); }
-
-        /* ── SIDEBAR ── */
-        .sidebar {
-            width: 300px;
-            min-width: 300px;
-            background: var(--bg);
-            border-right: 0.5px solid var(--border);
+        /* ── LIST VIEW ── */
+        #listView {
+            height: calc(100vh - 52px - 48px);
             display: flex;
             flex-direction: column;
             overflow: hidden;
         }
-        .search-box { padding: 0.6rem 0.75rem; background: var(--bg); }
-        .search-box input {
+
+        .list-toolbar {
+            background: rgba(255,255,255,0.72);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 0.5px solid var(--border);
+            padding: 0.6rem 1rem 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .list-search-wrap {
+            max-width: 600px;
+            margin: 0 auto 0.5rem;
+        }
+
+        .list-search-wrap input {
             width: 100%;
-            padding: 0.48rem 0.85rem 0.48rem 2rem;
+            padding: 0.5rem 0.85rem 0.5rem 2.1rem;
             border: none;
             border-radius: 10px;
-            font-size: 0.88rem;
+            font-size: 0.9rem;
             background: rgba(118,118,128,0.12);
             outline: none;
             color: var(--text);
+            font-family: inherit;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.5'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
-            background-position: 0.6rem center;
-            transition: background 0.15s;
+            background-position: 0.7rem center;
         }
-        .search-box input::placeholder { color: var(--text-muted); }
-        .search-box input:focus { background-color: rgba(118,118,128,0.18); }
+
+        .list-search-wrap input::placeholder { color: var(--text-muted); }
+
+        /* centre the filter tabs */
+        .list-toolbar .filter-tabs {
+            justify-content: center;
+            padding: 0;
+            border: none;
+            background: none;
+        }
 
         .filter-tabs {
             display: flex;
-            padding: 0 0.75rem 0.5rem;
             gap: 0.3rem;
             overflow-x: auto;
             flex-shrink: 0;
@@ -333,26 +348,69 @@
         .filter-tab:active { transform: scale(0.95); }
         .filter-tab.active { background: var(--cyan); color: white; }
 
-        .order-list { list-style: none; overflow-y: auto; flex: 1; padding: 0 0.5rem 0.5rem; }
-        .order-list::-webkit-scrollbar { width: 3px; }
-        .order-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+        .order-grid-wrap {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 1rem 2rem;
+        }
+        .order-grid-wrap::-webkit-scrollbar { width: 3px; }
+        .order-grid-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+
+        .order-grid {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 0.75rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
 
         .order-item {
-            padding: 0.75rem 0.9rem;
-            border-radius: var(--radius-sm);
+            padding: 1rem 1.1rem;
+            border-radius: 13px;
             cursor: pointer;
-            transition: background 0.12s;
+            transition: transform 0.15s, box-shadow 0.15s;
             position: relative;
-            margin-bottom: 2px;
             background: var(--white);
-            box-shadow: var(--shadow);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+            margin-bottom: 0;
         }
-        .order-item:hover { background: #f9f9f9; }
-        .order-item:active { transform: scale(0.99); }
-        .order-item.active {
-            background: #e9f4e1;
-            box-shadow: 0 0 0 1.5px var(--green), var(--shadow);
+        .order-item:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
+        .order-item:active { transform: scale(0.98); }
+        .order-item.active { box-shadow: 0 0 0 2px var(--green), 0 4px 16px rgba(74,124,47,0.2); }
+
+        /* ── DETAIL VIEW ── */
+        #detailView {
+            height: calc(100vh - 52px - 48px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
+
+        .detail-topbar {
+            background: rgba(255,255,255,0.72);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 0.5px solid var(--border);
+            padding: 0.6rem 1rem;
+            flex-shrink: 0;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: var(--cyan);
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 0.2rem 0;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+            letter-spacing: -0.01em;
+        }
+        .back-btn:hover { opacity: 0.7; }
         .order-item-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.15rem; gap: 6px; }
         .order-name { font-weight: 600; font-size: 0.88rem; color: var(--text); letter-spacing: -0.01em; }
         .order-customer { font-size: 0.76rem; color: var(--text-muted); margin-bottom: 0.2rem; }
@@ -379,7 +437,21 @@
         }
 
         /* ── CONTENT ── */
-        .content-area { flex: 1; overflow-y: auto; padding: 1.25rem; background: var(--bg); }
+        .content-area { overflow-y: auto; padding: 1.25rem; background: var(--bg); max-width: 900px; margin: 0 auto; }
+
+        #detailView .content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.25rem;
+            background: var(--bg);
+            max-width: 100%;
+        }
+
+        #detailView .content-area > * {
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
 
         /* ── ORDER HEADER CARD ── */
         .order-hero {
@@ -834,42 +906,17 @@
             .stat-chip.outstanding .stat-chip-count { font-size: 0.82rem; }
             .stat-chip-label { font-size: 0.55rem; }
 
-            /* Layout: stack sidebar + content, show only one at a time */
-            .main-container {
-                flex-direction: column;
+            /* Layout: new iOS-style list/detail views */
+            #listView {
                 height: calc(100vh - 52px - 44px);
             }
-            .sidebar {
-                width: 100%;
-                min-width: 0;
-                border-right: none;
-                border-bottom: 1px solid var(--border);
-                max-height: 100%;
-                flex: 1;
+            #detailView {
+                height: calc(100vh - 52px - 44px);
             }
-            .content-area {
-                flex: 1;
-                padding: 0.75rem;
-            }
-
-            /* Mobile view switching: list vs detail */
-            .main-container[data-view="detail"] .sidebar  { display: none; }
-            .main-container[data-view="list"]   .content-area { display: none; }
-
-            /* Mobile back button */
-            .mobile-back-btn {
-                display: flex !important;
-                align-items: center;
-                gap: 0.4rem;
-                background: none;
-                border: none;
-                color: var(--cyan);
-                font-size: 0.9rem;
-                font-weight: 600;
-                cursor: pointer;
-                padding: 0.5rem 0;
-                margin-bottom: 0.75rem;
-            }
+            .order-grid { grid-template-columns: 1fr; }
+            .order-grid-wrap { padding: 0.75rem 0.75rem 2rem; }
+            .list-toolbar { padding: 0.5rem 0.75rem 0.4rem; }
+            #detailView .content-area { padding: 0.75rem; }
 
             /* Order hero: stack vertically */
             .order-hero {
@@ -936,7 +983,6 @@
            TABLET / iPAD  (769px – 1024px)
         ══════════════════════════════════════ */
         @media (min-width: 769px) and (max-width: 1024px) {
-            .sidebar { width: 240px; min-width: 240px; }
             .detail-grid { grid-template-columns: 1fr; }
             .detail-grid-wide { grid-column: 1; }
             .data-grid-3 { grid-template-columns: 1fr 1fr; }
@@ -954,14 +1000,10 @@
             .live-totals { grid-template-columns: 1fr; }
         }
 
-        /* Desktop: hide back button */
-        .mobile-back-btn { display: none; }
-
         @media print {
-            #loginScreen, .app-header, .sidebar, .action-bar, .stats-bar { display: none; }
-            .main-container { height: auto; flex-direction: row; }
-            .content-area { padding: 0; display: block !important; }
-            .sidebar { display: none !important; }
+            #loginScreen, .app-header, #listView, .detail-topbar, .action-bar, .stats-bar { display: none; }
+            #detailView { height: auto; display: block !important; }
+            .content-area { padding: 0; display: block !important; max-width: 100%; }
         }
 
         /* ── NOTES ── */
@@ -1137,13 +1179,13 @@
         <div class="stat-chip outstanding"><span class="stat-chip-count" id="st-outstanding">—</span><span class="stat-chip-label">Outstanding Balance</span></div>
     </div>
 
-    <div class="main-container" id="mainContainer" data-view="list">
-        <div class="sidebar">
-            <div class="search-box">
-                <input type="text" id="searchInput" placeholder="Search orders..." oninput="filterOrders()">
+    <div id="listView">
+        <!-- search + filters bar -->
+        <div class="list-toolbar">
+            <div class="list-search-wrap">
+                <input type="text" id="searchInput" placeholder="Search orders…" oninput="filterOrders()">
             </div>
-            
-            <div class="filter-tabs">
+            <div class="filter-tabs" id="filterTabsBar">
                 <button class="filter-tab active" data-filter="all" onclick="setFilter('all')">All</button>
                 <button class="filter-tab" data-filter="Enquiry" onclick="setFilter('Enquiry')">Enquiry</button>
                 <button class="filter-tab" data-filter="Quoted" onclick="setFilter('Quoted')">Quoted</button>
@@ -1153,12 +1195,19 @@
                 <button class="filter-tab" data-filter="Ready" onclick="setFilter('Ready')">Ready</button>
                 <button class="filter-tab" data-filter="Installed" onclick="setFilter('Installed')">Installed</button>
             </div>
-
-            <ul class="order-list" id="orderList">
-                <li class="loading">Loading orders...</li>
+        </div>
+        <!-- card grid -->
+        <div class="order-grid-wrap">
+            <ul class="order-grid" id="orderList">
+                <li class="loading">Loading orders…</li>
             </ul>
         </div>
+    </div>
 
+    <div id="detailView" style="display:none;">
+        <div class="detail-topbar">
+            <button class="back-btn" onclick="showListView()">← All Orders</button>
+        </div>
         <div class="content-area" id="contentArea">
             <div class="empty-state">
                 <div class="empty-state-icon">📋</div>
@@ -1647,19 +1696,23 @@
             });
         }
 
-        // ── Mobile view switching ──
+        // ── iOS-style list / detail navigation ──
+        function showListView() {
+            document.getElementById('listView').style.display = 'flex';
+            document.getElementById('detailView').style.display = 'none';
+            currentOrder = null;
+            document.querySelectorAll('.order-item').forEach(i => i.classList.remove('active'));
+        }
+
+        function showDetailView() {
+            document.getElementById('listView').style.display = 'none';
+            document.getElementById('detailView').style.display = 'flex';
+        }
+
+        // Legacy shims (keep any old callers happy)
         function isMobile() { return window.innerWidth <= 768; }
-
-        function showMobileDetail() {
-            if (isMobile()) {
-                document.getElementById('mainContainer').setAttribute('data-view', 'detail');
-                window.scrollTo(0, 0);
-            }
-        }
-
-        function backToList() {
-            document.getElementById('mainContainer').setAttribute('data-view', 'list');
-        }
+        function showMobileDetail() { showDetailView(); }
+        function backToList() { showListView(); }
 
         // Select order
         function selectOrder(orderId) {
@@ -1667,7 +1720,7 @@
             if (!currentOrder) return;
             renderOrderList();
             renderOrderDetails();
-            showMobileDetail();
+            showDetailView();
         }
 
         // Select order by array index (fallback)
@@ -1676,7 +1729,7 @@
             if (!currentOrder) return;
             renderOrderList();
             renderOrderDetails();
-            showMobileDetail();
+            showDetailView();
         }
 
         // Render order details
