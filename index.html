@@ -332,7 +332,6 @@
             position: relative;
         }
         .order-item:hover { background: var(--bg); }
-        .order-item.overdue-item { border-left: 3px solid #dc2626; }
         .order-item.active {
             background: #e8f5e9;
             border-left: 3px solid var(--green);
@@ -1555,36 +1554,54 @@
                 const isOverdue = !isInstalled && daysSinceCreated > 120;
 
                 // Colour: green <30d, amber 30-90d, orange 90-120d, red 120d+
-                const daysColor = daysSince === null ? '#9ca3af'
-                    : isInstalled         ? '#9ca3af'
+                const daysColor = isInstalled ? '#9ca3af'
+                    : daysSince === null   ? '#9ca3af'
                     : daysSince <= 30      ? '#16a34a'
                     : daysSince <= 90      ? '#d97706'
                     : daysSince <= 120     ? '#f97316'
                     : '#dc2626';
 
-                const daysLabel = daysSince === null ? ''
-                    : daysSince === 0 ? 'Today'
-                    : daysSince === 1 ? '1 day'
-                    : `${daysSince} days`;
+                const daysBg = isInstalled ? 'rgba(0,0,0,0.06)'
+                    : daysSince === null   ? 'rgba(0,0,0,0.06)'
+                    : daysSince <= 30      ? '#dcfce7'
+                    : daysSince <= 90      ? '#fef9c3'
+                    : daysSince <= 120     ? '#ffedd5'
+                    : '#fee2e2';
 
-                const daysIcon = isOverdue ? '🚨' : daysSince !== null && daysSince > 90 ? '⚠️' : '🕐';
+                const daysLabel = daysSince === null ? '—'
+                    : daysSince === 0 ? 'today'
+                    : `${daysSince}d`;
 
-                const daysRow = daysSince !== null ? `
-                    <div style="display:flex;align-items:center;gap:4px;margin-top:3px;font-size:0.72rem;font-weight:600;color:${daysColor};">
-                        ${daysIcon} ${daysLabel} — last movement
-                    </div>` : '';
+                const borderColor = isInstalled ? 'transparent'
+                    : daysSince === null   ? 'transparent'
+                    : daysSince <= 30      ? '#86efac'
+                    : daysSince <= 90      ? '#fde047'
+                    : daysSince <= 120     ? '#fdba74'
+                    : '#fca5a5';
+
+                const daysBadge = `<span style="
+                    display:inline-flex;align-items:center;
+                    background:${daysBg};color:${daysColor};
+                    font-size:0.68rem;font-weight:700;
+                    padding:1px 6px;border-radius:999px;
+                    border:1px solid ${borderColor};
+                    white-space:nowrap;margin-left:4px;
+                " title="Days since last movement">${daysLabel}</span>`;
 
                 return `
-                    <li class="order-item ${currentOrder?.orderId === order.orderId ? 'active' : ''} ${isOverdue ? 'overdue-item' : ''}"
+                    <li class="order-item ${currentOrder?.orderId === order.orderId ? 'active' : ''}"
+                        style="border-left:3px solid ${borderColor};"
                         data-order-id="${safeOrderId}"
                         data-order-index="${index}">
                         <div class="order-item-top">
                             <div class="order-name">${order.deceasedName || 'Unknown'}</div>
-                            <span class="order-status-badge" style="background:${STATUS_COLORS[status] || '#94a3b8'}">${status}</span>
+                            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+                                ${daysBadge}
+                                <span class="order-status-badge" style="background:${STATUS_COLORS[status] || '#94a3b8'}">${status}</span>
+                            </div>
                         </div>
                         <div class="order-customer">${order.customerName || ''} &middot; ${order.orderRef || 'No Ref'}</div>
                         ${paymentRow}
-                        ${daysRow}
                     </li>
                 `;
             }).join('');
