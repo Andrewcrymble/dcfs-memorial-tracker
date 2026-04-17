@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Memorial Proof — David Crymble &amp; Sons</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -502,6 +503,11 @@
         style="display:none;width:100%;padding:0.9rem;background:#635bff;color:white;border:none;border-radius:12px;font-size:0.95rem;font-weight:700;font-family:inherit;cursor:pointer;text-align:center;text-decoration:none;box-sizing:border-box;">
         💳 Pay 50% Deposit Now
       </a>
+      <!-- QR code for payment link -->
+      <div id="payQrWrap" style="display:none;text-align:center;">
+        <p style="font-size:0.72rem;color:var(--sub);margin-bottom:0.5rem;">Or scan to pay on your phone</p>
+        <div id="payQrCode" style="display:inline-block;padding:10px;background:white;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.1);"></div>
+      </div>
       <p style="font-size:0.72rem;color:var(--sub);text-align:center;line-height:1.4;">Secure payment powered by Stripe · Card, Apple Pay &amp; Google Pay accepted</p>
     </div>
   </div>
@@ -695,6 +701,18 @@ function renderProof(p) {
       const payBtn = document.getElementById('stripePayBtn');
       payBtn.href = p.stripePaymentUrl;
       payBtn.style.display = 'block';
+      // Generate QR code
+      const qrWrap = document.getElementById('payQrWrap');
+      const qrDiv  = document.getElementById('payQrCode');
+      qrWrap.style.display = 'block';
+      new QRCode(qrDiv, {
+        text:         p.stripePaymentUrl,
+        width:        160,
+        height:       160,
+        colorDark:    '#635bff',
+        colorLight:   '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
     }
   }
 
