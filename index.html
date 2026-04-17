@@ -332,6 +332,7 @@
             position: relative;
         }
         .order-item:hover { background: var(--bg); }
+        .order-item.overdue-item { border-left: 3px solid #dc2626; }
         .order-item.active {
             background: #e8f5e9;
             border-left: 3px solid var(--green);
@@ -1541,8 +1542,17 @@
                         <span class="pay-bal ${balance <= 0 ? 'clear' : ''}">${balance <= 0 ? '✓ Clear' : fmt(balance) + ' due'}</span>
                     </div>` : '';
 
+                // 120-day overdue flag — non-Installed orders older than 120 days
+                const isInstalled = status === 'Installed';
+                const orderCreated = order.orderDate || order.createdAt || '';
+                const daysSinceCreated = orderCreated ? Math.floor((Date.now() - new Date(orderCreated)) / 86400000) : 0;
+                const isOverdue = !isInstalled && daysSinceCreated > 120;
+                const overdueFlag = isOverdue ? `<div style="display:flex;align-items:center;gap:4px;margin-top:3px;font-size:0.72rem;font-weight:700;color:#dc2626;">
+                    🚨 ${daysSinceCreated} days since quote
+                </div>` : '';
+
                 return `
-                    <li class="order-item ${currentOrder?.orderId === order.orderId ? 'active' : ''}"
+                    <li class="order-item ${currentOrder?.orderId === order.orderId ? 'active' : ''} ${isOverdue ? 'overdue-item' : ''}"
                         data-order-id="${safeOrderId}"
                         data-order-index="${index}">
                         <div class="order-item-top">
@@ -1551,6 +1561,7 @@
                         </div>
                         <div class="order-customer">${order.customerName || ''} &middot; ${order.orderRef || 'No Ref'}</div>
                         ${paymentRow}
+                        ${overdueFlag}
                     </li>
                 `;
             }).join('');
