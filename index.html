@@ -3923,13 +3923,44 @@
         }
 
         function selectStone(type) {
-            // Store for inscription designer
             window._selectedStoneType = type;
-            // Update the type dropdown
             const sel = document.getElementById('f_hsType');
             if (sel) {
-                sel.value = type;
-                onHsTypeChange(); // rebuilds size dropdown + syncs highlight
+                const opts = Array.from(sel.options);
+                const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const typeNorm = norm(type);
+
+                // 1. Exact match
+                let match = opts.find(o => o.value === type);
+                // 2. Case-insensitive exact
+                if (!match) match = opts.find(o => o.value.toLowerCase() === type.toLowerCase());
+                // 3. Normalised (strip non-alphanumeric)
+                if (!match) match = opts.find(o => norm(o.value) === typeNorm);
+                // 4. For '1/2 Densmore' / 'Half Densmore' etc — match on base word + half/1/2
+                if (!match) {
+                    const isHalf = /half|½|1\/2|1.2/i.test(type);
+                    const baseWord = type.toLowerCase().replace(/half|½|1\/2|1.2|densmore|ogee|murphy|g3|\s/gi,'').trim();
+                    match = opts.find(o => {
+                        if (!o.value) return false;
+                        const oNorm = o.value.toLowerCase();
+                        const oIsHalf = /half|½|1\/2|1.2/i.test(oNorm);
+                        // Both mention densmore (or the stone name) and share half/full status
+                        return norm(o.value).includes(norm(type.replace(/1\/2|half|½/gi,'').trim())) && oIsHalf === isHalf;
+                    });
+                }
+                // 5. Partial — every significant word in type appears in option
+                if (!match) {
+                    const words = type.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 1);
+                    match = opts.find(o => words.every(w => o.value.toLowerCase().includes(w)));
+                }
+
+                if (match) {
+                    sel.value = match.value;
+                    window._selectedStoneType = match.value;
+                    onHsTypeChange();
+                } else {
+                    console.warn('Stone picker: no price book match found for type:', type, '— available:', opts.map(o=>o.value));
+                }
             }
             // Highlight selected card
             document.querySelectorAll('.stone-card').forEach(c => {
@@ -4008,12 +4039,16 @@
             // Colour adjustment
             const hsColour = val('f_hsColour');
             if (hsColour && priceBook.Headstone_Colours) {
+                const cNorm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
                 const col = priceBook.Headstone_Colours.find(c =>
                     c.name === hsColour || c.colour === hsColour ||
-                    (hsColour === 'Visac Blue' && (c.name || '').toLowerCase().includes('bahamas')) ||
-                    (hsColour === 'Bahamas Blue' && (c.name || '').toLowerCase().includes('visac'))
+                    cNorm(c.name) === cNorm(hsColour) ||
+                    cNorm(c.colour) === cNorm(hsColour)
                 );
-                if (col) { hsCost += parseFloat(col.costAdj || col.cost_adj || 0); hsSell += parseFloat(col.sellAdj || col.sell_adj || 0); }
+                if (col) {
+                    hsCost += parseFloat(col.costAdj || col.cost_adj || col.cost || 0);
+                    hsSell += parseFloat(col.sellAdj || col.sell_adj || col.sell || 0);
+                }
             }
             showPI('pi_headstone', hsCost, hsSell);
             totalCost += hsCost; totalSell += hsSell;
@@ -4551,15 +4586,15 @@
     if (order.hsColour && order.hsColour !== 'Black') {
         const colourBook = priceBook.Headstone_Colours || priceBook.Colours || [];
         const lookupName = order.hsColour;
+        const cNorm2 = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
         const colour = colourBook.find(c =>
             c.name === lookupName || c.colour === lookupName ||
-            // Handle Visac Blue ↔ Bahamas Blue alias
-            (lookupName === 'Visac Blue' && (c.name || '').toLowerCase().includes('bahamas')) ||
-            (lookupName === 'Bahamas Blue' && (c.name || '').toLowerCase().includes('visac'))
+            cNorm2(c.name) === cNorm2(lookupName) ||
+            cNorm2(c.colour) === cNorm2(lookupName)
         );
         if (colour) {
-            cost += parseFloat(colour.costAdj || colour.cost_adj) || 0;
-            sell += parseFloat(colour.sellAdj || colour.sell_adj) || 0;
+            cost += parseFloat(colour.costAdj || colour.cost_adj || colour.cost) || 0;
+            sell += parseFloat(colour.sellAdj || colour.sell_adj || colour.sell) || 0;
         }
     }
     return { cost, sell, margin: sell - cost };
