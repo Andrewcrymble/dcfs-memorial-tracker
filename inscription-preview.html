@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Headstone Inscription Preview</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    background: #f2f2f7;
+    color: #1c1c1e;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    background: #4a7c2f;
+    color: white;
+    padding: 0 1.5rem;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.2);
+  }
+  header h1 { font-size: 1rem; font-weight: 700; }
+  header span { font-size: 0.78rem; opacity: 0.75; }
+
+  main {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 1rem;
+    padding: 1.25rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    align-items: start;
+  }
+
+  /* ── CONTROLS ── */
+  .controls { display: flex; flex-direction: column; gap: 0.75rem; }
+
+  .card {
+    background: white;
+    border-radius: 13px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 0.65rem 1rem;
+    border-bottom: 0.5px solid rgba(60,60,67,0.13);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8e8e93;
+  }
+  .card-body { padding: 0.9rem 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+
+  label { font-size: 0.78rem; font-weight: 600; color: #3c3c43; display: block; margin-bottom: 0.25rem; }
+  textarea {
+    width: 100%;
+    min-height: 130px;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid rgba(60,60,67,0.2);
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: vertical;
+    line-height: 1.6;
+    color: #1c1c1e;
+    background: #f9f9f9;
+    outline: none;
+  }
+  textarea:focus { border-color: #4a7c2f; background: white; }
+
+  .row { display: flex; gap: 0.6rem; }
+  .row .group { flex: 1; }
+
+  select, input[type=text], input[type=number] {
+    width: 100%;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid rgba(60,60,67,0.2);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    background: #f9f9f9;
+    color: #1c1c1e;
+    outline: none;
+  }
+  select:focus, input:focus { border-color: #4a7c2f; background: white; }
+
+  .slider-row { display: flex; align-items: center; gap: 0.6rem; }
+  .slider-row input[type=range] { flex: 1; accent-color: #4a7c2f; }
+  .slider-val {
+    font-size: 0.78rem; font-weight: 700; color: #4a7c2f;
+    min-width: 32px; text-align: right;
+  }
+
+  .colour-swatches { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .swatch {
+    width: 32px; height: 32px; border-radius: 8px;
+    border: 2px solid transparent;
+    cursor: pointer; transition: transform 0.12s;
+  }
+  .swatch:hover { transform: scale(1.1); }
+  .swatch.active { border-color: #1c1c1e; transform: scale(1.12); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+    padding: 0.55rem 1.1rem;
+    border: none; border-radius: 980px;
+    font-size: 0.88rem; font-weight: 700;
+    cursor: pointer; transition: all 0.15s;
+    font-family: inherit; width: 100%;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-green { background: #4a7c2f; color: white; }
+  .btn-green:hover { background: #3d6b26; }
+  .btn-blue { background: #007aff; color: white; }
+  .btn-blue:hover { background: #0063d1; }
+  .btn-outline { background: transparent; color: #4a7c2f; border: 1.5px solid #4a7c2f; }
+  .btn-outline:hover { background: #f0f7e6; }
+
+  /* position controls */
+  .pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+
+  /* ── PREVIEW ── */
+  .preview-wrap {
+    background: white;
+    border-radius: 13px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+  .preview-wrap h2 { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #8e8e93; align-self: flex-start; }
+
+  canvas {
+    max-width: 100%;
+    border-radius: 8px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+    cursor: crosshair;
+  }
+
+  .download-row { display: flex; gap: 0.75rem; width: 100%; }
+  .download-row .btn { flex: 1; }
+
+  .hint {
+    font-size: 0.72rem; color: #8e8e93; text-align: center;
+    padding: 0.3rem 0;
+  }
+
+  @media (max-width: 800px) {
+    main { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Headstone Inscription Preview</h1>
+  </div>
+  <span>David Crymble &amp; Sons — Proof of Concept</span>
+</header>
+
+<main>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+
+    <div class="card">
+      <div class="card-header">📝 Inscription Text</div>
+      <div class="card-body">
+        <div>
+          <label>Inscription (use new lines for each line)</label>
+          <textarea id="inscriptionText" oninput="render()" placeholder="In Loving Memory of
+JOHN SMITH
+Beloved Husband & Father
+1945 — 2024
+Rest In Peace">In Loving Memory of
+JOHN SMITH
+Beloved Husband & Father
+1945 — 2024
+Rest In Peace</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">🎨 Font & Style</div>
+      <div class="card-body">
+
+        <div class="row">
+          <div class="group">
+            <label>Font</label>
+            <select id="fontFamily" onchange="render()">
+              <option value="Georgia, serif">Georgia</option>
+              <option value="'Times New Roman', serif" selected>Times New Roman</option>
+              <option value="'Palatino Linotype', serif">Palatino</option>
+              <option value="'Garamond', serif">Garamond</option>
+              <option value="'Trajan Pro', 'Times New Roman', serif">Trajan</option>
+              <option value="'Book Antiqua', serif">Book Antiqua</option>
+              <option value="Verdana, sans-serif">Verdana</option>
+              <option value="Arial, sans-serif">Arial</option>
+            </select>
+          </div>
+          <div class="group">
+            <label>Style</label>
+            <select id="fontStyle" onchange="render()">
+              <option value="normal">Normal</option>
+              <option value="italic">Italic</option>
+              <option value="bold">Bold</option>
+              <option value="bold italic">Bold Italic</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label>Font Size <span id="fontSizeVal" style="color:#4a7c2f;font-weight:700;"></span></label>
+          <div class="slider-row">
+            <input type="range" id="fontSize" min="10" max="60" value="22" oninput="updateVal('fontSizeVal', this.value, 'px'); render()">
+            <span class="slider-val" id="fontSizeVal2">22px</span>
+          </div>
+        </div>
+
+        <div>
+          <label>Line Spacing</label>
+          <div class="slider-row">
+            <input type="range" id="lineSpacing" min="1" max="3" step="0.05" value="1.7" oninput="updateVal('lineSpacingVal', parseFloat(this.value).toFixed(2), '×'); render()">
+            <span class="slider-val" id="lineSpacingVal">1.70×</span>
+          </div>
+        </div>
+
+        <div>
+          <label>Letter Spacing</label>
+          <div class="slider-row">
+            <input type="range" id="letterSpacing" min="-2" max="12" step="0.5" value="2" oninput="updateVal('letterSpacingVal', this.value, 'px'); render()">
+            <span class="slider-val" id="letterSpacingVal">2px</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">🎨 Colour</div>
+      <div class="card-body">
+        <div class="colour-swatches" id="swatches">
+          <div class="swatch active" style="background:#c8a84b;" data-color="#c8a84b" onclick="setColour(this)" title="Gold"></div>
+          <div class="swatch" style="background:#e8d5a3;" data-color="#e8d5a3" onclick="setColour(this)" title="Light Gold"></div>
+          <div class="swatch" style="background:#e0e0e0;" data-color="#e0e0e0" onclick="setColour(this)" title="Silver"></div>
+          <div class="swatch" style="background:#ffffff;" data-color="#ffffff" onclick="setColour(this)" title="White" style="border:1px solid #ddd;"></div>
+          <div class="swatch" style="background:#d4af37;" data-color="#d4af37" onclick="setColour(this)" title="Deep Gold"></div>
+          <div class="swatch" style="background:#1c1c1e;" data-color="#1c1c1e" onclick="setColour(this)" title="Black"></div>
+        </div>
+        <div>
+          <label>Custom Colour</label>
+          <input type="color" id="customColour" value="#c8a84b" oninput="setCustomColour(this.value)" style="width:100%;height:36px;border-radius:8px;border:1px solid rgba(60,60,67,0.2);cursor:pointer;padding:2px;">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">📐 Position</div>
+      <div class="card-body">
+        <div>
+          <label>Vertical Position (% from top)</label>
+          <div class="slider-row">
+            <input type="range" id="posY" min="10" max="90" value="42" oninput="updateVal('posYVal', this.value, '%'); render()">
+            <span class="slider-val" id="posYVal">42%</span>
+          </div>
+        </div>
+        <div>
+          <label>Horizontal Centre (%)</label>
+          <div class="slider-row">
+            <input type="range" id="posX" min="20" max="80" value="50" oninput="updateVal('posXVal', this.value, '%'); render()">
+            <span class="slider-val" id="posXVal">50%</span>
+          </div>
+        </div>
+        <div>
+          <label>Max Text Width (%)</label>
+          <div class="slider-row">
+            <input type="range" id="maxWidth" min="20" max="90" value="52" oninput="updateVal('maxWidthVal', this.value, '%'); render()">
+            <span class="slider-val" id="maxWidthVal">52%</span>
+          </div>
+        </div>
+        <p class="hint">💡 Click on the canvas to set the centre point</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">✨ Effects</div>
+      <div class="card-body">
+        <div>
+          <label>Text Shadow / Depth</label>
+          <div class="slider-row">
+            <input type="range" id="shadowBlur" min="0" max="12" step="0.5" value="3" oninput="updateVal('shadowBlurVal', this.value, 'px'); render()">
+            <span class="slider-val" id="shadowBlurVal">3px</span>
+          </div>
+        </div>
+        <div>
+          <label>Opacity</label>
+          <div class="slider-row">
+            <input type="range" id="opacity" min="0.3" max="1" step="0.01" value="0.95" oninput="updateVal('opacityVal', Math.round(this.value*100), '%'); render()">
+            <span class="slider-val" id="opacityVal">95%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PREVIEW -->
+  <div class="preview-wrap">
+    <h2>Live Preview</h2>
+    <canvas id="previewCanvas"></canvas>
+    <p class="hint" id="canvasHint">Loading headstone image…</p>
+    <div class="download-row">
+      <button class="btn btn-green" onclick="downloadPNG()">⬇ Download PNG</button>
+      <button class="btn btn-outline" onclick="resetDefaults()">↺ Reset</button>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── STATE ──
+let hsImage = null;
+let currentColour = '#c8a84b';
+
+// ── LOAD IMAGE ──
+const img = new Image();
+img.onload = function() {
+    hsImage = img;
+    document.getElementById('canvasHint').textContent = '✅ Click canvas to reposition text';
+    setupCanvas();
+    render();
+};
+img.onerror = function() {
+    document.getElementById('canvasHint').textContent = '⚠ Could not load headstone.png — make sure it\'s in the same folder';
+};
+img.src = 'headstone.png';
+
+function setupCanvas() {
+    const canvas = document.getElementById('previewCanvas');
+    // Scale to max 560px wide
+    const maxW = 560;
+    const scale = Math.min(maxW / hsImage.width, 1);
+    canvas.width  = hsImage.width  * scale;
+    canvas.height = hsImage.height * scale;
+
+    // Click to set position
+    canvas.addEventListener('click', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width  / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const cx = (e.clientX - rect.left) * scaleX;
+        const cy = (e.clientY - rect.top)  * scaleY;
+        const pctX = Math.round((cx / canvas.width)  * 100);
+        const pctY = Math.round((cy / canvas.height) * 100);
+        document.getElementById('posX').value = pctX;
+        document.getElementById('posY').value = pctY;
+        document.getElementById('posXVal').textContent = pctX + '%';
+        document.getElementById('posYVal').textContent = pctY + '%';
+        render();
+    });
+}
+
+// ── RENDER ──
+function render() {
+    if (!hsImage) return;
+    const canvas = document.getElementById('previewCanvas');
+    const ctx    = canvas.getContext('2d');
+
+    // Draw headstone
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(hsImage, 0, 0, canvas.width, canvas.height);
+
+    // Get settings
+    const text         = document.getElementById('inscriptionText').value || '';
+    const fontSize     = parseInt(document.getElementById('fontSize').value);
+    const fontFamily   = document.getElementById('fontFamily').value;
+    const fontStyle    = document.getElementById('fontStyle').value;
+    const lineSpacing  = parseFloat(document.getElementById('lineSpacing').value);
+    const letterSp     = parseFloat(document.getElementById('letterSpacing').value);
+    const posXpct      = parseInt(document.getElementById('posX').value) / 100;
+    const posYpct      = parseInt(document.getElementById('posY').value) / 100;
+    const maxWidthPct  = parseInt(document.getElementById('maxWidth').value) / 100;
+    const shadowBlur   = parseFloat(document.getElementById('shadowBlur').value);
+    const opacity      = parseFloat(document.getElementById('opacity').value);
+
+    const cx       = canvas.width  * posXpct;
+    const startY   = canvas.height * posYpct;
+    const maxW     = canvas.width  * maxWidthPct;
+    const lineH    = fontSize * lineSpacing;
+
+    // Scale font to canvas
+    const scale = canvas.width / 560;
+    const scaledSize = Math.round(fontSize * scale);
+    const scaledLineH = scaledSize * lineSpacing;
+
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.fillStyle   = currentColour;
+    ctx.textAlign   = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font        = `${fontStyle} ${scaledSize}px ${fontFamily}`;
+
+    // Shadow for depth / engraved feel
+    if (shadowBlur > 0) {
+        ctx.shadowColor   = 'rgba(0,0,0,0.6)';
+        ctx.shadowBlur    = shadowBlur * scale;
+        ctx.shadowOffsetX = 1 * scale;
+        ctx.shadowOffsetY = 1 * scale;
+    }
+
+    // Split into lines and draw
+    const lines = text.split('\n');
+    const totalH = lines.length * scaledLineH;
+    const topY = startY - totalH / 2;
+
+    lines.forEach((line, i) => {
+        const y = topY + i * scaledLineH + scaledLineH / 2;
+        drawTextWithSpacing(ctx, line.trim(), cx, y, maxW * scale, letterSp * scale);
+    });
+
+    ctx.restore();
+
+    // Update slider display vals
+    document.getElementById('fontSizeVal2').textContent = fontSize + 'px';
+}
+
+// Draw text with custom letter spacing (canvas doesn't natively support letterSpacing well cross-browser)
+function drawTextWithSpacing(ctx, text, cx, y, maxWidth, spacing) {
+    if (!text) return;
+    if (spacing === 0) {
+        ctx.fillText(text, cx, y);
+        return;
+    }
+
+    // Measure total width with spacing
+    let totalW = 0;
+    for (let i = 0; i < text.length; i++) {
+        totalW += ctx.measureText(text[i]).width + (i < text.length - 1 ? spacing : 0);
+    }
+
+    // Scale down if too wide
+    let scaleX = 1;
+    if (totalW > maxWidth) scaleX = maxWidth / totalW;
+
+    let x = cx - (totalW * scaleX) / 2;
+    for (let i = 0; i < text.length; i++) {
+        const charW = ctx.measureText(text[i]).width * scaleX;
+        ctx.fillText(text[i], x + charW / 2, y);
+        x += charW + spacing * scaleX;
+    }
+}
+
+// ── COLOUR ──
+function setColour(el) {
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+    currentColour = el.dataset.color;
+    document.getElementById('customColour').value = currentColour;
+    render();
+}
+
+function setCustomColour(val) {
+    currentColour = val;
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    render();
+}
+
+// ── HELPERS ──
+function updateVal(id, val, suffix) {
+    document.getElementById(id).textContent = val + suffix;
+}
+
+function resetDefaults() {
+    document.getElementById('fontSize').value     = 22;
+    document.getElementById('lineSpacing').value  = 1.7;
+    document.getElementById('letterSpacing').value = 2;
+    document.getElementById('posX').value         = 50;
+    document.getElementById('posY').value         = 42;
+    document.getElementById('maxWidth').value     = 52;
+    document.getElementById('shadowBlur').value   = 3;
+    document.getElementById('opacity').value      = 0.95;
+    document.getElementById('fontStyle').value    = 'normal';
+    currentColour = '#c8a84b';
+    document.querySelectorAll('.swatch').forEach(s => {
+        s.classList.toggle('active', s.dataset.color === '#c8a84b');
+    });
+    document.getElementById('fontSizeVal2').textContent  = '22px';
+    document.getElementById('lineSpacingVal').textContent = '1.70×';
+    document.getElementById('letterSpacingVal').textContent = '2px';
+    document.getElementById('posXVal').textContent       = '50%';
+    document.getElementById('posYVal').textContent       = '42%';
+    document.getElementById('maxWidthVal').textContent   = '52%';
+    document.getElementById('shadowBlurVal').textContent = '3px';
+    document.getElementById('opacityVal').textContent    = '95%';
+    render();
+}
+
+// ── DOWNLOAD ──
+function downloadPNG() {
+    const canvas = document.getElementById('previewCanvas');
+    const link = document.createElement('a');
+    link.download = 'headstone-inscription-preview.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+}
+</script>
+
+</body>
+</html>
