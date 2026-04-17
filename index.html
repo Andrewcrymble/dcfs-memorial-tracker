@@ -12,6 +12,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
     <!-- LOGIN — isolated script, immune to app errors -->
     <script>
@@ -1111,6 +1112,174 @@
             transition: all 0.15s;
         }
         .btn-complete-amendment:hover { background: #fff7ed; }
+
+        /* ── BOARD LAYOUT ── */
+        .board-wrap {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 1rem 3rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .board-wrap::-webkit-scrollbar { width: 3px; }
+        .board-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+
+        /* ── PIE CHART CARD ── */
+        .pipeline-chart-card {
+            background: var(--white);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        .pipeline-chart-inner {
+            width: 180px;
+            height: 180px;
+            flex-shrink: 0;
+        }
+        .pipeline-chart-legend {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 0.5rem 1rem;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .legend-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .legend-text { font-size: 0.8rem; color: var(--text); }
+        .legend-text strong { font-weight: 700; }
+        .legend-text span { color: var(--text-muted); font-size: 0.72rem; }
+
+        /* ── BOARD SECTION LABELS ── */
+        .board-section-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: var(--text-muted);
+            padding: 0 0.25rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* ── KANBAN ROWS ── */
+        .kanban-row {
+            display: grid;
+            gap: 0.75rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        .kanban-row-active { grid-template-columns: repeat(4, 1fr); }
+        .kanban-row-leads  { grid-template-columns: repeat(2, 1fr); }
+
+        /* ── KANBAN COLUMN ── */
+        .kanban-col {
+            background: rgba(118,118,128,0.07);
+            border-radius: var(--radius);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            max-height: 480px;
+        }
+        .kanban-row-leads .kanban-col { max-height: 360px; }
+
+        .kanban-col-header {
+            padding: 0.65rem 0.9rem;
+            border-top: 3px solid var(--col-color);
+            background: var(--white);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            box-shadow: 0 1px 0 var(--border);
+        }
+        .kanban-col-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: var(--text);
+        }
+        .kanban-col-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+        .kanban-col-count {
+            font-size: 1rem;
+            font-weight: 800;
+            color: var(--col-color, var(--text));
+            line-height: 1;
+        }
+        .kanban-col-value {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .kanban-cards {
+            list-style: none;
+            overflow-y: auto;
+            flex: 1;
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+        .kanban-cards::-webkit-scrollbar { width: 2px; }
+        .kanban-cards::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 2px; }
+
+        .kanban-empty {
+            text-align: center;
+            padding: 1.5rem 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+        }
+
+        /* ── INSTALLED SUMMARY ── */
+        .installed-summary {
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+            background: var(--white);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 0.75rem 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            opacity: 0.7;
+        }
+        .installed-icon { font-size: 1rem; }
+        .installed-label { font-size: 0.85rem; font-weight: 700; color: var(--text-muted); }
+        .installed-count { font-size: 0.8rem; color: var(--text-muted); flex: 1; }
+        .installed-view-btn {
+            background: none; border: none;
+            color: var(--cyan); font-size: 0.8rem;
+            font-weight: 600; cursor: pointer;
+            font-family: inherit;
+        }
+
+        /* responsive */
+        @media (max-width: 900px) {
+            .kanban-row-active { grid-template-columns: repeat(2, 1fr); }
+            .pipeline-chart-card { flex-direction: column; align-items: flex-start; }
+            .pipeline-chart-inner { width: 140px; height: 140px; margin: 0 auto; }
+        }
+        @media (max-width: 600px) {
+            .kanban-row-active, .kanban-row-leads { grid-template-columns: 1fr; }
+            .kanban-col { max-height: 300px; }
+        }
     </style>
 </head>
 <body>
@@ -1180,7 +1349,7 @@
     </div>
 
     <div id="listView">
-        <!-- search + filters bar -->
+        <!-- toolbar: search + filters -->
         <div class="list-toolbar">
             <div class="list-search-wrap">
                 <input type="text" id="searchInput" placeholder="Search orders…" oninput="filterOrders()">
@@ -1196,11 +1365,107 @@
                 <button class="filter-tab" data-filter="Installed" onclick="setFilter('Installed')">Installed</button>
             </div>
         </div>
-        <!-- card grid -->
-        <div class="order-grid-wrap">
-            <ul class="order-grid" id="orderList">
-                <li class="loading">Loading orders…</li>
-            </ul>
+
+        <!-- main board area -->
+        <div class="board-wrap" id="boardWrap">
+
+            <!-- pie chart card -->
+            <div class="pipeline-chart-card" id="pipelineChartCard">
+                <div class="pipeline-chart-inner">
+                    <canvas id="pipelineChart" width="200" height="200"></canvas>
+                </div>
+                <div class="pipeline-chart-legend" id="pipelineChartLegend"></div>
+            </div>
+
+            <!-- Active pipeline label -->
+            <div class="board-section-label">🔧 Active Pipeline</div>
+
+            <!-- Row 1: Confirmed, In Design, Production, Ready -->
+            <div class="kanban-row kanban-row-active">
+                <div class="kanban-col" id="col-Confirmed" data-status="Confirmed">
+                    <div class="kanban-col-header" style="--col-color:#0097a7">
+                        <span class="kanban-col-title">Confirmed</span>
+                        <div class="kanban-col-meta">
+                            <span class="kanban-col-count" id="col-count-Confirmed">0</span>
+                            <span class="kanban-col-value" id="col-value-Confirmed">£0</span>
+                        </div>
+                    </div>
+                    <ul class="kanban-cards" id="cards-Confirmed"></ul>
+                </div>
+                <div class="kanban-col" id="col-In Design" data-status="In Design">
+                    <div class="kanban-col-header" style="--col-color:#8b5cf6">
+                        <span class="kanban-col-title">In Design</span>
+                        <div class="kanban-col-meta">
+                            <span class="kanban-col-count" id="col-count-In Design">0</span>
+                            <span class="kanban-col-value" id="col-value-In Design">£0</span>
+                        </div>
+                    </div>
+                    <ul class="kanban-cards" id="cards-In Design"></ul>
+                </div>
+                <div class="kanban-col" id="col-Production" data-status="Production">
+                    <div class="kanban-col-header" style="--col-color:#f97316">
+                        <span class="kanban-col-title">Production</span>
+                        <div class="kanban-col-meta">
+                            <span class="kanban-col-count" id="col-count-Production">0</span>
+                            <span class="kanban-col-value" id="col-value-Production">£0</span>
+                        </div>
+                    </div>
+                    <ul class="kanban-cards" id="cards-Production"></ul>
+                </div>
+                <div class="kanban-col" id="col-Ready" data-status="Ready">
+                    <div class="kanban-col-header" style="--col-color:#16a34a">
+                        <span class="kanban-col-title">Ready</span>
+                        <div class="kanban-col-meta">
+                            <span class="kanban-col-count" id="col-count-Ready">0</span>
+                            <span class="kanban-col-value" id="col-value-Ready">£0</span>
+                        </div>
+                    </div>
+                    <ul class="kanban-cards" id="cards-Ready"></ul>
+                </div>
+            </div>
+
+            <!-- Enquiry + Quoted label -->
+            <div class="board-section-label">📋 Leads &amp; Quotes</div>
+
+            <!-- Row 2: Enquiry, Quoted -->
+            <div class="kanban-row kanban-row-leads">
+                <div class="kanban-col" id="col-Enquiry" data-status="Enquiry">
+                    <div class="kanban-col-header" style="--col-color:#94a3b8">
+                        <span class="kanban-col-title">Enquiry</span>
+                        <div class="kanban-col-meta">
+                            <span class="kanban-col-count" id="col-count-Enquiry">0</span>
+                            <span class="kanban-col-value" id="col-value-Enquiry">£0</span>
+                        </div>
+                    </div>
+                    <ul class="kanban-cards" id="cards-Enquiry"></ul>
+                </div>
+                <div class="kanban-col" id="col-Quoted" data-status="Quoted">
+                    <div class="kanban-col-header" style="--col-color:#f59e0b">
+                        <span class="kanban-col-title">Quoted</span>
+                        <div class="kanban-col-meta">
+                            <span class="kanban-col-count" id="col-count-Quoted">0</span>
+                            <span class="kanban-col-value" id="col-value-Quoted">£0</span>
+                        </div>
+                    </div>
+                    <ul class="kanban-cards" id="cards-Quoted"></ul>
+                </div>
+            </div>
+
+            <!-- Installed summary row (no cards, just count) -->
+            <div class="installed-summary" id="installedSummary">
+                <span class="installed-icon">✅</span>
+                <span class="installed-label">Installed</span>
+                <span class="installed-count" id="installed-count">0 jobs completed</span>
+                <button class="installed-view-btn" onclick="setFilter('Installed'); renderKanbanBoard()">View all →</button>
+            </div>
+
+            <!-- hidden: full order-grid used by filter tabs when a specific filter is set -->
+            <div class="order-grid-wrap" id="orderGridWrap" style="display:none;">
+                <ul class="order-grid" id="orderList">
+                    <li class="loading">Loading orders…</li>
+                </ul>
+            </div>
+
         </div>
     </div>
 
@@ -1553,7 +1818,7 @@
         // Filter orders
         function setFilter(status) {
             currentFilter = status;
-            
+
             // Update active tab
             document.querySelectorAll('.filter-tab').forEach(tab => {
                 tab.classList.remove('active');
@@ -1561,8 +1826,9 @@
                     tab.classList.add('active');
                 }
             });
-            
+
             filterOrders();
+            try { if (document.getElementById('boardWrap')) renderKanbanBoard(); } catch(e) { console.warn('Kanban render error:', e); }
         }
 
         // Filter and search orders
@@ -1693,6 +1959,167 @@
                         selectOrderByIndex(orderIndex);
                     }
                 });
+            });
+
+            // Also refresh kanban board if visible
+            try { if (document.getElementById('boardWrap')) renderKanbanBoard(); } catch(e) { console.warn('Kanban render error:', e); }
+        }
+
+        function renderKanbanBoard() {
+            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed'];
+            const colors   = {
+                'Enquiry':'#94a3b8','Quoted':'#f59e0b','Confirmed':'#0097a7',
+                'In Design':'#8b5cf6','Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e'
+            };
+            const fmt = n => '£' + (n||0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+
+            // Filter by search term
+            const searchTerm = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+            const filtered = allOrders.filter(o => {
+                if (!searchTerm) return true;
+                return (o.deceasedName||'').toLowerCase().includes(searchTerm)
+                    || (o.customerName||'').toLowerCase().includes(searchTerm)
+                    || (o.orderRef||'').toLowerCase().includes(searchTerm)
+                    || (o.cemetery||'').toLowerCase().includes(searchTerm);
+            });
+
+            // Group by status
+            const groups = {};
+            statuses.forEach(s => groups[s] = []);
+            filtered.forEach(o => {
+                const s = o.status || 'Enquiry';
+                if (groups[s]) groups[s].push(o);
+            });
+
+            // Render each column
+            statuses.forEach(status => {
+                const listEl = document.getElementById('cards-' + status);
+                if (!listEl) return;
+                const orders = groups[status] || [];
+                const total = orders.reduce((sum,o) => sum + (parseFloat(o.totalSellPrice)||0), 0);
+
+                // update header counts/values
+                const countEl = document.getElementById('col-count-' + status);
+                const valueEl = document.getElementById('col-value-' + status);
+                if (countEl) countEl.textContent = orders.length;
+                if (valueEl) valueEl.textContent = fmt(total);
+
+                if (status === 'Installed') {
+                    const installedCount = document.getElementById('installed-count');
+                    if (installedCount) installedCount.textContent = orders.length + ' jobs completed';
+                    return;
+                }
+
+                if (orders.length === 0) {
+                    listEl.innerHTML = '<li class="kanban-empty">No orders</li>';
+                    return;
+                }
+
+                listEl.innerHTML = orders.map(order => {
+                    const safeId = String(order.orderId||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+                    const orderTotal = parseFloat(order.totalSellPrice)||0;
+                    const paid  = parseFloat(order.depositPaid)||0;
+                    const bal   = Math.max(0, orderTotal - paid);
+
+                    // days badge
+                    const logEntries = order.log||[];
+                    const lastLogTs = logEntries.length > 0
+                        ? logEntries.reduce((l,e)=>e.ts>l?e.ts:l, logEntries[0].ts) : null;
+                    const lastMovement = lastLogTs || order.orderDate || '';
+                    const daysSince = lastMovement ? Math.floor((Date.now()-new Date(lastMovement))/86400000) : null;
+                    const daysColor = daysSince===null?'#9ca3af':daysSince<=30?'#16a34a':daysSince<=90?'#d97706':daysSince<=120?'#f97316':'#dc2626';
+                    const daysBg    = daysSince===null?'rgba(0,0,0,0.06)':daysSince<=30?'#dcfce7':daysSince<=90?'#fef9c3':daysSince<=120?'#ffedd5':'#fee2e2';
+                    const borderColor = daysSince===null?'transparent':daysSince<=30?'#86efac':daysSince<=90?'#fde047':daysSince<=120?'#fdba74':'#fca5a5';
+                    const daysLabel = daysSince===null?'—':daysSince===0?'today':`${daysSince}d`;
+                    const daysBadge = `<span style="background:${daysBg};color:${daysColor};font-size:0.65rem;font-weight:700;padding:1px 5px;border-radius:999px;border:1px solid ${borderColor};">${daysLabel}</span>`;
+
+                    const balHtml = bal > 0
+                        ? `<span style="font-size:0.7rem;font-weight:600;color:#007aff;">£${bal.toFixed(0)} due</span>`
+                        : orderTotal > 0 ? `<span style="font-size:0.7rem;color:#34c759;font-weight:600;">✓ Clear</span>` : '';
+
+                    return `<li class="order-item" data-order-id="${safeId}" style="border-left:3px solid ${borderColor};margin:0;border-radius:10px;padding:0.7rem 0.85rem;">
+                        <div class="order-item-top" style="margin-bottom:0.15rem;">
+                            <div class="order-name" style="font-size:0.83rem;">${order.deceasedName||'Unknown'}</div>
+                            ${daysBadge}
+                        </div>
+                        <div class="order-customer" style="font-size:0.72rem;margin-bottom:0.2rem;">${order.customerName||''} · ${order.orderRef||''}</div>
+                        ${balHtml ? `<div>${balHtml}</div>` : ''}
+                    </li>`;
+                }).join('');
+
+                // attach click handlers
+                listEl.querySelectorAll('.order-item').forEach(item => {
+                    item.addEventListener('click', function() {
+                        selectOrder(this.getAttribute('data-order-id'));
+                    });
+                });
+            });
+
+            // render pie chart
+            renderPipelineChart(groups, colors, fmt);
+        }
+
+        function renderPipelineChart(groups, colors, fmt) {
+            const chartStatuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready'];
+            const values = chartStatuses.map(s => groups[s].reduce((sum,o)=>sum+(parseFloat(o.totalSellPrice)||0),0));
+            const counts = chartStatuses.map(s => groups[s].length);
+            const chartColors = chartStatuses.map(s => colors[s]);
+
+            // Legend
+            const legendEl = document.getElementById('pipelineChartLegend');
+            if (legendEl) {
+                legendEl.innerHTML = chartStatuses.map((s,i) => `
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:${chartColors[i]}"></div>
+                        <div class="legend-text">
+                            <strong>${s}</strong><br>
+                            <span>${counts[i]} jobs · ${fmt(values[i])}</span>
+                        </div>
+                    </div>`).join('');
+            }
+
+            // Chart
+            const canvas = document.getElementById('pipelineChart');
+            if (!canvas) return;
+            if (!window.Chart) return;
+
+            // Destroy existing chart if any
+            if (window._pipelineChartInstance) {
+                window._pipelineChartInstance.destroy();
+                window._pipelineChartInstance = null;
+            }
+
+            // Only show segments with value > 0
+            const hasAnyValue = values.some(v => v > 0);
+            const displayValues = hasAnyValue ? values : chartStatuses.map(() => 1); // equal slices if no values
+
+            window._pipelineChartInstance = new window.Chart(canvas, {
+                type: 'doughnut',
+                data: {
+                    labels: chartStatuses,
+                    datasets: [{
+                        data: displayValues,
+                        backgroundColor: chartColors,
+                        borderWidth: 2,
+                        borderColor: '#f2f2f7',
+                        hoverOffset: 6
+                    }]
+                },
+                options: {
+                    cutout: '62%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    const s = chartStatuses[ctx.dataIndex];
+                                    return ` ${s}: ${counts[ctx.dataIndex]} jobs · ${fmt(values[ctx.dataIndex])}`;
+                                }
+                            }
+                        }
+                    },
+                    animation: { duration: 400 }
+                }
             });
         }
 
