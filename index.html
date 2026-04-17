@@ -6375,8 +6375,8 @@
                         <div>
                           <label>Vertical Position (% from top)</label>
                           <div class="slider-row">
-                            <input type="range" id="id_posY" min="10" max="90" value="42" oninput="idSv('id_posYV',this.value,'%');idRender()">
-                            <span class="slider-val" id="id_posYV">42%</span>
+                            <input type="range" id="id_posY" min="10" max="90" value="35" oninput="idSv('id_posYV',this.value,'%');idRender()">
+                            <span class="slider-val" id="id_posYV">35%</span>
                           </div>
                         </div>
                         <div>
@@ -6527,7 +6527,7 @@
             const lineSpacing = parseFloat((document.getElementById('id_lsp')  || {}).value || 1.7);
             const letterSp  = parseFloat((document.getElementById('id_ksp')  || {}).value || 2);
             const posXpct   = parseInt((document.getElementById('id_posX') || {}).value || 50) / 100;
-            const posYpct   = parseInt((document.getElementById('id_posY') || {}).value || 42) / 100;
+            const posYpct   = parseInt((document.getElementById('id_posY') || {}).value || 35) / 100;
             const maxWpct   = parseInt((document.getElementById('id_maxW') || {}).value || 52) / 100;
             const shadowBlur = parseFloat((document.getElementById('id_shad') || {}).value || 3);
             const opacity   = parseFloat((document.getElementById('id_opac') || {}).value || 0.95);
@@ -6554,11 +6554,9 @@
             }
 
             const lines = text.split('\n');
-            const totalH = lines.length * scaledLineH;
-            const topY = startY - totalH / 2;
-
+            // Pin top of text block to posY — text grows downward, nothing shifts
             lines.forEach((line, i) => {
-                const y = topY + i * scaledLineH + scaledLineH / 2;
+                const y = startY + i * scaledLineH + scaledLineH / 2;
                 idDrawTextSpaced(ctx, line.trim(), cx, y, maxW, letterSp * canvScale);
             });
 
@@ -6604,10 +6602,10 @@
         function idReset() {
             const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
             set('id_size', 22); set('id_lsp', 1.7); set('id_ksp', 2);
-            set('id_posX', 50); set('id_posY', 42); set('id_maxW', 52);
+            set('id_posX', 50); set('id_posY', 35); set('id_maxW', 52);
             set('id_shad', 3);  set('id_opac', 0.95);
             idSv('id_sizeV','22','px'); idSv('id_lspV','1.70','×'); idSv('id_kspV','2','px');
-            idSv('id_posXV','50','%'); idSv('id_posYV','42','%'); idSv('id_maxWV','52','%');
+            idSv('id_posXV','50','%'); idSv('id_posYV','35','%'); idSv('id_maxWV','52','%');
             idSv('id_shadV','3','px'); idSv('id_opacV','95','%');
             _idColour = '#c8a84b';
             document.querySelectorAll('#inscDesignerOverlay .id-swatch').forEach(s => {
