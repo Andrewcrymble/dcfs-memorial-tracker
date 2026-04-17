@@ -1542,14 +1542,37 @@
                         <span class="pay-bal ${balance <= 0 ? 'clear' : ''}">${balance <= 0 ? '✓ Clear' : fmt(balance) + ' due'}</span>
                     </div>` : '';
 
-                // 120-day overdue flag — non-Installed orders older than 120 days
+                // Days since last movement (most recent log entry, or order creation date)
                 const isInstalled = status === 'Installed';
                 const orderCreated = order.orderDate || order.createdAt || '';
+                const logEntries = order.log || [];
+                const lastLogTs = logEntries.length > 0
+                    ? logEntries.reduce((latest, e) => e.ts > latest ? e.ts : latest, logEntries[0].ts)
+                    : null;
+                const lastMovement = lastLogTs || orderCreated;
+                const daysSince = lastMovement ? Math.floor((Date.now() - new Date(lastMovement)) / 86400000) : null;
                 const daysSinceCreated = orderCreated ? Math.floor((Date.now() - new Date(orderCreated)) / 86400000) : 0;
                 const isOverdue = !isInstalled && daysSinceCreated > 120;
-                const overdueFlag = isOverdue ? `<div style="display:flex;align-items:center;gap:4px;margin-top:3px;font-size:0.72rem;font-weight:700;color:#dc2626;">
-                    🚨 ${daysSinceCreated} days since quote
-                </div>` : '';
+
+                // Colour: green <30d, amber 30-90d, orange 90-120d, red 120d+
+                const daysColor = daysSince === null ? '#9ca3af'
+                    : isInstalled         ? '#9ca3af'
+                    : daysSince <= 30      ? '#16a34a'
+                    : daysSince <= 90      ? '#d97706'
+                    : daysSince <= 120     ? '#f97316'
+                    : '#dc2626';
+
+                const daysLabel = daysSince === null ? ''
+                    : daysSince === 0 ? 'Today'
+                    : daysSince === 1 ? '1 day'
+                    : `${daysSince} days`;
+
+                const daysIcon = isOverdue ? '🚨' : daysSince !== null && daysSince > 90 ? '⚠️' : '🕐';
+
+                const daysRow = daysSince !== null ? `
+                    <div style="display:flex;align-items:center;gap:4px;margin-top:3px;font-size:0.72rem;font-weight:600;color:${daysColor};">
+                        ${daysIcon} ${daysLabel} — last movement
+                    </div>` : '';
 
                 return `
                     <li class="order-item ${currentOrder?.orderId === order.orderId ? 'active' : ''} ${isOverdue ? 'overdue-item' : ''}"
@@ -1561,7 +1584,7 @@
                         </div>
                         <div class="order-customer">${order.customerName || ''} &middot; ${order.orderRef || 'No Ref'}</div>
                         ${paymentRow}
-                        ${overdueFlag}
+                        ${daysRow}
                     </li>
                 `;
             }).join('');
