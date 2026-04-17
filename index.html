@@ -5051,5 +5051,22 @@
         }
 
     </script>
+
+    <!-- Diagnostic: runs AFTER main script, checks if it loaded correctly -->
+    <script>
+    (function() {
+        var ok = typeof loadOrders === 'function' && typeof testConnection === 'function';
+        if (!ok) {
+            // Main script failed — show a visible error banner and reload option
+            var banner = document.createElement('div');
+            banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#dc2626;color:white;padding:0.75rem 1rem;font-size:0.9rem;font-weight:600;z-index:99999;display:flex;align-items:center;justify-content:space-between;';
+            banner.innerHTML = '⚠ App script failed to load — there may be a browser caching issue. <button onclick="location.reload(true)" style="background:white;color:#dc2626;border:none;border-radius:4px;padding:0.3rem 0.75rem;font-weight:700;cursor:pointer;margin-left:1rem;">Force Reload</button>';
+            document.body.appendChild(banner);
+            console.error('DC&S: Main script did not load correctly. loadOrders or testConnection undefined.');
+        } else {
+            console.log('DC&S: Main script loaded OK. loadOrders and testConnection defined.');
+        }
+    })();
+    </script>
 </body>
 </html>
