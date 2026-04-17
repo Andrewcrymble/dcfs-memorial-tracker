@@ -1960,6 +1960,31 @@
             const files = order.files || [];
             const fileTypes = ['Proof', 'Artwork', 'Photo', 'Signed Form', 'Cemetery Permit', 'Grave Paper', 'Invoice', 'Other'];
 
+            // ── Proof status banner ──
+            const proofFile = files.find(f => f.type === 'Proof');
+            let proofBanner = '';
+            if (proofFile) {
+                if (proofFile.approved) {
+                    proofBanner = `
+                        <div style="display:flex;align-items:center;gap:0.75rem;background:#dcfce7;border:2px solid #16a34a;border-radius:8px;padding:0.75rem 1.1rem;margin-bottom:1rem;">
+                            <span style="font-size:1.5rem;">✅</span>
+                            <div>
+                                <div style="font-size:1rem;font-weight:800;color:#15803d;letter-spacing:0.01em;">PROOF APPROVED</div>
+                                <div style="font-size:0.78rem;color:#166534;">Approved ${proofFile.approvedAt ? new Date(proofFile.approvedAt).toLocaleString('en-GB') : ''} · ${proofFile.name}</div>
+                            </div>
+                        </div>`;
+                } else {
+                    proofBanner = `
+                        <div style="display:flex;align-items:center;gap:0.75rem;background:#fee2e2;border:2px solid #dc2626;border-radius:8px;padding:0.75rem 1.1rem;margin-bottom:1rem;">
+                            <span style="font-size:1.5rem;">❌</span>
+                            <div>
+                                <div style="font-size:1rem;font-weight:800;color:#dc2626;letter-spacing:0.01em;">PROOF NOT APPROVED</div>
+                                <div style="font-size:0.78rem;color:#991b1b;">Uploaded ${proofFile.uploadedAt ? new Date(proofFile.uploadedAt).toLocaleDateString('en-GB') : ''} · Awaiting approval</div>
+                            </div>
+                        </div>`;
+                }
+            }
+
             const fileGrid = files.length === 0
                 ? `<p style="color:#9ca3af;font-size:0.85rem;margin:0 0 1rem;">No files uploaded yet.</p>`
                 : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:0.75rem;margin-bottom:1rem;">
@@ -2011,6 +2036,7 @@
                   </div>`;
 
             return `
+                ${proofBanner}
                 ${fileGrid}
                 <div style="border:2px dashed #d1d5db;border-radius:8px;padding:1.25rem;text-align:center;background:#fafafa;" id="dropZone"
                      ondragover="event.preventDefault();this.style.borderColor='#6366f1';"
@@ -2051,6 +2077,27 @@
             if (!currentOrder) return;
             const progress = document.getElementById('uploadProgress');
             if (!currentOrder.files) currentOrder.files = [];
+
+            // ── Proof: only one allowed — replace existing automatically ──
+            if (fileType === 'Proof') {
+                const existingProofIdx = currentOrder.files.findIndex(f => f.type === 'Proof');
+                if (existingProofIdx >= 0) {
+                    const old = currentOrder.files[existingProofIdx];
+                    if (!confirm(`A proof "${old.name}" already exists.\n\nReplace it with the new file?\n\nThe old proof will be removed.`)) return;
+                    // Remove old proof from Drive
+                    if (old.fileId) {
+                        try {
+                            await fetch(SCRIPT_URL, {
+                                method: 'POST',
+                                body: JSON.stringify({ action: 'deleteFile', fileId: old.fileId })
+                            });
+                        } catch(e) {}
+                    }
+                    // Remove from local array and log it
+                    currentOrder.files.splice(existingProofIdx, 1);
+                    addActivityLog(`Proof replaced: old file "${old.name}" removed`);
+                }
+            }
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
@@ -3929,6 +3976,32 @@
             doc.text(statusText, 186, y + 7, { align: 'right' });
             doc.setTextColor(0, 0, 0);
             y += 15;
+
+            // ── Proof approval status banner ──
+            const proofFile = (currentOrder.files || []).find(f => f.type === 'Proof');
+            if (proofFile) {
+                if (proofFile.approved) {
+                    doc.setFillColor(22, 163, 74);   // green
+                    doc.rect(20, y, 170, 11, 'F');
+                    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+                    doc.text('✓  PROOF APPROVED', 105, y + 8, { align: 'center' });
+                    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
+                    const approvedLabel = proofFile.approvedAt ? `  Approved: ${new Date(proofFile.approvedAt).toLocaleString('en-GB')}` : '';
+                    doc.text(approvedLabel, 105, y + 8, { align: 'center' });
+                    // Redo: split onto two lines within the bar
+                    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+                    doc.text('✓  PROOF APPROVED', 24, y + 7.5);
+                    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
+                    if (proofFile.approvedAt) doc.text(`Approved: ${new Date(proofFile.approvedAt).toLocaleString('en-GB')}`, 186, y + 7.5, { align: 'right' });
+                } else {
+                    doc.setFillColor(220, 38, 38);   // red
+                    doc.rect(20, y, 170, 11, 'F');
+                    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+                    doc.text('✗  PROOF NOT APPROVED — DO NOT PROCEED WITHOUT APPROVAL', 24, y + 7.5);
+                }
+                doc.setTextColor(0, 0, 0);
+                y += 16;
+            }
 
             // ── Install / Grave info row (if present) ──
             const hasInstall = currentOrder.installDate || currentOrder.graveNumber || currentOrder.cemetery;
