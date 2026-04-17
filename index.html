@@ -2215,12 +2215,20 @@
                         ? `<span style="font-size:0.7rem;font-weight:600;color:#007aff;">£${bal.toFixed(0)} due</span>`
                         : orderTotal > 0 ? `<span style="font-size:0.7rem;color:#34c759;font-weight:600;">✓ Clear</span>` : '';
 
+                    // Format creation date
+                    const createdRaw = order.createdAt || order.orderDate || '';
+                    const createdFmt = createdRaw ? new Date(createdRaw).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '';
+                    const createdHtml = createdFmt && createdFmt !== 'Invalid Date'
+                        ? `<span style="font-size:0.68rem;color:#8e8e93;">Created ${createdFmt}</span>`
+                        : '';
+
                     return `<li class="order-item" data-order-id="${safeId}" style="border-left:3px solid ${borderColor};margin:0;border-radius:10px;padding:0.7rem 0.85rem;">
                         <div class="order-item-top" style="margin-bottom:0.15rem;">
                             <div class="order-name" style="font-size:0.83rem;">${order.deceasedName||'Unknown'}</div>
                             ${daysBadge}
                         </div>
                         <div class="order-customer" style="font-size:0.72rem;margin-bottom:0.2rem;">${order.customerName||''} · ${order.orderRef||''}</div>
+                        ${createdHtml ? `<div style="margin-bottom:0.15rem;">${createdHtml}</div>` : ''}
                         ${balHtml ? `<div>${balHtml}</div>` : ''}
                     </li>`;
                 }).join('');
@@ -4184,9 +4192,13 @@
             orderData.log.push({
                 id: Date.now().toString(),
                 ts: new Date().toISOString(),
-                author: 'User',
-                text: editingOrderId ? 'Order updated' : 'Order created'
+                author: getCurrentUser ? getCurrentUser() : 'User',
+                text: editingOrderId ? 'Order updated' : `Order created — ${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}`
             });
+            // Stamp creation date on new orders
+            if (!editingOrderId) {
+                orderData.createdAt = new Date().toISOString();
+            }
 
             closeOrderModal();
             await saveOrder(orderData);
@@ -4835,9 +4847,12 @@
                 y = iy + 6;  // track actual position after text (fixes page-break y bug)
             }
 
-            // Payment QR code (if payment link exists)
-            if (currentOrder.stripePaymentUrl) {
-                y = await addPdfPaymentQR(doc, y, currentOrder.stripePaymentUrl);
+            // Payment QR code — auto-create 50% deposit link if one doesn't exist yet
+            const depositUrl = await autoGetDepositLink();
+            const depositAmt = currentOrder.stripePaymentAmount || (parseFloat(currentOrder.totalSellPrice||0)/2);
+            const depositLbl = currentOrder.stripePaymentLabel || '50% Deposit';
+            if (depositUrl) {
+                y = await addPdfPaymentQR(doc, y, depositUrl, depositLbl, depositAmt);
             }
 
             // Terms
@@ -4978,9 +4993,12 @@
                 y = iy + 6;
             }
 
-            // Payment QR code (if payment link exists)
-            if (currentOrder.stripePaymentUrl) {
-                y = await addPdfPaymentQR(doc, y, currentOrder.stripePaymentUrl);
+            // Payment QR code — auto-create 50% deposit link if one doesn't exist yet
+            const invDepositUrl = await autoGetDepositLink();
+            const invDepositAmt = currentOrder.stripePaymentAmount || (parseFloat(currentOrder.totalSellPrice||0)/2);
+            const invDepositLbl = currentOrder.stripePaymentLabel || '50% Deposit';
+            if (invDepositUrl) {
+                y = await addPdfPaymentQR(doc, y, invDepositUrl, invDepositLbl, invDepositAmt);
             }
 
             // Payment details box
@@ -5750,6 +5768,49 @@
             if (customRow) customRow.style.display = opt === 'custom' ? 'block' : 'none';
         }
 
+        // Auto-create a 50% deposit link for an order (used by estimate PDF)
+        async function autoGetDepositLink() {
+            if (!currentOrder) return null;
+            // Already has a link — reuse it
+            if (currentOrder.stripePaymentUrl) return currentOrder.stripePaymentUrl;
+
+            const total = parseFloat(currentOrder.totalSellPrice || 0);
+            if (total <= 0) return null;
+
+            const amount = Math.round((total / 2) * 100) / 100;
+            const ref = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
+
+            try {
+                const resp = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'createPaymentLink',
+                        orderId: currentOrder.orderId,
+                        orderRef: currentOrder.orderRef || currentOrder.orderId,
+                        customerName: currentOrder.customerName,
+                        deceasedName: currentOrder.deceasedName,
+                        amountPence: Math.round(amount * 100),
+                        paymentType: 'half',
+                        totalSellPrice: total,
+                        previousDeposit: parseFloat(currentOrder.depositPaid) || 0,
+                        description: `50% Deposit — ${currentOrder.deceasedName || 'Memorial'} (Ref: ${ref})`
+                    })
+                });
+                const result = await resp.json();
+                if (result.success && result.url) {
+                    currentOrder.stripePaymentUrl = result.url;
+                    currentOrder.stripeLinkId = result.linkId;
+                    currentOrder.stripePaymentLabel = '50% Deposit';
+                    currentOrder.stripePaymentAmount = amount;
+                    saveOrder(currentOrder).catch(e => console.warn('Auto-save deposit link:', e));
+                    return result.url;
+                }
+            } catch(e) {
+                console.warn('Auto-create deposit link failed (PDF will still generate):', e);
+            }
+            return null;
+        }
+
         async function doCreatePaymentLink() {
             if (!currentOrder) return;
             const balance = window._payBalance || 0;
@@ -5855,27 +5916,37 @@
         }
 
         // Draw payment QR block into a jsPDF doc; returns new y position
-        async function addPdfPaymentQR(doc, y, url) {
+        async function addPdfPaymentQR(doc, y, url, label, amount) {
             if (!url) return y;
             const qrDataUrl = await getPdfQRDataUrl(url);
             if (!qrDataUrl) return y;
-            // If not enough room for the 28mm block, start a new page
-            if (y + 32 > 258) { doc.addPage(); y = 20; }
+            // If not enough room for the 32mm block, start a new page
+            if (y + 36 > 258) { doc.addPage(); y = 20; }
             y += 4;
             doc.setFillColor(245, 244, 255);
             doc.setDrawColor(99, 91, 255);
             doc.setLineWidth(0.4);
-            doc.roundedRect(20, y, 170, 26, 2, 2, 'FD');
-            doc.addImage(qrDataUrl, 'PNG', 24, y + 2, 22, 22);
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(99, 91, 255);
-            doc.text('Pay Online', 50, y + 8);
-            doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(55, 65, 81);
-            doc.text('Scan the QR code or visit the link to pay by card, Apple Pay or Google Pay.', 50, y + 15);
+            doc.roundedRect(20, y, 170, 30, 2, 2, 'FD');
+            doc.addImage(qrDataUrl, 'PNG', 24, y + 3, 22, 22);
+            // Title row
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(99, 91, 255);
+            const titleText = label ? `Pay Online — ${label}` : 'Pay Online';
+            doc.text(titleText, 50, y + 9);
+            // Amount if provided
+            if (amount && parseFloat(amount) > 0) {
+                doc.setFontSize(8); doc.setTextColor(55, 65, 81);
+                doc.text(`Amount due: £${parseFloat(amount).toFixed(2)}`, 50, y + 16);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+                doc.text('Scan QR or visit the link below to pay by card, Apple Pay or Google Pay.', 50, y + 22);
+            } else {
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(55, 65, 81);
+                doc.text('Scan the QR code or visit the link below to pay by card, Apple Pay or Google Pay.', 50, y + 16);
+            }
             const urlLine = doc.splitTextToSize(url, 135);
             doc.setFontSize(6.5); doc.setTextColor(99, 91, 255);
-            doc.text(urlLine[0] || '', 50, y + 21);
+            doc.text(urlLine[0] || '', 50, y + 27);
             doc.setTextColor(0, 0, 0);
-            return y + 30;
+            return y + 34;
         }
 
         function sendPaymentLinkWhatsApp() {
