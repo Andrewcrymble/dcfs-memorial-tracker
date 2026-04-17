@@ -4876,13 +4876,22 @@
             // ════════════════════════════════════════
             const hasProofContent = !!(currentOrder.hsImage || STONE_IMAGES[currentOrder.hsType] || currentOrder.inscriptionText || currentOrder.hsType);
             if (hasProofContent) {
+                // ── PROOF PAGE: stone image with inscription overlaid ──
                 doc.addPage();
                 let py = dcsPdfHeader(doc, 'INITIAL PROOF', 'Please review carefully and confirm all details are correct');
+                const SAFE_BOTTOM = 255; // stay above footer (footer starts at 263)
 
-                // Stone image — centred, large, with inscription overlaid on top
                 const stoneImgSrc = currentOrder.hsImage || (currentOrder.hsType ? STONE_IMAGES[currentOrder.hsType] : null);
-                const imgW = 90, imgH = 108;
-                const imgX = (210 - imgW) / 2;
+                // Fit stone into available height leaving room for inscription + sig
+                const inscLines = currentOrder.inscriptionText
+                    ? doc.splitTextToSize(currentOrder.inscriptionText, 150)
+                    : [];
+                const inscBoxH  = inscLines.length > 0 ? (14 + inscLines.length * 6.5) : 0;
+                const sigH      = 42; // height needed for signature block
+                const maxImgH   = SAFE_BOTTOM - py - inscBoxH - sigH - 16;
+                const imgH      = Math.min(90, Math.max(50, maxImgH));
+                const imgW      = imgH * (90/108); // maintain aspect ratio
+                const imgX      = (210 - imgW) / 2;
 
                 if (stoneImgSrc) {
                     try {
@@ -4895,65 +4904,75 @@
                         });
                         doc.addImage(stoneDataUrl, 'PNG', imgX, py, imgW, imgH);
 
-                        // Overlay inscription text ON the stone image
-                        if (currentOrder.inscriptionText) {
-                            // Choose colour based on inscriptionColour field
+                        // Overlay inscription text on the stone image
+                        if (inscLines.length > 0) {
                             const ic = (currentOrder.inscriptionColour || '').toLowerCase();
                             if (ic === 'gold')        doc.setTextColor(200, 168, 75);
                             else if (ic === 'silver') doc.setTextColor(210, 210, 210);
                             else if (ic === 'white')  doc.setTextColor(240, 240, 240);
-                            else                      doc.setTextColor(210, 195, 140); // default warm gold
+                            else                      doc.setTextColor(210, 195, 140);
 
-                            doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5);
-                            const inscLines = currentOrder.inscriptionText.split('\n').filter(l => l.trim());
-                            const lineH = 5.5;
-                            const totalTxtH = inscLines.length * lineH;
-                            // Start text at ~48% down the image
+                            const rawLines = currentOrder.inscriptionText.split('\n').filter(l => l.trim());
+                            const overlayLH = Math.min(6, imgH * 0.45 / Math.max(rawLines.length, 1));
+                            const overlaySize = Math.max(5, Math.min(8, overlayLH * 0.9));
+                            doc.setFont('helvetica', 'italic'); doc.setFontSize(overlaySize);
+                            const totalTxtH = rawLines.length * overlayLH;
                             let ity = py + imgH * 0.48 - totalTxtH / 2;
-                            inscLines.forEach(line => {
+                            rawLines.forEach(line => {
                                 doc.text(line.trim(), 105, ity, { align: 'center' });
-                                ity += lineH;
+                                ity += overlayLH;
                             });
                             doc.setTextColor(0,0,0);
                         }
 
+                        // Stone label below image
                         doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(60,60,60);
-                        doc.text(`${currentOrder.hsType || ''}${currentOrder.hsSize ? ' — ' + currentOrder.hsSize : ''}`, 105, py + imgH + 6, { align: 'center' });
+                        doc.text(`${currentOrder.hsType || ''}${currentOrder.hsSize ? ' — ' + currentOrder.hsSize : ''}${currentOrder.hsColour ? ' · ' + currentOrder.hsColour : ''}`, 105, py + imgH + 6, { align: 'center' });
                         doc.setTextColor(0,0,0);
-                        py += imgH + 12;
+                        py += imgH + 11;
                     } catch(e) {
                         console.warn('Proof page stone image error:', e);
-                        py += 10;
                     }
                 }
 
-                // Inscription text confirmation box (below image for easy proofing)
-                if (currentOrder.inscriptionText) {
+                // ── Inscription verification box ──
+                if (inscLines.length > 0) {
+                    // Break to new page if not enough room
+                    if (py + inscBoxH + sigH > SAFE_BOTTOM) {
+                        doc.addPage();
+                        py = dcsPdfHeader(doc, 'INITIAL PROOF — INSCRIPTION', 'Please verify every word, spacing and punctuation is correct');
+                    }
+
                     doc.setFillColor(74, 124, 47); doc.rect(20, py, 170, 8, 'F');
                     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255,255,255);
                     doc.text('INSCRIPTION — Please verify every word, spacing and punctuation is correct', 105, py + 5.5, { align: 'center' });
-                    doc.setTextColor(0,0,0); py += 12;
+                    doc.setTextColor(0,0,0); py += 11;
 
                     doc.setDrawColor(74,124,47); doc.setLineWidth(0.4);
-                    const iLines = doc.splitTextToSize(currentOrder.inscriptionText, 150);
-                    const boxH = 10 + iLines.length * 7;
-                    doc.roundedRect(20, py - 4, 170, boxH, 2, 2, 'S');
-                    doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(0,0,0);
-                    iLines.forEach(l => { doc.text(l, 105, py, { align: 'center' }); py += 7; });
-                    py += 8;
+                    const boxH = 8 + inscLines.length * 6.5;
+                    doc.roundedRect(20, py - 3, 170, boxH, 2, 2, 'S');
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(0,0,0);
+                    inscLines.forEach(l => { doc.text(l, 105, py, { align: 'center' }); py += 6.5; });
+                    py += 7;
                 }
 
-                // Customer approval signature block
-                py = Math.max(py + 4, 230);
-                doc.setDrawColor(180,180,180); doc.setLineWidth(0.3); doc.line(20, py, 190, py); py += 8;
-                doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(60,60,60);
+                // ── Customer approval signature block ──
+                // Ensure at least 38mm before footer
+                if (py + 38 > SAFE_BOTTOM) {
+                    doc.addPage();
+                    py = 30;
+                } else {
+                    py = Math.max(py + 4, SAFE_BOTTOM - 36);
+                }
+                doc.setDrawColor(180,180,180); doc.setLineWidth(0.3); doc.line(20, py, 190, py); py += 7;
+                doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(30,30,30);
                 doc.text('CUSTOMER APPROVAL', 20, py); py += 7;
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90,90,90);
-                doc.text('By signing below you confirm that all details on this proof are correct and authorise David Crymble & Sons to proceed.', 20, py); py += 10;
-                doc.setTextColor(0,0,0);
-                doc.text('Signature: ___________________________________', 20, py);
-                doc.text('Date: ___________________', 130, py); py += 10;
-                doc.text('Print Name: __________________________________', 20, py);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(80,80,80);
+                doc.text('By signing below you confirm all details are correct and authorise David Crymble & Sons to proceed.', 20, py); py += 9;
+                doc.setTextColor(0,0,0); doc.setFontSize(9);
+                doc.text('Signature: _______________________________________', 20, py);
+                doc.text('Date: ____________________', 135, py); py += 9;
+                doc.text('Print Name: ______________________________________', 20, py);
 
                 dcsPdfFooter(doc);
             }
