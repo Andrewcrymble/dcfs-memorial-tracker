@@ -6417,7 +6417,8 @@
                 <div class="modal-footer">
                   <button class="id-btn id-btn-outline" onclick="idDownloadPNG()">⬇ Download PNG</button>
                   <button class="id-btn id-btn-outline" onclick="idReset()">↺ Reset</button>
-                  <button class="id-btn id-btn-green" onclick="closeInscriptionDesigner(true)">✓ Done</button>
+                  <button class="id-btn" id="idSaveBtn" style="background:#2563eb;color:white;" onclick="idSaveToForm()">💾 Save</button>
+                  <button class="id-btn id-btn-green" onclick="closeInscriptionDesigner(false)">✕ Close</button>
                 </div>
               </div>
             `;
@@ -6449,16 +6450,25 @@
             img.src = stoneFile;
         }
 
-        function closeInscriptionDesigner(save) {
-            // If called from Done button, copy text back to the order form
-            if (save) {
-                const designerText = (document.getElementById('id_inscText') || {}).value;
-                const formField = document.getElementById('f_inscText');
-                if (formField && designerText !== undefined) {
-                    formField.value = designerText;
-                    formField.dispatchEvent(new Event('input', { bubbles: true }));
-                }
+        function idSaveToForm() {
+            const designerText = (document.getElementById('id_inscText') || {}).value;
+            const formField = document.getElementById('f_inscText');
+            if (formField && designerText !== undefined) {
+                formField.value = designerText;
+                formField.dispatchEvent(new Event('input', { bubbles: true }));
             }
+            // Flash the save button green to confirm
+            const btn = document.getElementById('idSaveBtn');
+            if (btn) {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '✅ Saved!';
+                btn.style.background = '#16a34a';
+                setTimeout(() => { btn.innerHTML = orig; btn.style.background = '#2563eb'; }, 1500);
+            }
+        }
+
+        function closeInscriptionDesigner(save) {
+            if (save) idSaveToForm();
             const el = document.getElementById('inscDesignerOverlay');
             if (el) el.remove();
         }
