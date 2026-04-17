@@ -6275,7 +6275,7 @@
               <div id="inscDesignerModal">
                 <div class="modal-header">
                   <h2>🪨 Inscription Designer</h2>
-                  <button onclick="closeInscriptionDesigner()" title="Close">✕</button>
+                  <button onclick="closeInscriptionDesigner(false)" title="Close">✕</button>
                 </div>
                 <div class="modal-body">
 
@@ -6417,15 +6417,15 @@
                 <div class="modal-footer">
                   <button class="id-btn id-btn-outline" onclick="idDownloadPNG()">⬇ Download PNG</button>
                   <button class="id-btn id-btn-outline" onclick="idReset()">↺ Reset</button>
-                  <button class="id-btn id-btn-green" onclick="closeInscriptionDesigner()">✓ Done</button>
+                  <button class="id-btn id-btn-green" onclick="closeInscriptionDesigner(true)">✓ Done</button>
                 </div>
               </div>
             `;
             document.body.appendChild(overlay);
 
-            // Close on backdrop click
+            // Close on backdrop click (no save)
             overlay.addEventListener('click', function(e) {
-                if (e.target === overlay) closeInscriptionDesigner();
+                if (e.target === overlay) closeInscriptionDesigner(false);
             });
 
             // Load stone image
@@ -6449,7 +6449,16 @@
             img.src = stoneFile;
         }
 
-        function closeInscriptionDesigner() {
+        function closeInscriptionDesigner(save) {
+            // If called from Done button, copy text back to the order form
+            if (save) {
+                const designerText = (document.getElementById('id_inscText') || {}).value;
+                const formField = document.getElementById('f_inscText');
+                if (formField && designerText !== undefined) {
+                    formField.value = designerText;
+                    formField.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
             const el = document.getElementById('inscDesignerOverlay');
             if (el) el.remove();
         }

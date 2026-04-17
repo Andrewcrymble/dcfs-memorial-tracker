@@ -118,7 +118,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    background: #1c1c1e;
+    background: #f0f0f0;
     border-radius: var(--radius);
     overflow: hidden;
     min-height: 200px;
@@ -695,7 +695,8 @@ function drawCanvas(p) {
   canvas.height = hsImage.height * scale;
 
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(hsImage, 0, 0, canvas.width, canvas.height);
 
   // Inscription overlay
