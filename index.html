@@ -4713,32 +4713,21 @@
             // ── Stone image (top right of estimate) ──
             const stoneImgSrc = currentOrder.hsImage || (currentOrder.hsType ? STONE_IMAGES[currentOrder.hsType] : null);
             if (stoneImgSrc) {
-                await new Promise(resolve => {
-                    const img = new Image();
-                    img.crossOrigin = 'anonymous';
-                    img.onload = function() {
-                        try {
-                            const offCanvas = document.createElement('canvas');
-                            offCanvas.width = img.width;
-                            offCanvas.height = img.height;
-                            const ctx = offCanvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0);
-                            const dataUrl = offCanvas.toDataURL('image/png');
-                            // Fit into 55mm × 65mm box, top right
-                            const imgW = 55, imgH = 65;
-                            doc.addImage(dataUrl, 'PNG', 135, y - 5, imgW, imgH);
-                        } catch(e) { console.warn('Stone image error:', e); }
-                        resolve();
-                    };
-                    img.onerror = () => resolve();
-                    img.src = stoneImgSrc;
-                });
-                // Label under image
-                doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(130,130,130);
-                doc.text(currentOrder.hsType || '', 162, y + 62, { align: 'center' });
-                doc.setTextColor(0,0,0);
+                try {
+                    const resp = await fetch(stoneImgSrc);
+                    const blob = await resp.blob();
+                    const stoneDataUrl = await new Promise(res => {
+                        const fr = new FileReader();
+                        fr.onload = () => res(fr.result);
+                        fr.readAsDataURL(blob);
+                    });
+                    doc.addImage(stoneDataUrl, 'PNG', 135, y - 5, 55, 65);
+                    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(130,130,130);
+                    doc.text(currentOrder.hsType || '', 162, y + 62, { align: 'center' });
+                    doc.setTextColor(0,0,0);
+                } catch(e) { console.warn('Stone image fetch error:', e); }
+                y += 68; // advance past image only when one was attempted
             }
-            y += 68; // advance past the image height
 
             // Ref + date row
             doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(90, 90, 90);
