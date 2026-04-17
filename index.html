@@ -4775,19 +4775,23 @@
             // Table header
             y = dcsPdfTableHeader(doc, y, 'AMOUNT');
 
-            // Row helper
+            // Row helper — amountLabel overrides numeric display (e.g. 'Included')
             let alt = false;
-            function row(label, sub, amount) {
+            function row(label, sub, amount, amountLabel) {
                 if (y > 248) { doc.addPage(); y = 20; }
                 if (alt) { doc.setFillColor(248, 248, 248); doc.rect(20, y - 4, 170, 8, 'F'); }
                 alt = !alt;
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(0,0,0);
                 doc.text(label, 23, y);
                 if (sub) {
                     doc.setFontSize(7.5); doc.setTextColor(130, 130, 130);
                     doc.text(sub, 23, y + 4); doc.setTextColor(0, 0, 0); y += 4;
                 }
-                if (amount !== null && amount !== undefined) {
+                if (amountLabel) {
+                    doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(74,124,47);
+                    doc.text(amountLabel, 188, y, { align: 'right' });
+                    doc.setTextColor(0,0,0);
+                } else if (amount !== null && amount !== undefined) {
                     doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
                     doc.text(`£${parseFloat(amount).toFixed(2)}`, 188, y, { align: 'right' });
                 }
@@ -4814,7 +4818,7 @@
                 row(currentOrder.inscriptionType === 'new' ? 'New Inscription' : 'Additional Inscription',
                     `${totals.breakdown.inscription.letterCount} letters`, totals.breakdown.inscription.sell);
             else if (currentOrder.inscriptionText)
-                row('New Inscription', 'Included (up to 100 letters)', 0);
+                row('New Inscription', 'Included (up to 100 letters)', null, 'Included');
 
             if (totals.breakdown.cemeteryFee > 0)
                 row('Cemetery / Churchyard Fee', currentOrder.cemetery, totals.breakdown.cemeteryFee);
@@ -4870,7 +4874,7 @@
             // ════════════════════════════════════════
             // PAGE 2 — INITIAL PROOF (stone image + inscription)
             // ════════════════════════════════════════
-            const hasProofContent = (currentOrder.hsImage || STONE_IMAGES[currentOrder.hsType]) || currentOrder.inscriptionText;
+            const hasProofContent = !!(currentOrder.hsImage || STONE_IMAGES[currentOrder.hsType] || currentOrder.inscriptionText || currentOrder.hsType);
             if (hasProofContent) {
                 doc.addPage();
                 let py = dcsPdfHeader(doc, 'INITIAL PROOF', 'Please review carefully and confirm all details are correct');
