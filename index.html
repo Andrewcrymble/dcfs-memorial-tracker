@@ -915,42 +915,70 @@
         // ── PASSWORD PROTECTION ──
         // To change the password, update the string below and redeploy to GitHub
         const APP_PASSWORD = '7901';
+        const PW_STORE_KEY = 'dcfs_auth_v1';
 
+        function pwIsUnlocked() {
+            try { return localStorage.getItem(PW_STORE_KEY) === 'yes'; } catch(e) { return false; }
+        }
+
+        function pwSetUnlocked(val) {
+            try { localStorage.setItem(PW_STORE_KEY, val ? 'yes' : 'no'); } catch(e) {}
+        }
+
+        // Run as soon as possible — hide screen if already authenticated
         (function initPasswordScreen() {
-            const unlocked = sessionStorage.getItem('dcfs_unlocked');
-            if (unlocked === 'yes') {
-                document.getElementById('pwScreen').classList.add('hidden');
-            }
-            // focus input
-            setTimeout(() => { const el = document.getElementById('pwInput'); if(el) el.focus(); }, 100);
+            try {
+                const screen = document.getElementById('pwScreen');
+                if (!screen) return;
+                if (pwIsUnlocked()) {
+                    screen.style.display = 'none';
+                } else {
+                    screen.style.display = 'flex';
+                    setTimeout(() => { const el = document.getElementById('pwInput'); if (el) el.focus(); }, 120);
+                }
+            } catch(e) { console.error('PW init error:', e); }
         })();
 
         function checkPassword() {
-            const input = document.getElementById('pwInput');
-            const errorEl = document.getElementById('pwError');
-            if (input.value === APP_PASSWORD) {
-                sessionStorage.setItem('dcfs_unlocked', 'yes');
-                document.getElementById('pwScreen').classList.add('hidden');
-                errorEl.textContent = '';
-            } else {
-                input.classList.add('error');
-                errorEl.textContent = 'Incorrect password. Please try again.';
-                input.value = '';
-                setTimeout(() => input.classList.remove('error'), 400);
-                input.focus();
-            }
+            try {
+                const input = document.getElementById('pwInput');
+                const errorEl = document.getElementById('pwError');
+                if (!input) return;
+                const val = (input.value || '').trim();
+                if (val === APP_PASSWORD) {
+                    pwSetUnlocked(true);
+                    const screen = document.getElementById('pwScreen');
+                    if (screen) screen.style.display = 'none';
+                    if (errorEl) errorEl.textContent = '';
+                } else {
+                    input.classList.add('error');
+                    if (errorEl) errorEl.textContent = 'Incorrect password. Please try again.';
+                    input.value = '';
+                    setTimeout(() => input.classList.remove('error'), 400);
+                    input.focus();
+                }
+            } catch(e) { console.error('PW check error:', e); }
+        }
+
+        function lockApp() {
+            pwSetUnlocked(false);
+            const screen = document.getElementById('pwScreen');
+            if (screen) { screen.style.display = 'flex'; }
+            const inp = document.getElementById('pwInput');
+            if (inp) { inp.value = ''; inp.focus(); }
+            // close any open dropdown
+            const dd = document.getElementById('userDropdown');
+            if (dd) dd.remove();
         }
 
         function togglePwVisibility() {
-            const input = document.getElementById('pwInput');
-            const btn = document.getElementById('pwToggle');
-            if (input.type === 'password') {
-                input.type = 'text';
-                btn.textContent = '🙈';
-            } else {
-                input.type = 'password';
-                btn.textContent = '👁';
-            }
+            try {
+                const input = document.getElementById('pwInput');
+                const btn = document.getElementById('pwToggle');
+                if (!input) return;
+                input.type = input.type === 'password' ? 'text' : 'password';
+                if (btn) btn.textContent = input.type === 'password' ? '👁' : '🙈';
+            } catch(e) {}
         }
 
         // ── STATS BAR ──
@@ -2268,6 +2296,17 @@
                 btn.onclick = (e) => { e.stopPropagation(); setCurrentUser(name); };
                 dd.appendChild(btn);
             });
+            // Divider + Lock button
+            const divider = document.createElement('div');
+            divider.style.cssText = 'height:1px;background:#e5e7eb;margin:2px 0;';
+            dd.appendChild(divider);
+            const lockBtn = document.createElement('button');
+            lockBtn.textContent = '🔒  Lock App';
+            lockBtn.style.cssText = 'display:block;width:100%;padding:0.7rem 1rem;text-align:left;border:none;background:white;color:#dc2626;font-size:0.9rem;font-weight:600;cursor:pointer;';
+            lockBtn.onmouseenter = () => { lockBtn.style.background='#fee2e2'; };
+            lockBtn.onmouseleave = () => { lockBtn.style.background='white'; };
+            lockBtn.onclick = (e) => { e.stopPropagation(); lockApp(); };
+            dd.appendChild(lockBtn);
             document.body.appendChild(dd);
             setTimeout(() => {
                 document.addEventListener('click', function closeDD(e) {
