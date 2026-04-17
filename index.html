@@ -2,8 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>David Crymble &amp; Sons — Memorial Tool</title>
+    <!-- PWA / mobile app meta -->
+    <meta name="theme-color" content="#5a8f2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DC&S Memorial">
+    <meta name="mobile-web-app-capable" content="yes">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -560,10 +566,155 @@
             flex-shrink: 0;
         }
 
+        /* ══════════════════════════════════════
+           MOBILE RESPONSIVE  (≤ 768px)
+        ══════════════════════════════════════ */
+        @media (max-width: 768px) {
+
+            /* Header */
+            .app-header { padding: 0 0.75rem; height: 52px; }
+            .app-header h1 { font-size: 0.95rem; }
+            .header-actions { gap: 0.35rem; }
+            .header-actions .btn { padding: 0.4rem 0.65rem; font-size: 0.75rem; }
+            /* hide less-important header buttons on mobile */
+            #testConnBtn { display: none; }
+
+            /* Stats bar — smaller chips, horizontal scroll */
+            .stats-bar { padding: 0.4rem 0.75rem; }
+            .stat-chip { padding: 0.25rem 0.6rem; min-width: 58px; }
+            .stat-chip-count { font-size: 0.95rem; }
+            .stat-chip.money .stat-chip-count,
+            .stat-chip.outstanding .stat-chip-count { font-size: 0.82rem; }
+            .stat-chip-label { font-size: 0.55rem; }
+
+            /* Layout: stack sidebar + content, show only one at a time */
+            .main-container {
+                flex-direction: column;
+                height: calc(100vh - 52px - 44px);
+            }
+            .sidebar {
+                width: 100%;
+                min-width: 0;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                max-height: 100%;
+                flex: 1;
+            }
+            .content-area {
+                flex: 1;
+                padding: 0.75rem;
+            }
+
+            /* Mobile view switching: list vs detail */
+            .main-container[data-view="detail"] .sidebar  { display: none; }
+            .main-container[data-view="list"]   .content-area { display: none; }
+
+            /* Mobile back button */
+            .mobile-back-btn {
+                display: flex !important;
+                align-items: center;
+                gap: 0.4rem;
+                background: none;
+                border: none;
+                color: var(--cyan);
+                font-size: 0.9rem;
+                font-weight: 600;
+                cursor: pointer;
+                padding: 0.5rem 0;
+                margin-bottom: 0.75rem;
+            }
+
+            /* Order hero: stack vertically */
+            .order-hero {
+                flex-direction: column;
+                gap: 0.75rem;
+                padding: 1rem;
+            }
+            .order-hero-right { text-align: left; }
+            .hero-total { font-size: 1.5rem; }
+            .order-hero-meta { gap: 0.75rem; font-size: 0.8rem; }
+
+            /* Detail grid: single column */
+            .detail-grid {
+                grid-template-columns: 1fr;
+            }
+            .detail-grid-wide { grid-column: 1; }
+
+            /* Data grids: single column */
+            .data-grid   { grid-template-columns: 1fr 1fr; gap: 0.5rem 1rem; }
+            .data-grid-3 { grid-template-columns: 1fr 1fr; }
+
+            /* Action bar: wrap, smaller */
+            .action-bar {
+                flex-wrap: wrap;
+                gap: 0.4rem;
+                padding: 0.65rem 0.75rem;
+                margin-top: 0.75rem;
+            }
+            .action-bar .btn { font-size: 0.78rem; padding: 0.4rem 0.7rem; }
+            .action-bar .spacer { display: none; }
+
+            /* Status pills */
+            .status-workflow { gap: 0.3rem; }
+            .status-pill { padding: 0.35rem 0.7rem; font-size: 0.75rem; }
+
+            /* Modals: full screen */
+            .modal { padding: 0; align-items: flex-end; }
+            .modal-content {
+                max-width: 100%;
+                max-height: 93vh;
+                border-radius: var(--radius) var(--radius) 0 0;
+                padding: 1.25rem 1rem;
+            }
+
+            /* Form grids: single column */
+            .form-grid { grid-template-columns: 1fr; }
+            .form-section { padding: 1rem; }
+
+            /* Live totals */
+            .live-totals { grid-template-columns: 1fr 1fr; }
+
+            /* Card body */
+            .card-body { padding: 0.75rem 1rem; }
+
+            /* Filter tabs scrollable */
+            .filter-tabs { padding: 0.4rem 0.5rem; }
+            .filter-tab { padding: 0.25rem 0.55rem; font-size: 0.72rem; }
+
+            /* Password screen */
+            .pw-card { padding: 2rem 1.5rem; }
+        }
+
+        /* ══════════════════════════════════════
+           TABLET / iPAD  (769px – 1024px)
+        ══════════════════════════════════════ */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .sidebar { width: 240px; min-width: 240px; }
+            .detail-grid { grid-template-columns: 1fr; }
+            .detail-grid-wide { grid-column: 1; }
+            .data-grid-3 { grid-template-columns: 1fr 1fr; }
+            .order-hero { padding: 1rem 1.25rem; }
+            .hero-total { font-size: 1.65rem; }
+            .modal-content { max-width: 700px; padding: 1.25rem; }
+            .form-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+        }
+
+        /* Extra small phones */
+        @media (max-width: 400px) {
+            .app-header h1 { font-size: 0.82rem; }
+            .data-grid   { grid-template-columns: 1fr; }
+            .data-grid-3 { grid-template-columns: 1fr; }
+            .live-totals { grid-template-columns: 1fr; }
+        }
+
+        /* Desktop: hide back button */
+        .mobile-back-btn { display: none; }
+
         @media print {
-            .app-header, .sidebar, .action-bar, .stats-bar { display: none; }
-            .main-container { height: auto; }
-            .content-area { padding: 0; }
+            #pwScreen, .app-header, .sidebar, .action-bar, .stats-bar { display: none; }
+            .main-container { height: auto; flex-direction: row; }
+            .content-area { padding: 0; display: block !important; }
+            .sidebar { display: none !important; }
         }
 
         /* ── NOTES ── */
@@ -600,7 +751,7 @@
             <button id="userChip" onclick="toggleUserDropdown()" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:0.3rem;font-weight:600;">👤 <span id="userChipName">Andrew</span> ▾</button>
             <button class="btn btn-primary" onclick="showNewOrderModal()">+ New Order</button>
             <button class="btn btn-secondary" onclick="refreshOrders()">🔄 Refresh</button>
-            <button class="btn btn-secondary" onclick="testConnection()">🔍 Test Connection</button>
+            <button id="testConnBtn" class="btn btn-secondary" onclick="testConnection()">🔍 Test</button>
         </div>
     </div>
 
@@ -619,7 +770,7 @@
         <div class="stat-chip outstanding"><span class="stat-chip-count" id="st-outstanding">—</span><span class="stat-chip-label">Outstanding Balance</span></div>
     </div>
 
-    <div class="main-container">
+    <div class="main-container" id="mainContainer" data-view="list">
         <div class="sidebar">
             <div class="search-box">
                 <input type="text" id="searchInput" placeholder="Search orders..." oninput="filterOrders()">
@@ -1108,12 +1259,27 @@
             });
         }
 
+        // ── Mobile view switching ──
+        function isMobile() { return window.innerWidth <= 768; }
+
+        function showMobileDetail() {
+            if (isMobile()) {
+                document.getElementById('mainContainer').setAttribute('data-view', 'detail');
+                window.scrollTo(0, 0);
+            }
+        }
+
+        function backToList() {
+            document.getElementById('mainContainer').setAttribute('data-view', 'list');
+        }
+
         // Select order
         function selectOrder(orderId) {
             currentOrder = allOrders.find(o => o.orderId === orderId || o.id === orderId || o.ID === orderId);
             if (!currentOrder) return;
             renderOrderList();
             renderOrderDetails();
+            showMobileDetail();
         }
 
         // Select order by array index (fallback)
@@ -1122,6 +1288,7 @@
             if (!currentOrder) return;
             renderOrderList();
             renderOrderDetails();
+            showMobileDetail();
         }
 
         // Render order details
@@ -1148,6 +1315,9 @@
             const val = (v) => v ? `<span class="data-value">${v}</span>` : `<span class="data-value empty">—</span>`;
 
             contentArea.innerHTML = `
+                <!-- Mobile back button -->
+                <button class="mobile-back-btn" onclick="backToList()">‹ Back to orders</button>
+
                 <!-- Hero banner -->
                 <div class="order-hero">
                     <div class="order-hero-left">
@@ -2785,6 +2955,7 @@
                 setTimeout(() => {
                     loadOrders();
                     currentOrder = null;
+                    backToList();
                     document.getElementById('contentArea').innerHTML = `
                         <div class="empty-state">
                             <div class="empty-state-icon">📋</div>
