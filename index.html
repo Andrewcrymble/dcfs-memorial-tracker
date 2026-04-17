@@ -1363,14 +1363,21 @@
 
                     document.head.appendChild(script);
 
-                    // Timeout after 10s
+                    // Timeout after 15s — show error with retry
                     setTimeout(() => {
                         if (script.parentNode) script.parentNode.removeChild(script);
                         if (window[callbackName]) {
                             delete window[callbackName];
+                            const ol = document.getElementById('orderList');
+                            if (ol) ol.innerHTML = `
+                                <li style="padding:1rem;color:#dc2626;font-size:0.85rem;line-height:1.6;">
+                                    <strong>⚠ Could not load orders</strong><br>
+                                    <span style="color:#6b7280;">Connection to Google timed out.</span><br>
+                                    <button class="btn btn-secondary" style="margin-top:0.6rem;" onclick="refreshOrders()">🔄 Try Again</button>
+                                </li>`;
                             reject('timeout');
                         }
-                    }, 10000);
+                    }, 15000);
 
                 } catch (error) {
                     console.error('Error loading orders:', error);
