@@ -13,57 +13,76 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-    <!-- PASSWORD PROTECTION — isolated script, never broken by app errors -->
+    <!-- PASSWORD PROTECTION — fully isolated, wired via addEventListener not onclick -->
     <script>
-        var _APP_PW = '7901';
-        var _PW_KEY = 'dcfs_auth_v1';
-        function _pwOk()  { try { return localStorage.getItem(_PW_KEY)==='yes'; } catch(e){ return false; } }
-        function _pwSet(v){ try { localStorage.setItem(_PW_KEY, v?'yes':'no'); } catch(e){} }
+    (function() {
+        var PW   = '7901';
+        var KEY  = 'dcfs_auth_v1';
 
-        document.addEventListener('DOMContentLoaded', function() {
-            var sc = document.getElementById('pwScreen');
-            if (!sc) return;
-            if (_pwOk()) { sc.style.display='none'; return; }
-            sc.style.display='flex';
-            setTimeout(function(){ var i=document.getElementById('pwInput'); if(i) i.focus(); }, 100);
-        });
+        function isAuth()   { try { return localStorage.getItem(KEY)==='yes'; } catch(e){ return false; } }
+        function setAuth(v) { try { localStorage.setItem(KEY, v?'yes':'no');  } catch(e){} }
 
-        function checkPassword() {
+        function doUnlock() {
+            var sc  = document.getElementById('pwScreen');
             var inp = document.getElementById('pwInput');
             var err = document.getElementById('pwError');
             if (!inp) return;
-            var v = inp.value.trim();
-            if (v === _APP_PW) {
-                _pwSet(true);
-                var sc = document.getElementById('pwScreen');
-                if (sc) sc.style.display='none';
-                if (err) err.textContent='';
+            if (inp.value.trim() === PW) {
+                setAuth(true);
+                if (sc)  sc.style.cssText = 'display:none!important';
+                if (err) err.textContent  = '';
             } else {
-                inp.classList.add('error');
-                if (err) err.textContent='Incorrect password. Please try again.';
-                inp.value='';
-                setTimeout(function(){ inp.classList.remove('error'); }, 400);
-                inp.focus();
+                if (err) err.textContent = 'Incorrect password — try again.';
+                inp.value = '';
+                inp.style.borderColor = '#ef4444';
+                setTimeout(function(){ inp.style.borderColor = ''; inp.focus(); }, 600);
             }
         }
 
-        function lockApp() {
-            _pwSet(false);
+        // Expose for onclick= fallback (in case DOMContentLoaded already fired)
+        window.checkPassword      = doUnlock;
+        window.togglePwVisibility = function() {
+            var i = document.getElementById('pwInput');
+            var b = document.getElementById('pwToggle');
+            if (!i) return;
+            i.type = i.type==='password' ? 'text' : 'password';
+            if (b) b.textContent = i.type==='password' ? '👁' : '🙈';
+        };
+        window.lockApp = function() {
+            setAuth(false);
             var sc = document.getElementById('pwScreen');
-            if (sc) sc.style.display='flex';
-            var inp = document.getElementById('pwInput');
-            if (inp) { inp.value=''; inp.focus(); }
+            if (sc) sc.style.cssText = 'display:flex!important';
+            var i  = document.getElementById('pwInput');
+            if (i) { i.value=''; i.focus(); }
             var dd = document.getElementById('userDropdown');
             if (dd) dd.remove();
-        }
+        };
 
-        function togglePwVisibility() {
+        document.addEventListener('DOMContentLoaded', function() {
+            var sc  = document.getElementById('pwScreen');
+            var btn = document.getElementById('pwSubmit');
             var inp = document.getElementById('pwInput');
-            var btn = document.getElementById('pwToggle');
-            if (!inp) return;
-            inp.type = inp.type==='password' ? 'text' : 'password';
-            if (btn) btn.textContent = inp.type==='password' ? '👁' : '🙈';
-        }
+
+            if (!sc) return;
+
+            // Hide immediately if already authenticated
+            if (isAuth()) {
+                sc.style.cssText = 'display:none!important';
+                return;
+            }
+
+            sc.style.cssText = 'display:flex!important';
+            if (inp) inp.focus();
+
+            // Wire button click
+            if (btn) btn.addEventListener('click', doUnlock);
+
+            // Wire Enter key
+            if (inp) inp.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') doUnlock();
+            });
+        });
+    })();
     </script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -886,11 +905,11 @@
             <h2>David Crymble &amp; Sons</h2>
             <p>Memorial Tool — Staff Access Only</p>
             <div class="pw-input-wrap">
-                <input type="password" id="pwInput" placeholder="Enter password" onkeydown="if(event.key==='Enter')checkPassword()">
+                <input type="password" id="pwInput" placeholder="Enter password">
                 <button id="pwToggle" onclick="togglePwVisibility()" title="Show/hide">👁</button>
             </div>
             <div id="pwError"></div>
-            <button id="pwSubmit" onclick="checkPassword()">Unlock →</button>
+            <button id="pwSubmit">Unlock →</button>
             <div class="pw-footer">David Crymble &amp; Sons Memorial Masons · Belfast</div>
         </div>
     </div>
