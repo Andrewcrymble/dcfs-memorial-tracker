@@ -446,7 +446,7 @@ function upsertOrder(order) {
     "Log Entries":         logText,
     "Note Entries":        order.noteEntries ? JSON.stringify(order.noteEntries) : "[]",
     "Mason Note Entries":  order.masonNoteEntries ? JSON.stringify(order.masonNoteEntries) : "[]",
-    "Stripe Link ID":      order.stripeLinkId || "",
+    "Stripe Link ID":      order.stripePaymentUrl || order.stripeLinkId || "",
     "Stripe Payment Date": order.stripePaymentDate || "",
     "Stripe Payment Amount": order.stripePaymentAmount || 0,
   };
@@ -872,17 +872,28 @@ function getProofData(orderId, callback) {
       else if (logText.includes('CHANGES REQUESTED')) proofStatus = 'changes_requested';
       else if (logText.includes('Proof link sent'))  proofStatus = 'sent';
 
+      const totalSell    = parseFloat(get(row, 'Total Sell Price') || 0);
+      const depositPaid  = parseFloat(get(row, 'Deposit Paid') || 0);
+      const depositAmt   = totalSell > 0 ? Math.round((totalSell / 2) * 100) / 100 : 0;
+      const stripeLinkRaw = get(row, 'Stripe Link ID') || '';
+      const stripePayUrl  = stripeLinkRaw.startsWith('http') ? stripeLinkRaw : '';
+
       const proof = {
-        orderId:          get(row, 'Order ID'),
-        orderRef:         get(row, 'Order Ref') || String(orderId).slice(-8).toUpperCase(),
-        customerFirstName:(get(row, 'Customer Name') || '').split(' ')[0],
-        deceasedName:     get(row, 'Deceased Name'),
-        hsType:           get(row, 'Headstone Type'),
-        hsSize:           get(row, 'Headstone Size'),
-        hsColour:         get(row, 'Headstone Colour'),
-        inscriptionText:  get(row, 'Inscription Text'),
-        inscriptionColour:get(row, 'Inscription Colour') || 'Gold',
-        proofStatus:      proofStatus
+        orderId:           get(row, 'Order ID'),
+        orderRef:          get(row, 'Order Ref') || String(orderId).slice(-8).toUpperCase(),
+        customerFirstName: (get(row, 'Customer Name') || '').split(' ')[0],
+        deceasedName:      get(row, 'Deceased Name'),
+        hsType:            get(row, 'Headstone Type'),
+        hsSize:            get(row, 'Headstone Size'),
+        hsColour:          get(row, 'Headstone Colour'),
+        inscriptionText:   get(row, 'Inscription Text'),
+        inscriptionColour: get(row, 'Inscription Colour') || 'Gold',
+        proofStatus:       proofStatus,
+        totalSellPrice:    totalSell,
+        depositPaid:       depositPaid,
+        depositAmount:     depositAmt,
+        stripePaymentUrl:  stripePayUrl,
+        balanceDue:        Math.max(0, totalSell - depositPaid)
       };
       return send({ success: true, proof });
     }

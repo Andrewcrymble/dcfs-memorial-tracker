@@ -479,6 +479,29 @@
     </div>
   </div>
 
+  <!-- Estimate & Payment card (shown when data available) -->
+  <div class="card" id="paymentCard" style="display:none;">
+    <div class="card-header">💳 Estimate &amp; Deposit Payment</div>
+    <div class="card-body" style="display:flex;flex-direction:column;gap:0.85rem;">
+      <p style="font-size:0.85rem;color:var(--sub);line-height:1.5;">Your full estimate has been emailed to you. A 50% deposit is required to confirm your order.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+        <div>
+          <div style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--sub);margin-bottom:3px;">Estimate Total</div>
+          <div style="font-size:1.2rem;font-weight:800;color:var(--text);" id="totalDisplay">—</div>
+        </div>
+        <div>
+          <div style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--sub);margin-bottom:3px;">50% Deposit Due</div>
+          <div style="font-size:1.2rem;font-weight:800;color:#2e7d32;" id="depositDisplay">—</div>
+        </div>
+      </div>
+      <a id="stripePayBtn" href="#" target="_blank"
+        style="display:none;width:100%;padding:0.9rem;background:#635bff;color:white;border:none;border-radius:12px;font-size:0.95rem;font-weight:700;font-family:inherit;cursor:pointer;text-align:center;text-decoration:none;box-sizing:border-box;">
+        💳 Pay 50% Deposit Now
+      </a>
+      <p style="font-size:0.72rem;color:var(--sub);text-align:center;line-height:1.4;">Secure payment powered by Stripe · Card, Apple Pay &amp; Google Pay accepted</p>
+    </div>
+  </div>
+
   <!-- Action buttons -->
   <div class="action-section" id="actionSection">
 
@@ -652,6 +675,18 @@ function renderProof(p) {
   } else {
     statusEl.className = 'status-badge badge-pending';
     statusEl.textContent = '⏳ Awaiting Your Approval';
+  }
+
+  // Payment card
+  if (p.totalSellPrice > 0) {
+    document.getElementById('totalDisplay').textContent   = '£' + p.totalSellPrice.toFixed(2);
+    document.getElementById('depositDisplay').textContent = '£' + p.depositAmount.toFixed(2);
+    document.getElementById('paymentCard').style.display  = 'block';
+    if (p.stripePaymentUrl) {
+      const payBtn = document.getElementById('stripePayBtn');
+      payBtn.href = p.stripePaymentUrl;
+      payBtn.style.display = 'block';
+    }
   }
 
   // Show main view
