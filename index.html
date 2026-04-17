@@ -4781,7 +4781,7 @@
                 row(currentOrder.inscriptionType === 'new' ? 'New Inscription' : 'Additional Inscription',
                     `${totals.breakdown.inscription.letterCount} letters`, totals.breakdown.inscription.sell);
             else if (currentOrder.inscriptionText)
-                row('New Inscription', 'Included (within 100 letters)', 0);
+                row('New Inscription', 'Included (up to 100 letters)', 0);
 
             if (totals.breakdown.cemeteryFee > 0)
                 row('Cemetery / Churchyard Fee', currentOrder.cemetery, totals.breakdown.cemeteryFee);
@@ -5150,10 +5150,14 @@
                 y += 11;
             }
 
-            if (currentOrder.hsType || currentOrder.hsSize)
+            if (currentOrder.hsType || currentOrder.hsSize) {
+                const jcHsCost = totals.breakdown.headstone.cost > 0
+                    ? totals.breakdown.headstone.cost
+                    : (parseFloat(currentOrder.hsCostPrice) || null);
                 row(`${currentOrder.hsType || ''} Headstone — ${currentOrder.hsSize || ''}`,
                     `${colourDisplayName(currentOrder.hsColour, true) || 'Black'}${currentOrder.hsFinish ? ' · ' + currentOrder.hsFinish : ''}`,
-                    totals.breakdown.headstone.cost > 0 ? totals.breakdown.headstone.cost : null);
+                    jcHsCost);
+            }
 
             if (totals.breakdown.surround.cost > 0)
                 row(currentOrder.surroundType || 'Surround',
@@ -5173,7 +5177,7 @@
                     `${totals.breakdown.inscription.letterCount} letters`,
                     totals.breakdown.inscription.cost);
             else if (currentOrder.inscriptionText)
-                row('New Inscription', 'Included (≤100 letters)', null);
+                row('New Inscription', 'Included (up to 100 letters)', null);
 
             // Extra charges (mason-facing only)
             (totals.breakdown.extraCharges || []).forEach(ec => {
