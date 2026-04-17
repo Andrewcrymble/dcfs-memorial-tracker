@@ -13,73 +13,158 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-    <!-- PASSWORD PROTECTION — fully isolated, wired via addEventListener not onclick -->
+    <!-- LOGIN — isolated script, immune to app errors -->
     <script>
     (function() {
-        var PW   = '7901';
-        var KEY  = 'dcfs_auth_v1';
+        var PW          = '7901';
+        var SESSION_KEY = 'dcfs_session_user'; // sessionStorage — clears when window closes
+        var selectedUser = '';
 
-        function isAuth()   { try { return localStorage.getItem(KEY)==='yes'; } catch(e){ return false; } }
-        function setAuth(v) { try { localStorage.setItem(KEY, v?'yes':'no');  } catch(e){} }
+        function getSessionUser() {
+            try { return sessionStorage.getItem(SESSION_KEY) || ''; } catch(e){ return ''; }
+        }
+        function setSessionUser(name) {
+            try { sessionStorage.setItem(SESSION_KEY, name); } catch(e){}
+        }
 
-        function doUnlock() {
-            var sc  = document.getElementById('pwScreen');
-            var inp = document.getElementById('pwInput');
-            var err = document.getElementById('pwError');
-            if (!inp) return;
-            if (inp.value.trim() === PW) {
-                setAuth(true);
-                if (sc)  sc.style.cssText = 'display:none!important';
-                if (err) err.textContent  = '';
+        function hideLogin() {
+            var sc = document.getElementById('loginScreen');
+            if (sc) sc.style.display = 'none';
+        }
+        function showLogin() {
+            var sc = document.getElementById('loginScreen');
+            if (sc) sc.style.display = 'flex';
+            selectedUser = '';
+            var inp = document.getElementById('loginPwInput');
+            if (inp) inp.value = '';
+            var err = document.getElementById('loginError');
+            if (err) err.textContent = '';
+            document.querySelectorAll('.login-user-btn').forEach(function(b){ b.classList.remove('selected'); });
+            updateLoginBtn();
+        }
+
+        function updateLoginBtn() {
+            var btn = document.getElementById('loginSubmit');
+            if (!btn) return;
+            if (selectedUser) {
+                btn.textContent = 'Sign in as ' + selectedUser + ' →';
+                btn.disabled = false;
+                btn.classList.add('ready');
             } else {
-                if (err) err.textContent = 'Incorrect password — try again.';
-                inp.value = '';
-                inp.style.borderColor = '#ef4444';
-                setTimeout(function(){ inp.style.borderColor = ''; inp.focus(); }, 600);
+                btn.textContent = 'Select a name first';
+                btn.disabled = true;
+                btn.classList.remove('ready');
             }
         }
 
-        // Expose for onclick= fallback (in case DOMContentLoaded already fired)
-        window.checkPassword      = doUnlock;
-        window.togglePwVisibility = function() {
-            var i = document.getElementById('pwInput');
-            var b = document.getElementById('pwToggle');
-            if (!i) return;
-            i.type = i.type==='password' ? 'text' : 'password';
-            if (b) b.textContent = i.type==='password' ? '👁' : '🙈';
+        window.loginSelectUser = function(name) {
+            selectedUser = name;
+            document.querySelectorAll('.login-user-btn').forEach(function(b){
+                b.classList.toggle('selected', b.getAttribute('data-user') === name);
+            });
+            updateLoginBtn();
+            var inp = document.getElementById('loginPwInput');
+            if (inp) inp.focus();
         };
+
+        window.loginSubmit = function() {
+            if (!selectedUser) return;
+            var inp = document.getElementById('loginPwInput');
+            var err = document.getElementById('loginError');
+            var pw  = inp ? inp.value.trim() : '';
+            if (pw === PW) {
+                setSessionUser(selectedUser);
+                // Set current user in app (if app already loaded)
+                try { if (typeof setCurrentUser === 'function') setCurrentUser(selectedUser); } catch(e){}
+                hideLogin();
+            } else {
+                if (err) err.textContent = 'Incorrect password — try again.';
+                if (inp) { inp.value=''; inp.style.borderColor='#ef4444'; inp.focus(); }
+                setTimeout(function(){ if(inp) inp.style.borderColor=''; }, 700);
+            }
+        };
+
+        window.loginTogglePw = function() {
+            var i = document.getElementById('loginPwInput');
+            var b = document.getElementById('loginPwToggle');
+            if (!i) return;
+            i.type = i.type === 'password' ? 'text' : 'password';
+            if (b) b.textContent = i.type === 'password' ? '👁' : '🙈';
+        };
+
         window.lockApp = function() {
-            setAuth(false);
-            var sc = document.getElementById('pwScreen');
-            if (sc) sc.style.cssText = 'display:flex!important';
-            var i  = document.getElementById('pwInput');
-            if (i) { i.value=''; i.focus(); }
+            setSessionUser('');
             var dd = document.getElementById('userDropdown');
             if (dd) dd.remove();
+            showLogin();
         };
 
-        document.addEventListener('DOMContentLoaded', function() {
-            var sc  = document.getElementById('pwScreen');
-            var btn = document.getElementById('pwSubmit');
-            var inp = document.getElementById('pwInput');
+        function renderLoginActivity() {
+            // Pull recent log entries from the JSONP-loaded orders (stored in window after load)
+            // Or try a cached copy in localStorage
+            var entries = [];
+            try {
+                var cached = localStorage.getItem('dcfs_activity_cache');
+                if (cached) entries = JSON.parse(cached);
+            } catch(e){}
 
-            if (!sc) return;
+            var list = document.getElementById('loginActivityList');
+            var panel = document.getElementById('loginActivity');
+            if (!list || !panel) return;
 
-            // Hide immediately if already authenticated
-            if (isAuth()) {
-                sc.style.cssText = 'display:none!important';
+            if (!entries || entries.length === 0) {
+                panel.style.display = 'none';
                 return;
             }
 
-            sc.style.cssText = 'display:flex!important';
-            if (inp) inp.focus();
+            panel.style.display = 'block';
+            list.innerHTML = entries.slice(0, 20).map(function(e) {
+                var time = '';
+                try {
+                    var d = new Date(e.ts);
+                    var now = new Date();
+                    var diff = (now - d) / 60000; // minutes
+                    if (diff < 60) time = Math.round(diff) + 'm ago';
+                    else if (diff < 1440) time = Math.round(diff/60) + 'h ago';
+                    else time = d.toLocaleDateString('en-GB', {day:'numeric',month:'short'});
+                } catch(err){}
+                return '<div style="padding:0.45rem 0;border-bottom:1px solid rgba(255,255,255,0.15);display:flex;gap:0.5rem;align-items:flex-start;">'
+                    + '<span style="flex:1;line-height:1.4;">'
+                    + '<strong style="color:rgba(255,255,255,0.6);font-size:0.72rem;">' + (e.ref || '') + '</strong>'
+                    + (e.ref ? ' · ' : '')
+                    + (e.text || '') + '</span>'
+                    + '<span style="color:rgba(255,255,255,0.5);font-size:0.7rem;white-space:nowrap;margin-top:0.1rem;">' + time + '</span>'
+                    + '</div>';
+            }).join('');
+        }
 
-            // Wire button click
-            if (btn) btn.addEventListener('click', doUnlock);
+        // Called by the main app after orders load — caches activity for login screen
+        window.cacheActivityForLogin = function(orders) {
+            try {
+                var entries = [];
+                (orders || []).forEach(function(o) {
+                    (o.log || []).forEach(function(entry) {
+                        entries.push({ ts: entry.ts, author: entry.author, text: entry.text, ref: o.deceasedName || o.orderRef || '' });
+                    });
+                });
+                entries.sort(function(a,b){ return new Date(b.ts) - new Date(a.ts); });
+                localStorage.setItem('dcfs_activity_cache', JSON.stringify(entries.slice(0, 30)));
+            } catch(e){}
+        };
 
-            // Wire Enter key
-            if (inp) inp.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') doUnlock();
+        document.addEventListener('DOMContentLoaded', function() {
+            var existing = getSessionUser();
+            if (existing) {
+                hideLogin();
+                try { if (typeof setCurrentUser === 'function') setCurrentUser(existing); } catch(e){}
+            } else {
+                showLogin();
+                renderLoginActivity();
+            }
+            // Enter key on password field
+            var inp = document.getElementById('loginPwInput');
+            if (inp) inp.addEventListener('keydown', function(e){
+                if (e.key === 'Enter') window.loginSubmit();
             });
         });
     })();
@@ -500,8 +585,8 @@
         .lt-label { font-size: 0.7rem; opacity: 0.75; text-transform: uppercase; letter-spacing: 0.05em; }
         .lt-value { font-size: 1.5rem; font-weight: 700; }
 
-        /* ── PASSWORD SCREEN ── */
-        #pwScreen {
+        /* ── LOGIN SCREEN ── */
+        #loginScreen {
             position: fixed;
             inset: 0;
             background: linear-gradient(135deg, #2d5a10 0%, #5a8f2e 60%, #0097a7 100%);
@@ -509,53 +594,82 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            gap: 1.5rem;
             padding: 1rem;
+            flex-wrap: wrap;
         }
-        #pwScreen.hidden { display: none; }
-        .pw-card {
+        .login-card {
             background: white;
             border-radius: 16px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            padding: 2.5rem 2rem;
-            max-width: 380px;
+            padding: 2rem 2rem 1.75rem;
+            max-width: 400px;
             width: 100%;
             text-align: center;
         }
-        .pw-logo {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-        }
-        .pw-card h2 {
-            font-size: 1.25rem;
+        .login-card h2 {
+            font-size: 1.2rem;
             font-weight: 700;
             color: #1e293b;
+            margin-bottom: 0.2rem;
+        }
+        .login-card .login-sub {
+            font-size: 0.82rem;
+            color: #64748b;
+            margin-bottom: 1.5rem;
+        }
+        .login-who {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #64748b;
+            margin-bottom: 0.6rem;
+        }
+        .login-users {
+            display: flex;
+            gap: 0.6rem;
+            margin-bottom: 1.4rem;
+            justify-content: center;
+        }
+        .login-user-btn {
+            flex: 1;
+            padding: 0.7rem 0.5rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #374151;
+        }
+        .login-user-btn:hover { border-color: #5a8f2e; background: #f0f7e6; color: #2d5a10; }
+        .login-user-btn.selected {
+            border-color: #5a8f2e;
+            background: #5a8f2e;
+            color: white;
+            box-shadow: 0 2px 8px rgba(90,143,46,0.4);
+        }
+        .login-user-btn .login-avatar {
+            font-size: 1.4rem;
+            display: block;
             margin-bottom: 0.25rem;
         }
-        .pw-card p {
-            font-size: 0.85rem;
-            color: #64748b;
-            margin-bottom: 1.75rem;
-        }
-        .pw-input-wrap { position: relative; margin-bottom: 1rem; }
-        #pwInput {
+        .login-pw-wrap { position: relative; margin-bottom: 0.75rem; }
+        #loginPwInput {
             width: 100%;
-            padding: 0.75rem 3rem 0.75rem 1rem;
+            padding: 0.7rem 2.75rem 0.7rem 1rem;
             border: 2px solid #e2e8f0;
             border-radius: 8px;
             font-size: 1rem;
             outline: none;
             transition: border-color 0.15s;
             text-align: center;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.12em;
         }
-        #pwInput:focus { border-color: #5a8f2e; }
-        #pwInput.error { border-color: #ef4444; animation: shake 0.3s; }
-        @keyframes shake {
-            0%,100% { transform: translateX(0); }
-            25% { transform: translateX(-6px); }
-            75% { transform: translateX(6px); }
-        }
-        #pwToggle {
+        #loginPwInput:focus { border-color: #5a8f2e; }
+        #loginPwToggle {
             position: absolute;
             right: 0.75rem;
             top: 50%;
@@ -564,30 +678,31 @@
             border: none;
             cursor: pointer;
             font-size: 1rem;
-            color: #64748b;
+            color: #94a3b8;
         }
-        #pwError {
+        #loginError {
             font-size: 0.8rem;
             color: #ef4444;
-            margin-bottom: 0.75rem;
-            min-height: 1.2em;
+            min-height: 1.1em;
+            margin-bottom: 0.5rem;
         }
-        #pwSubmit {
+        #loginSubmit {
             width: 100%;
             padding: 0.75rem;
-            background: #5a8f2e;
+            background: #9ca3af;
             color: white;
             border: none;
             border-radius: 8px;
             font-size: 1rem;
             font-weight: 600;
-            cursor: pointer;
+            cursor: not-allowed;
             transition: background 0.15s;
         }
-        #pwSubmit:hover { background: #4a7a24; }
-        .pw-footer {
-            margin-top: 1.5rem;
-            font-size: 0.75rem;
+        #loginSubmit.ready { background: #5a8f2e; cursor: pointer; }
+        #loginSubmit.ready:hover { background: #4a7a24; }
+        .login-footer {
+            margin-top: 1.25rem;
+            font-size: 0.72rem;
             color: #9ca3af;
         }
 
@@ -783,7 +898,7 @@
         .mobile-back-btn { display: none; }
 
         @media print {
-            #pwScreen, .app-header, .sidebar, .action-bar, .stats-bar { display: none; }
+            #loginScreen, .app-header, .sidebar, .action-bar, .stats-bar { display: none; }
             .main-container { height: auto; flex-direction: row; }
             .content-area { padding: 0; display: block !important; }
             .sidebar { display: none !important; }
@@ -898,19 +1013,39 @@
 </head>
 <body>
 
-    <!-- ── PASSWORD SCREEN ── -->
-    <div id="pwScreen">
-        <div class="pw-card">
-            <div class="pw-logo">🪨</div>
+    <!-- ── LOGIN SCREEN ── -->
+    <div id="loginScreen">
+        <div class="login-card">
+            <div style="font-size:2.2rem;margin-bottom:0.6rem;">🪨</div>
             <h2>David Crymble &amp; Sons</h2>
-            <p>Memorial Tool — Staff Access Only</p>
-            <div class="pw-input-wrap">
-                <input type="password" id="pwInput" placeholder="Enter password">
-                <button id="pwToggle" onclick="togglePwVisibility()" title="Show/hide">👁</button>
+            <p class="login-sub">Memorial Tool — who are you?</p>
+
+            <div class="login-who">Select your name</div>
+            <div class="login-users">
+                <button class="login-user-btn" data-user="Stephen" onclick="loginSelectUser('Stephen')">
+                    <span class="login-avatar">👤</span>Stephen
+                </button>
+                <button class="login-user-btn" data-user="Andrew" onclick="loginSelectUser('Andrew')">
+                    <span class="login-avatar">👤</span>Andrew
+                </button>
+                <button class="login-user-btn" data-user="Paul" onclick="loginSelectUser('Paul')">
+                    <span class="login-avatar">👤</span>Paul
+                </button>
             </div>
-            <div id="pwError"></div>
-            <button id="pwSubmit">Unlock →</button>
-            <div class="pw-footer">David Crymble &amp; Sons Memorial Masons · Belfast</div>
+
+            <div class="login-pw-wrap">
+                <input type="password" id="loginPwInput" placeholder="Enter password" autocomplete="off">
+                <button id="loginPwToggle" onclick="loginTogglePw()" title="Show/hide">👁</button>
+            </div>
+            <div id="loginError"></div>
+            <button id="loginSubmit" disabled onclick="loginSubmit()">Select a name first</button>
+            <div class="login-footer">David Crymble &amp; Sons Memorial Masons · Belfast</div>
+        </div>
+
+        <!-- Recent activity panel shown beside the card on wider screens -->
+        <div id="loginActivity" style="display:none;background:rgba(255,255,255,0.12);border-radius:14px;padding:1.25rem 1.5rem;max-width:320px;width:100%;max-height:440px;overflow-y:auto;backdrop-filter:blur(4px);">
+            <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:rgba(255,255,255,0.7);margin-bottom:0.75rem;">📋 Recent Activity</div>
+            <div id="loginActivityList" style="font-size:0.82rem;color:rgba(255,255,255,0.9);"></div>
         </div>
     </div>
 
@@ -1155,7 +1290,7 @@
 
             loadOrders(); // priceBook is included in the Apps Script response
             const chipName = document.getElementById('userChipName');
-            if (chipName) chipName.textContent = localStorage.getItem('dcs_current_user') || 'Andrew';
+            if (chipName) chipName.textContent = getCurrentUser();
         });
 
         // Load price book from Google Sheets
@@ -1205,6 +1340,8 @@
                         allOrders = data.orders || [];
                         if (data.priceBook) priceBook = data.priceBook;
                         renderOrderList();
+                        // Cache activity log for login screen
+                        try { if (typeof cacheActivityForLogin === 'function') cacheActivityForLogin(allOrders); } catch(e){}
                         delete window[callbackName];
                         resolve();
                     };
@@ -2270,10 +2407,14 @@
 
         // ── USER MANAGEMENT ──────────────────────────────────────────
         function getCurrentUser() {
-            return localStorage.getItem('dcs_current_user') || 'Andrew';
+            // Prefer session user (set at login screen); fall back to localStorage
+            try {
+                return sessionStorage.getItem('dcfs_session_user') || localStorage.getItem('dcs_current_user') || 'Andrew';
+            } catch(e) { return 'Andrew'; }
         }
         function setCurrentUser(name) {
-            localStorage.setItem('dcs_current_user', name);
+            try { sessionStorage.setItem('dcfs_session_user', name); } catch(e){}
+            try { localStorage.setItem('dcs_current_user', name); } catch(e){}
             const el = document.getElementById('userChipName');
             if (el) el.textContent = name;
             const nl = document.getElementById('noteAuthorLabel');
