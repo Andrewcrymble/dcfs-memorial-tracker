@@ -140,6 +140,7 @@ function doPost(e) {
     if (action === "createPaymentLink")   return handleCreatePaymentLink(body);
     if (action === "submitProofResponse") return submitProofResponse(body.orderId, body.approved, body.message);
     if (action === "sendEstimateEmail")   return sendEstimateEmail(body.email, body.customerName, body.ref, body.pdfBase64, body.proofUrl);
+    if (action === "storeEstimatePdf")    return storeEstimatePdf(body.orderId, body.ref, body.pdfBase64);
     return respond(false, "Unknown action");
   } catch (err) {
     return respond(false, err.toString());
@@ -878,6 +879,14 @@ function getProofData(orderId, callback) {
       const stripeLinkRaw = get(row, 'Stripe Link ID') || '';
       const stripePayUrl  = stripeLinkRaw.startsWith('http') ? stripeLinkRaw : '';
 
+      // Get estimate PDF URL from Files field
+      let estimatePdfUrl = '';
+      try {
+        const files = JSON.parse(get(row, 'Files') || '[]');
+        const estFile = files.find(f => f.type === 'Estimate PDF');
+        if (estFile) estimatePdfUrl = estFile.viewUrl || estFile.downloadUrl || '';
+      } catch(e) {}
+
       const proof = {
         orderId:           get(row, 'Order ID'),
         orderRef:          get(row, 'Order Ref') || String(orderId).slice(-8).toUpperCase(),
@@ -893,7 +902,8 @@ function getProofData(orderId, callback) {
         depositPaid:       depositPaid,
         depositAmount:     depositAmt,
         stripePaymentUrl:  stripePayUrl,
-        balanceDue:        Math.max(0, totalSell - depositPaid)
+        balanceDue:        Math.max(0, totalSell - depositPaid),
+        estimatePdfUrl:    estimatePdfUrl
       };
       return send({ success: true, proof });
     }
@@ -937,6 +947,54 @@ function submitProofResponse(orderId, approved, message) {
     return respond(false, 'Order not found');
   } catch (err) {
     return respond(false, err.toString());
+  }
+}
+
+// ============================================================
+// STORE ESTIMATE PDF IN GOOGLE DRIVE
+// ============================================================
+function storeEstimatePdf(orderId, ref, pdfBase64) {
+  try {
+    const base64Data = pdfBase64.replace(/^data:application\/pdf;base64,/, '');
+    const pdfBytes   = Utilities.base64Decode(base64Data);
+    const blob       = Utilities.newBlob(pdfBytes, 'application/pdf', 'Estimate_' + ref + '.pdf');
+
+    // Save into the DC&S Drive folder
+    const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    const file   = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    const viewUrl     = 'https://drive.google.com/file/d/' + file.getId() + '/view';
+    const downloadUrl = 'https://drive.google.com/uc?export=download&id=' + file.getId();
+
+    // Save the URL back to the order (Files JSON field)
+    const sheet   = getOrCreateSheet();
+    const data    = sheet.getDataRange().getValues();
+    const headers = data[0];
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) !== String(orderId)) continue;
+      const rowNum  = i + 1;
+      const filesCol = headers.indexOf('Files');
+      if (filesCol >= 0) {
+        let files = [];
+        try { files = JSON.parse(data[i][filesCol] || '[]'); } catch(e) { files = []; }
+        // Remove any old estimate entries
+        files = files.filter(f => f.type !== 'Estimate PDF');
+        files.push({
+          type: 'Estimate PDF',
+          name: 'Estimate_' + ref + '.pdf',
+          viewUrl: viewUrl,
+          downloadUrl: downloadUrl,
+          uploadedAt: new Date().toISOString()
+        });
+        sheet.getRange(rowNum, filesCol + 1).setValue(JSON.stringify(files));
+      }
+      break;
+    }
+
+    return respond(true, 'Estimate stored in Drive', { viewUrl, downloadUrl });
+  } catch (err) {
+    return respond(false, 'Drive store error: ' + err.toString());
   }
 }
 

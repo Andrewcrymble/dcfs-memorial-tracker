@@ -371,7 +371,7 @@
 
 <div class="site-header">
   <div class="logo-line">David Crymble &amp; Sons</div>
-  <div class="sub-line">Funeral Directors &amp; Memorial Masons · Established 1947</div>
+  <div class="sub-line">Funeral Directors &amp; Memorial Masons · Established 2004</div>
 </div>
 
 <!-- LOADING -->
@@ -494,6 +494,10 @@
           <div style="font-size:1.2rem;font-weight:800;color:#2e7d32;" id="depositDisplay">—</div>
         </div>
       </div>
+      <a id="estimatePdfBtn" href="#" target="_blank"
+        style="display:none;width:100%;padding:0.85rem;background:#1e40af;color:white;border:none;border-radius:12px;font-size:0.95rem;font-weight:700;font-family:inherit;cursor:pointer;text-align:center;text-decoration:none;box-sizing:border-box;">
+        📄 View / Download Your Estimate
+      </a>
       <a id="stripePayBtn" href="#" target="_blank"
         style="display:none;width:100%;padding:0.9rem;background:#635bff;color:white;border:none;border-radius:12px;font-size:0.95rem;font-weight:700;font-family:inherit;cursor:pointer;text-align:center;text-decoration:none;box-sizing:border-box;">
         💳 Pay 50% Deposit Now
@@ -682,6 +686,11 @@ function renderProof(p) {
     document.getElementById('totalDisplay').textContent   = '£' + p.totalSellPrice.toFixed(2);
     document.getElementById('depositDisplay').textContent = '£' + p.depositAmount.toFixed(2);
     document.getElementById('paymentCard').style.display  = 'block';
+    if (p.estimatePdfUrl) {
+      const estBtn = document.getElementById('estimatePdfBtn');
+      estBtn.href = p.estimatePdfUrl;
+      estBtn.style.display = 'block';
+    }
     if (p.stripePaymentUrl) {
       const payBtn = document.getElementById('stripePayBtn');
       payBtn.href = p.stripePaymentUrl;

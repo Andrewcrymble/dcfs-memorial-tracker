@@ -4993,9 +4993,21 @@
                 `Ref: ${estRef}`,
                 `Total: £${totals.totalSell.toFixed(2)}`
             ]);
-            // Offer to email estimate to customer
+            // Upload estimate PDF to Drive (so proof page can link to it)
             window._lastEstimateDoc = doc;
             window._lastEstimateRef = estRef;
+            try {
+                const pdfB64 = doc.output('datauristring');
+                fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'storeEstimatePdf', orderId: currentOrder.orderId, ref: estRef, pdfBase64: pdfB64 })
+                }).then(r => r.json()).then(result => {
+                    if (result.success) console.log('Estimate stored in Drive:', result.data && result.data.viewUrl);
+                }).catch(e => console.warn('Drive store failed (non-critical):', e));
+            } catch(e) { console.warn('Drive upload skipped:', e); }
+
+            // Offer to email estimate to customer
             showEmailEstimateModal();
         }
 
