@@ -705,15 +705,18 @@ function drawCanvas(p) {
   const hexColour = colourToHex(p.inscriptionColour);
   const lines = text.split('\n').filter(l => l.trim());
 
-  const fontSize    = Math.round(canvas.width * 0.042);
-  const lineSpacing = 1.7;
+  // Scale font so all lines fit comfortably within the stone face area
+  const lineSpacing = 1.65;
+  const stoneAreaH  = canvas.height * 0.48;  // usable stone face height
+  const maxFontByH  = Math.floor(stoneAreaH / (lines.length * lineSpacing));
+  const fontSize    = Math.min(Math.round(canvas.width * 0.038), Math.max(maxFontByH, 8));
   const scaledLineH = fontSize * lineSpacing;
   const totalH      = lines.length * scaledLineH;
 
   const cx     = canvas.width  * 0.50;
-  const startY = canvas.height * 0.44;
+  const startY = canvas.height * 0.58;   // stone face centre is ~58% down
   const topY   = startY - totalH / 2;
-  const maxTextW = canvas.width * 0.52;
+  const maxTextW = canvas.width * 0.50;
 
   ctx.save();
   ctx.fillStyle    = hexColour;
