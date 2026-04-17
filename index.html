@@ -4755,34 +4755,18 @@
             const totals = calculateOrderTotals(currentOrder);
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
+            const estRef = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
 
-            // Header
+            // ════════════════════════════════════════
+            // PAGE 1 — PRICING ESTIMATE
+            // ════════════════════════════════════════
             let y = dcsPdfHeader(doc, 'ESTIMATE', 'Memorial Estimate · Subject to Final Confirmation');
-
-            // ── Stone image (top right of estimate) ──
-            const stoneImgSrc = currentOrder.hsImage || (currentOrder.hsType ? STONE_IMAGES[currentOrder.hsType] : null);
-            if (stoneImgSrc) {
-                try {
-                    const resp = await fetch(stoneImgSrc);
-                    const blob = await resp.blob();
-                    const stoneDataUrl = await new Promise(res => {
-                        const fr = new FileReader();
-                        fr.onload = () => res(fr.result);
-                        fr.readAsDataURL(blob);
-                    });
-                    doc.addImage(stoneDataUrl, 'PNG', 135, y - 5, 55, 65);
-                    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(130,130,130);
-                    doc.text(currentOrder.hsType || '', 162, y + 62, { align: 'center' });
-                    doc.setTextColor(0,0,0);
-                } catch(e) { console.warn('Stone image fetch error:', e); }
-                y += 68; // advance past image only when one was attempted
-            }
 
             // Ref + date row
             doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(90, 90, 90);
-            doc.text(`Estimate Ref: ${(currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase()}`, 20, y);
-            doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 125, y, { align: 'right' });
-            doc.text('Valid for 30 days from date of issue', 125, y + 5, { align: 'right' });
+            doc.text(`Estimate Ref: ${estRef}`, 20, y);
+            doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 190, y, { align: 'right' });
+            doc.text('Valid for 30 days from date of issue', 190, y + 5, { align: 'right' });
             doc.setTextColor(0, 0, 0); y += 12;
 
             // Customer + Deceased boxes
@@ -4835,7 +4819,6 @@
             if (totals.breakdown.cemeteryFee > 0)
                 row('Cemetery / Churchyard Fee', currentOrder.cemetery, totals.breakdown.cemeteryFee);
 
-            // Extra charges (customer-facing only)
             (totals.breakdown.extraCharges || []).forEach(ec => {
                 if (!ec.applyToCustomer) return;
                 const sign = ec.type === 'discount' ? -1 : 1;
@@ -4843,10 +4826,9 @@
                 row(label, ec.type === 'discount' ? 'Applied discount' : 'Additional charge', sign * ec.amount);
             });
 
-            // Divider + total
+            // Total box
             y += 2;
             doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3); doc.line(20, y, 190, y); y += 6;
-
             doc.setDrawColor(0,0,0); doc.setLineWidth(0.5); doc.line(110, y - 2, 190, y - 2);
             doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(0,0,0);
             doc.text('TOTAL', 115, y + 5);
@@ -4866,25 +4848,7 @@
                 y += 16;
             }
 
-            // Inscription preview
-            if (currentOrder.inscriptionText) {
-                if (y > 238) { doc.addPage(); y = 20; }
-                doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3); doc.line(20, y, 190, y); y += 8;
-                doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
-                doc.text('INSCRIPTION TEXT — Please verify below is correct', 20, y); y += 7;
-                const iLines = doc.splitTextToSize(currentOrder.inscriptionText, 162);
-                doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
-                let iy = y;
-                iLines.forEach(l => {
-                    if (iy > 255) { doc.addPage(); iy = 20; }
-                    doc.text(l, 24, iy);
-                    iy += 5.5;
-                });
-                doc.setTextColor(0, 0, 0);
-                y = iy + 6;  // track actual position after text (fixes page-break y bug)
-            }
-
-            // Payment QR code — auto-create 50% deposit link if one doesn't exist yet
+            // Payment QR — auto-create 50% deposit link
             const depositUrl = await autoGetDepositLink();
             const depositAmt = currentOrder.stripePaymentAmount || (parseFloat(currentOrder.totalSellPrice||0)/2);
             const depositLbl = currentOrder.stripePaymentLabel || '50% Deposit';
@@ -4892,9 +4856,9 @@
                 y = await addPdfPaymentQR(doc, y, depositUrl, depositLbl, depositAmt);
             }
 
-            // Terms
-            if (y < 258) {
-                y = Math.max(y + 4, 248);
+            // Terms (pinned near bottom of page 1)
+            if (y < 265) {
+                y = Math.max(y + 4, 253);
                 doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(130, 130, 130);
                 doc.text('This is an estimate only. Prices confirmed upon order acceptance and may vary subject to cemetery requirements.', 20, y);
                 doc.text('We require full payment or a minimum 50% deposit upon order placement. Remaining balance due on or before installation.', 20, y + 4.5);
@@ -4902,7 +4866,94 @@
             }
 
             dcsPdfFooter(doc);
-            const estRef = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
+
+            // ════════════════════════════════════════
+            // PAGE 2 — INITIAL PROOF (stone image + inscription)
+            // ════════════════════════════════════════
+            const hasProofContent = (currentOrder.hsImage || STONE_IMAGES[currentOrder.hsType]) || currentOrder.inscriptionText;
+            if (hasProofContent) {
+                doc.addPage();
+                let py = dcsPdfHeader(doc, 'INITIAL PROOF', 'Please review carefully and confirm all details are correct');
+
+                // Stone image — centred, large, with inscription overlaid on top
+                const stoneImgSrc = currentOrder.hsImage || (currentOrder.hsType ? STONE_IMAGES[currentOrder.hsType] : null);
+                const imgW = 90, imgH = 108;
+                const imgX = (210 - imgW) / 2;
+
+                if (stoneImgSrc) {
+                    try {
+                        const resp = await fetch(stoneImgSrc);
+                        const blob = await resp.blob();
+                        const stoneDataUrl = await new Promise(res => {
+                            const fr = new FileReader();
+                            fr.onload = () => res(fr.result);
+                            fr.readAsDataURL(blob);
+                        });
+                        doc.addImage(stoneDataUrl, 'PNG', imgX, py, imgW, imgH);
+
+                        // Overlay inscription text ON the stone image
+                        if (currentOrder.inscriptionText) {
+                            // Choose colour based on inscriptionColour field
+                            const ic = (currentOrder.inscriptionColour || '').toLowerCase();
+                            if (ic === 'gold')        doc.setTextColor(200, 168, 75);
+                            else if (ic === 'silver') doc.setTextColor(210, 210, 210);
+                            else if (ic === 'white')  doc.setTextColor(240, 240, 240);
+                            else                      doc.setTextColor(210, 195, 140); // default warm gold
+
+                            doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5);
+                            const inscLines = currentOrder.inscriptionText.split('\n').filter(l => l.trim());
+                            const lineH = 5.5;
+                            const totalTxtH = inscLines.length * lineH;
+                            // Start text at ~48% down the image
+                            let ity = py + imgH * 0.48 - totalTxtH / 2;
+                            inscLines.forEach(line => {
+                                doc.text(line.trim(), 105, ity, { align: 'center' });
+                                ity += lineH;
+                            });
+                            doc.setTextColor(0,0,0);
+                        }
+
+                        doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(60,60,60);
+                        doc.text(`${currentOrder.hsType || ''}${currentOrder.hsSize ? ' — ' + currentOrder.hsSize : ''}`, 105, py + imgH + 6, { align: 'center' });
+                        doc.setTextColor(0,0,0);
+                        py += imgH + 12;
+                    } catch(e) {
+                        console.warn('Proof page stone image error:', e);
+                        py += 10;
+                    }
+                }
+
+                // Inscription text confirmation box (below image for easy proofing)
+                if (currentOrder.inscriptionText) {
+                    doc.setFillColor(74, 124, 47); doc.rect(20, py, 170, 8, 'F');
+                    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255,255,255);
+                    doc.text('INSCRIPTION — Please verify every word, spacing and punctuation is correct', 105, py + 5.5, { align: 'center' });
+                    doc.setTextColor(0,0,0); py += 12;
+
+                    doc.setDrawColor(74,124,47); doc.setLineWidth(0.4);
+                    const iLines = doc.splitTextToSize(currentOrder.inscriptionText, 150);
+                    const boxH = 10 + iLines.length * 7;
+                    doc.roundedRect(20, py - 4, 170, boxH, 2, 2, 'S');
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(0,0,0);
+                    iLines.forEach(l => { doc.text(l, 105, py, { align: 'center' }); py += 7; });
+                    py += 8;
+                }
+
+                // Customer approval signature block
+                py = Math.max(py + 4, 230);
+                doc.setDrawColor(180,180,180); doc.setLineWidth(0.3); doc.line(20, py, 190, py); py += 8;
+                doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(60,60,60);
+                doc.text('CUSTOMER APPROVAL', 20, py); py += 7;
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90,90,90);
+                doc.text('By signing below you confirm that all details on this proof are correct and authorise David Crymble & Sons to proceed.', 20, py); py += 10;
+                doc.setTextColor(0,0,0);
+                doc.text('Signature: ___________________________________', 20, py);
+                doc.text('Date: ___________________', 130, py); py += 10;
+                doc.text('Print Name: __________________________________', 20, py);
+
+                dcsPdfFooter(doc);
+            }
+
             const estFilename = `Estimate_${estRef}_${new Date().toISOString().slice(0,10)}.pdf`;
             doc.save(estFilename);
             addActivityLog(`Generated Estimate — Total: £${totals.totalSell.toFixed(2)}`);
