@@ -1906,25 +1906,24 @@
                     : daysSince <= 120     ? '#ffedd5'
                     : '#fee2e2';
 
-                const daysLabel = daysSince === null ? '—'
+                const daysLabel = (daysSince === null || isNaN(daysSince)) ? null
                     : daysSince === 0 ? 'today'
                     : `${daysSince}d`;
 
-                const borderColor = isInstalled ? 'transparent'
-                    : daysSince === null   ? 'transparent'
+                const borderColor = (isInstalled || daysLabel === null || isNaN(daysSince)) ? 'transparent'
                     : daysSince <= 30      ? '#86efac'
                     : daysSince <= 90      ? '#fde047'
                     : daysSince <= 120     ? '#fdba74'
                     : '#fca5a5';
 
-                const daysBadge = `<span style="
+                const daysBadge = daysLabel ? `<span style="
                     display:inline-flex;align-items:center;
                     background:${daysBg};color:${daysColor};
                     font-size:0.68rem;font-weight:700;
                     padding:1px 6px;border-radius:999px;
                     border:1px solid ${borderColor};
                     white-space:nowrap;margin-left:4px;
-                " title="Days since last movement">${daysLabel}</span>`;
+                " title="Days since last movement">${daysLabel}</span>` : '';
 
                 return `
                     <li class="order-item ${currentOrder?.orderId === order.orderId ? 'active' : ''}"
@@ -2027,11 +2026,12 @@
                         ? logEntries.reduce((l,e)=>e.ts>l?e.ts:l, logEntries[0].ts) : null;
                     const lastMovement = lastLogTs || order.orderDate || '';
                     const daysSince = lastMovement ? Math.floor((Date.now()-new Date(lastMovement))/86400000) : null;
-                    const daysColor = daysSince===null?'#9ca3af':daysSince<=30?'#16a34a':daysSince<=90?'#d97706':daysSince<=120?'#f97316':'#dc2626';
-                    const daysBg    = daysSince===null?'rgba(0,0,0,0.06)':daysSince<=30?'#dcfce7':daysSince<=90?'#fef9c3':daysSince<=120?'#ffedd5':'#fee2e2';
-                    const borderColor = daysSince===null?'transparent':daysSince<=30?'#86efac':daysSince<=90?'#fde047':daysSince<=120?'#fdba74':'#fca5a5';
-                    const daysLabel = daysSince===null?'—':daysSince===0?'today':`${daysSince}d`;
-                    const daysBadge = `<span style="background:${daysBg};color:${daysColor};font-size:0.65rem;font-weight:700;padding:1px 5px;border-radius:999px;border:1px solid ${borderColor};">${daysLabel}</span>`;
+                    const validDays = daysSince !== null && !isNaN(daysSince);
+                    const daysColor = !validDays?'#9ca3af':daysSince<=30?'#16a34a':daysSince<=90?'#d97706':daysSince<=120?'#f97316':'#dc2626';
+                    const daysBg    = !validDays?'rgba(0,0,0,0.06)':daysSince<=30?'#dcfce7':daysSince<=90?'#fef9c3':daysSince<=120?'#ffedd5':'#fee2e2';
+                    const borderColor = !validDays?'transparent':daysSince<=30?'#86efac':daysSince<=90?'#fde047':daysSince<=120?'#fdba74':'#fca5a5';
+                    const daysLabel = !validDays ? null : daysSince===0 ? 'today' : `${daysSince}d`;
+                    const daysBadge = daysLabel ? `<span style="background:${daysBg};color:${daysColor};font-size:0.65rem;font-weight:700;padding:1px 5px;border-radius:999px;border:1px solid ${borderColor};">${daysLabel}</span>` : '';
 
                     const balHtml = bal > 0
                         ? `<span style="font-size:0.7rem;font-weight:600;color:#007aff;">£${bal.toFixed(0)} due</span>`
