@@ -725,6 +725,103 @@
         .note-text { font-size:0.88rem; color:var(--text); line-height:1.5; white-space:pre-wrap; word-break:break-word; }
         .note-meta { font-size:0.72rem; color:var(--text-muted); margin-top:0.2rem; }
         .note-add-row { display:flex; flex-direction:column; gap:0.5rem; padding-top:0.75rem; border-top:2px dashed var(--border); margin-top:0.75rem; }
+
+        /* ── AMENDMENTS ── */
+        .amendments-section {
+            margin-top: 1.25rem;
+            border-top: 2px solid #fed7aa;
+            padding-top: 1rem;
+        }
+        .amendments-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .amendments-title {
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #c2410c;
+        }
+        .amendments-badge {
+            background: #fed7aa;
+            color: #9a3412;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 0.1rem 0.45rem;
+            border-radius: 999px;
+        }
+        .amendment-entry {
+            display: flex;
+            gap: 0.75rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #fed7aa;
+        }
+        .amendment-entry:last-of-type { border-bottom: none; }
+        .amendment-entry.completed { opacity: 0.6; }
+        .amendment-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            flex-shrink: 0;
+            background: #fff7ed;
+            border: 2px solid #fed7aa;
+        }
+        .amendment-entry.completed .amendment-icon {
+            background: #f0fdf4;
+            border-color: #86efac;
+        }
+        .amendment-body { flex: 1; min-width: 0; }
+        .amendment-text {
+            font-size: 0.88rem;
+            color: var(--text);
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .amendment-entry.completed .amendment-text { text-decoration: line-through; color: var(--text-muted); }
+        .amendment-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem; }
+        .amendment-status-pending {
+            display: inline-block;
+            background: #fff7ed;
+            color: #c2410c;
+            border: 1px solid #fed7aa;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 0.1rem 0.45rem;
+            border-radius: 4px;
+            margin-right: 0.4rem;
+        }
+        .amendment-status-done {
+            display: inline-block;
+            background: #f0fdf4;
+            color: #15803d;
+            border: 1px solid #86efac;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 0.1rem 0.45rem;
+            border-radius: 4px;
+            margin-right: 0.4rem;
+        }
+        .btn-complete-amendment {
+            margin-top: 0.35rem;
+            background: none;
+            border: 1px solid #fed7aa;
+            color: #c2410c;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.2rem 0.65rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-complete-amendment:hover { background: #fff7ed; }
     </style>
 </head>
 <body>
@@ -2152,7 +2249,108 @@
                         <span style="font-size:0.78rem;color:#16a34a;">Adding as: <strong id="masonNoteAuthorLabel">${getCurrentUser()}</strong> &nbsp;·&nbsp; Printed on Job Card</span>
                         <button class="btn btn-outline" style="background:#f0fdf4;border-color:#86efac;color:#15803d;" onclick="submitMasonNote()">🔨 Add Mason Note</button>
                     </div>
+                </div>
+
+                <!-- ── AMENDMENTS SECTION ── -->
+                <div class="amendments-section">
+                    <div class="amendments-header">
+                        <span style="font-size:1.1rem;">✏️</span>
+                        <span class="amendments-title">Amendments Requested</span>
+                        ${renderAmendmentsBadge(order)}
+                        <span style="margin-left:auto;font-size:0.68rem;background:#fff7ed;color:#9a3412;padding:0.1rem 0.5rem;border-radius:4px;font-weight:600;border:1px solid #fed7aa;">Printed on Job Card</span>
+                    </div>
+                    <div id="amendmentEntriesList">${renderAmendmentsList(order.amendments)}</div>
+                    <div class="note-add-row" style="border-top-color:#fed7aa;">
+                        <textarea id="amendmentInput" placeholder="Describe the amendment requested by the customer or family..." rows="2" style="width:100%;border:1px solid #fed7aa;border-radius:6px;padding:0.5rem 0.75rem;font-size:0.88rem;font-family:inherit;resize:vertical;" onkeydown="if(event.ctrlKey&&event.key==='Enter'){submitAmendment();}"></textarea>
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;">
+                            <span style="font-size:0.78rem;color:#c2410c;">Logged as: <strong>${getCurrentUser()}</strong> &nbsp;·&nbsp; Ctrl+Enter to save</span>
+                            <button class="btn" style="background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;font-weight:700;" onclick="submitAmendment()">✏️ Log Amendment</button>
+                        </div>
+                    </div>
                 </div>`;
+        }
+
+        function renderAmendmentsBadge(order) {
+            const pending = (order.amendments || []).filter(a => a.status !== 'completed').length;
+            if (pending === 0) return '';
+            return `<span class="amendments-badge">${pending} pending</span>`;
+        }
+
+        function renderAmendmentsList(amendments) {
+            if (!amendments || amendments.length === 0)
+                return '<p style="color:#9ca3af;font-size:0.85rem;padding:0.25rem 0 0.5rem;">No amendments logged yet.</p>';
+            const sorted = [...amendments].sort((a,b) => new Date(b.ts)-new Date(a.ts));
+            return sorted.map(a => {
+                const safe = (a.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                const isDone = a.status === 'completed';
+                const statusBadge = isDone
+                    ? `<span class="amendment-status-done">✓ Completed</span>`
+                    : `<span class="amendment-status-pending">⚠ Pending</span>`;
+                const completedLine = isDone && a.completedTs
+                    ? `<div class="amendment-meta">Completed by ${a.completedBy || 'Unknown'} · ${new Date(a.completedTs).toLocaleString('en-GB')}</div>`
+                    : '';
+                const completeBtn = !isDone
+                    ? `<button class="btn-complete-amendment" onclick="markAmendmentComplete('${a.id}')">✓ Mark Complete</button>`
+                    : '';
+                return `<div class="amendment-entry ${isDone ? 'completed' : ''}" id="amendment-${a.id}">
+                    <div class="amendment-icon">${isDone ? '✅' : '✏️'}</div>
+                    <div class="amendment-body">
+                        <div class="amendment-text">${statusBadge}${safe}</div>
+                        <div class="amendment-meta">Logged by ${a.author} · ${new Date(a.ts).toLocaleString('en-GB')}</div>
+                        ${completedLine}
+                        ${completeBtn}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function submitAmendment() {
+            const input = document.getElementById('amendmentInput');
+            const text = (input?.value || '').trim();
+            if (!text || !currentOrder) return;
+            if (!currentOrder.amendments) currentOrder.amendments = [];
+            const entry = {
+                id: Date.now().toString(),
+                ts: new Date().toISOString(),
+                author: getCurrentUser(),
+                text,
+                status: 'pending',
+                completedTs: null,
+                completedBy: null
+            };
+            currentOrder.amendments.push(entry);
+            if (!currentOrder.log) currentOrder.log = [];
+            currentOrder.log.push({
+                id: (Date.now()+1).toString(),
+                ts: new Date().toISOString(),
+                author: getCurrentUser(),
+                text: `Amendment logged: "${text.slice(0,80)}${text.length>80?'…':''}"`
+            });
+            input.value = '';
+            // Update just the amendments list (fast, no full re-render)
+            const list = document.getElementById('amendmentEntriesList');
+            if (list) list.innerHTML = renderAmendmentsList(currentOrder.amendments);
+            await saveOrder(currentOrder);
+        }
+
+        async function markAmendmentComplete(amendmentId) {
+            if (!currentOrder || !currentOrder.amendments) return;
+            const amendment = currentOrder.amendments.find(a => a.id === amendmentId);
+            if (!amendment) return;
+            amendment.status = 'completed';
+            amendment.completedTs = new Date().toISOString();
+            amendment.completedBy = getCurrentUser();
+            if (!currentOrder.log) currentOrder.log = [];
+            currentOrder.log.push({
+                id: Date.now().toString(),
+                ts: new Date().toISOString(),
+                author: getCurrentUser(),
+                text: `Amendment completed: "${amendment.text.slice(0,80)}${amendment.text.length>80?'…':''}"`
+            });
+            // Update just the amendments list
+            const list = document.getElementById('amendmentEntriesList');
+            if (list) list.innerHTML = renderAmendmentsList(currentOrder.amendments);
+            await saveOrder(currentOrder);
         }
 
         async function submitNote() {
@@ -3849,6 +4047,56 @@
                     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(0,0,0);
                     el.forEach(l => { if (y > 265) { doc.addPage(); y = 20; } doc.text(l, 24, y); y += 5; });
                     y += 3;
+                });
+                y += 2;
+            }
+
+            // Amendments — show on job card
+            const amendments = currentOrder.amendments || [];
+            if (amendments.length > 0) {
+                if (y > 220) { doc.addPage(); y = 20; }
+
+                const pendingCount = amendments.filter(a => a.status !== 'completed').length;
+
+                // Orange header bar
+                doc.setFillColor(255, 237, 213); doc.setDrawColor(253, 186, 116); doc.setLineWidth(0.3);
+                doc.rect(20, y, 170, 7, 'FD');
+                doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(194, 65, 12);
+                doc.text(`AMENDMENTS REQUESTED  (${pendingCount} pending / ${amendments.length} total)`, 24, y + 4.5);
+                doc.setTextColor(0, 0, 0); y += 11;
+
+                const sortedAmend = [...amendments].sort((a,b) => new Date(a.ts)-new Date(b.ts));
+                sortedAmend.forEach((amend, i) => {
+                    if (y > 255) { doc.addPage(); y = 20; }
+                    const isDone = amend.status === 'completed';
+
+                    // Status badge area
+                    if (isDone) {
+                        doc.setFillColor(240, 253, 244); doc.setDrawColor(134, 239, 172); doc.setLineWidth(0.2);
+                    } else {
+                        doc.setFillColor(255, 247, 237); doc.setDrawColor(253, 186, 116); doc.setLineWidth(0.2);
+                    }
+                    doc.roundedRect(21, y - 1, 168, 5.5, 1, 1, 'FD');
+
+                    // Status label
+                    doc.setFontSize(7); doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(isDone ? 21 : 194, isDone ? 128 : 65, isDone ? 61 : 12);
+                    doc.text(isDone ? '✓ COMPLETED' : '⚠ PENDING', 24, y + 3.5);
+
+                    // Author + date
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 100, 100);
+                    doc.text(`Logged: ${amend.author} · ${new Date(amend.ts).toLocaleDateString('en-GB')}`, 65, y + 3.5);
+                    if (isDone && amend.completedTs) {
+                        doc.text(`Completed: ${amend.completedBy || ''} · ${new Date(amend.completedTs).toLocaleDateString('en-GB')}`, 130, y + 3.5);
+                    }
+                    y += 7;
+
+                    // Amendment text
+                    const al = doc.splitTextToSize(`${i + 1}. ${amend.text}`, 160);
+                    doc.setFont('helvetica', isDone ? 'normal' : 'bold'); doc.setFontSize(9);
+                    doc.setTextColor(isDone ? 120 : 0, isDone ? 120 : 0, isDone ? 120 : 0);
+                    al.forEach(l => { if (y > 265) { doc.addPage(); y = 20; } doc.text(l, 24, y); y += 5; });
+                    y += 4;
                 });
                 y += 2;
             }
