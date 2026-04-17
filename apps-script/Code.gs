@@ -594,6 +594,7 @@ function mapSheetOrderToTracker(sheetOrder) {
     noteEntries:         parseJSON(sheetOrder["Note Entries"]),
     masonNoteEntries:    parseJSON(sheetOrder["Mason Note Entries"]),
     stripeLinkId:        sheetOrder["Stripe Link ID"] || "",
+    stripePaymentUrl:    (sheetOrder["Stripe Link ID"] || "").startsWith("http") ? sheetOrder["Stripe Link ID"] : "",
     stripePaymentDate:   sheetOrder["Stripe Payment Date"] || "",
     stripePaymentAmount: parseFloat(sheetOrder["Stripe Payment Amount"]) || 0,
     stripePaymentReceived: !!(sheetOrder["Stripe Payment Date"] && sheetOrder["Stripe Payment Date"] !== ""),
