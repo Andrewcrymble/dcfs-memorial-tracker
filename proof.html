@@ -600,7 +600,9 @@ function colourToHex(name) {
 // ── INIT ──
 window.addEventListener('DOMContentLoaded', () => {
   const params = new URLSearchParams(window.location.search);
-  const orderId = params.get('id');
+  const orderId      = params.get('id');
+  window._payUrlParam   = params.get('pay')   || '';
+  window._totalParam    = parseFloat(params.get('total') || 0);
 
   if (!orderId) {
     showError('No proof ID found in the link. Please check the URL or contact us.');
@@ -687,26 +689,32 @@ function renderProof(p) {
     statusEl.textContent = '⏳ Awaiting Your Approval';
   }
 
-  // Payment card
-  if (p.totalSellPrice > 0) {
-    document.getElementById('totalDisplay').textContent   = '£' + p.totalSellPrice.toFixed(2);
-    document.getElementById('depositDisplay').textContent = '£' + p.depositAmount.toFixed(2);
+  // Payment card — use URL params as fallback if sheet fields are empty
+  const totalSell  = p.totalSellPrice  || window._totalParam  || 0;
+  const stripeUrl  = p.stripePaymentUrl || window._payUrlParam || '';
+  const depositAmt = p.depositAmount   || (totalSell > 0 ? Math.round(totalSell / 2 * 100) / 100 : 0);
+
+  if (totalSell > 0) {
+    document.getElementById('totalDisplay').textContent   = '£' + totalSell.toFixed(2);
+    document.getElementById('depositDisplay').textContent = '£' + depositAmt.toFixed(2);
     document.getElementById('paymentCard').style.display  = 'block';
+
     if (p.estimatePdfUrl) {
       const estBtn = document.getElementById('estimatePdfBtn');
       estBtn.href = p.estimatePdfUrl;
       estBtn.style.display = 'block';
     }
-    if (p.stripePaymentUrl) {
+
+    if (stripeUrl) {
       const payBtn = document.getElementById('stripePayBtn');
-      payBtn.href = p.stripePaymentUrl;
+      payBtn.href = stripeUrl;
       payBtn.style.display = 'block';
       // Generate QR code
       const qrWrap = document.getElementById('payQrWrap');
       const qrDiv  = document.getElementById('payQrCode');
       qrWrap.style.display = 'block';
       new QRCode(qrDiv, {
-        text:         p.stripePaymentUrl,
+        text:         stripeUrl,
         width:        160,
         height:       160,
         colorDark:    '#635bff',

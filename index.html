@@ -6116,8 +6116,15 @@
         // CUSTOMER PROOF LINK
         // ══════════════════════════════════════════════════════
         function getProofUrl(order) {
-            const id = (order || currentOrder || {}).orderId || '';
-            return `https://tracker.crymbleandsons.com/proof.html?id=${encodeURIComponent(id)}`;
+            const o   = order || currentOrder || {};
+            const id  = o.orderId || '';
+            let url   = `https://tracker.crymbleandsons.com/proof.html?id=${encodeURIComponent(id)}`;
+            // Embed payment URL and total in link so proof page never needs sheet lookup
+            const pay = o.stripePaymentUrl || '';
+            if (pay) url += `&pay=${encodeURIComponent(pay)}`;
+            const total = parseFloat(o.totalSellPrice || 0);
+            if (total > 0) url += `&total=${total}`;
+            return url;
         }
 
         function shareProofLink() {
