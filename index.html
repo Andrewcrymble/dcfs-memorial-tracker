@@ -2893,14 +2893,59 @@
             await saveOrder(orderData);
         }
 
+        // Show a non-blocking toast notification
+        function showToast(msg, type = 'success', duration = 3000) {
+            const existing = document.getElementById('appToast');
+            if (existing) existing.remove();
+            const toast = document.createElement('div');
+            toast.id = 'appToast';
+            const bg = type === 'success' ? '#16a34a' : type === 'warn' ? '#d97706' : '#dc2626';
+            toast.style.cssText = `
+                position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%);
+                background:${bg}; color:white; padding:0.65rem 1.25rem;
+                border-radius:999px; font-size:0.88rem; font-weight:600;
+                box-shadow:0 4px 16px rgba(0,0,0,0.25); z-index:9998;
+                animation:fadeInUp 0.2s ease; pointer-events:none;
+                white-space:nowrap; max-width:90vw; text-align:center;
+            `;
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), duration);
+        }
+
+        // Add toast animation once
+        if (!document.getElementById('toastStyle')) {
+            const s = document.createElement('style');
+            s.id = 'toastStyle';
+            s.textContent = '@keyframes fadeInUp{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
+            document.head.appendChild(s);
+        }
+
         // Save order to Google Sheets
         async function saveOrder(orderData) {
-            // Show saving indicator in the list
+            // ── 1. Update local state & UI immediately (optimistic) ──
+            const existingIdx = allOrders.findIndex(o => o.orderId === orderData.orderId);
+            if (existingIdx >= 0) {
+                allOrders[existingIdx] = orderData;
+            } else {
+                allOrders.unshift(orderData);
+            }
+            currentOrder = orderData;
+
+            try {
+                renderOrderList();
+                renderOrderDetails();
+                showMobileDetail();
+            } catch (uiErr) {
+                console.error('UI render error (order data is fine):', uiErr);
+            }
+
+            // ── 2. Send to Google Sheets in background ──
             const listEl = document.getElementById('orderList');
             const savingBanner = document.createElement('li');
             savingBanner.id = 'savingBanner';
-            savingBanner.style.cssText = 'padding:0.75rem 1rem;background:#e8f5e9;color:#2e7d32;font-size:0.85rem;text-align:center;font-weight:600;';
-            savingBanner.textContent = '💾 Saving order…';
+            savingBanner.style.cssText = 'padding:0.6rem 1rem;background:#e8f5e9;color:#2e7d32;font-size:0.82rem;text-align:center;font-weight:600;';
+            savingBanner.textContent = '💾 Syncing…';
             if (listEl) listEl.prepend(savingBanner);
 
             try {
@@ -2910,21 +2955,10 @@
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify({ action: 'upsert', order: orderData })
                 });
-
-                // Update local list immediately
-                const existingIdx = allOrders.findIndex(o => o.orderId === orderData.orderId);
-                if (existingIdx >= 0) {
-                    allOrders[existingIdx] = orderData; // update existing
-                } else {
-                    allOrders.unshift(orderData); // genuinely new order
-                }
-                currentOrder = orderData;
-                renderOrderList();
-                renderOrderDetails();
-
-            } catch (error) {
-                console.error('Error saving order:', error);
-                alert('Error saving order. Please check your connection and try again.');
+                showToast('✓ Order saved', 'success');
+            } catch (fetchErr) {
+                console.error('Network error syncing order:', fetchErr);
+                showToast('⚠ Saved locally — sync failed. Tap Refresh when back online.', 'warn', 5000);
             } finally {
                 const b = document.getElementById('savingBanner');
                 if (b) b.remove();
