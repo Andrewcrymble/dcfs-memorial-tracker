@@ -39,7 +39,8 @@ const HEADERS = [
   "Log Entries",
   "Note Entries", "Mason Note Entries",
   "Stripe Link ID", "Stripe Payment Date", "Stripe Payment Amount",
-  "Mason Notified At", "Mason Notified By"
+  "Mason Notified At", "Mason Notified By",
+  "Stripe Session IDs"
 ];
 
 // ============================================================
@@ -189,8 +190,9 @@ function handleStripeWebhook(event) {
         const orderId      = session.metadata && session.metadata.order_id;
         const amountPounds = (session.amount_total || 0) / 100;
         const paymentType  = (session.metadata && session.metadata.payment_type) || 'payment';
+        const sessionId    = session.id || '';
         if (orderId) {
-          markPaymentReceived(orderId, amountPounds, paymentType);
+          markPaymentReceived(orderId, amountPounds, paymentType, sessionId);
         } else {
           Logger.log('Webhook: no order_id in metadata — cannot match order');
         }
@@ -208,7 +210,7 @@ function handleStripeWebhook(event) {
   }
 }
 
-function markPaymentReceived(orderId, amountPounds, paymentType) {
+function markPaymentReceived(orderId, amountPounds, paymentType, sessionId) {
   try {
     const sheet   = getOrCreateSheet();
     const data    = sheet.getDataRange().getValues();
@@ -218,6 +220,15 @@ function markPaymentReceived(orderId, amountPounds, paymentType) {
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]) !== String(orderId)) continue;
       const rowNum = i + 1;
+
+      // Idempotency guard: Stripe retries webhooks. If we've already
+      // processed this session.id for this order, skip silently.
+      const sessCol = col('Stripe Session IDs');
+      const seen = sessCol >= 0 ? String(data[i][sessCol] || '') : '';
+      if (sessionId && seen.split(',').indexOf(sessionId) !== -1) {
+        Logger.log('Duplicate Stripe webhook for session ' + sessionId + ' on order ' + orderId + ' — skipping');
+        return;
+      }
 
       // Add to deposit paid
       const depCol = col('Deposit Paid');
@@ -247,6 +258,11 @@ function markPaymentReceived(orderId, amountPounds, paymentType) {
       if (sdCol >= 0) sheet.getRange(rowNum, sdCol + 1).setValue(new Date().toLocaleString('en-GB'));
       const saCol = col('Stripe Payment Amount');
       if (saCol >= 0) sheet.getRange(rowNum, saCol + 1).setValue(amountPounds);
+
+      // Record the session ID so subsequent retries are skipped
+      if (sessCol >= 0 && sessionId) {
+        sheet.getRange(rowNum, sessCol + 1).setValue(seen ? seen + ',' + sessionId : sessionId);
+      }
 
       // Append to log
       const logCol = col('Log Entries');
@@ -483,7 +499,14 @@ function upsertOrder(order) {
     "Mason Notified By":   order.masonNotifiedBy || "",
   };
 
-  const row = headers.map(h => valueMap.hasOwnProperty(h) ? valueMap[h] : "");
+  // For columns the tracker UI doesn't manage (e.g., Stripe Session IDs,
+  // anything written by webhooks/back-office tools), preserve the existing
+  // value rather than wiping it to "" on every save.
+  const existingVals = existingRow > 0 ? data[existingRow - 1] : null;
+  const row = headers.map((h, idx) => {
+    if (valueMap.hasOwnProperty(h)) return valueMap[h];
+    return existingVals && existingVals[idx] !== undefined ? existingVals[idx] : "";
+  });
 
   if (existingRow > 0) {
     sheet.getRange(existingRow, 1, 1, row.length).setValues([row]);
