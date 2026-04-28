@@ -1702,7 +1702,7 @@
         }
 
         // Configuration
-       const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyx-Vxu3IGCkEAe47CXbWq9L6_BbQ4wQ28rZ8JsScFFNiaVW80dsQrjLaFA-aq7aMJz/exec';
+       const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxqsqKFSmqxuhzlIGXI9PA2al1vMUPQQeBfoH-xoXoQaMnXbFCJdd8rjj-1cFY2noSc/exec';
         const SHEET_ID = '1_pbyhKL1IElgneBZHFIWG76Cv6hNKdUw0fgSHQjMN6M';
         const STONE_IMAGES = {
             'OG':           'ogee.png',
@@ -2551,6 +2551,20 @@
                     </div>
                 </div>
 
+                <!-- Mason Notification (auto-fires when proof approved; manual resend available) -->
+                <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);border-left:4px solid ${o.masonNotifiedAt ? '#16a34a' : '#9ca3af'};margin-bottom:1.25rem;">
+                    <div class="card-header" style="background:${o.masonNotifiedAt ? '#f0fdf4' : '#f9fafb'};">
+                        <span class="card-header-icon">📧</span>
+                        <span class="card-header-title" style="color:${o.masonNotifiedAt ? '#15803d' : '#374151'};">Mason Notification</span>
+                        ${o.masonNotifiedAt
+                            ? `<span style="margin-left:auto;font-size:0.72rem;background:#dcfce7;color:#15803d;padding:0.15rem 0.5rem;border-radius:4px;font-weight:600;">SENT</span>`
+                            : `<span style="margin-left:auto;font-size:0.72rem;background:#f3f4f6;color:#6b7280;padding:0.15rem 0.5rem;border-radius:4px;font-weight:600;">NOT SENT</span>`}
+                    </div>
+                    <div class="card-body">
+                        ${renderMasonNotification(o)}
+                    </div>
+                </div>
+
                 <!-- Payment card (shown when payment link exists) -->
                 ${o.stripePaymentUrl ? `
                 <div class="card detail-grid-wide" style="border:2px solid #635bff;">
@@ -3162,11 +3176,41 @@
         async function approveFile(idx) {
             if (!currentOrder || !currentOrder.files) return;
             const file = currentOrder.files[idx];
-            if (!confirm(`Mark "${file.name}" as APPROVED?\n\nThis will record the approval date and link to the Drive file.`)) return;
+            if (!confirm(`Mark "${file.name}" as APPROVED?\n\nThis will record the approval date and notify the stone mason by email with the proof attached.`)) return;
             file.approved = true;
             file.approvedAt = new Date().toISOString();
             addActivityLog(`Proof approved: ${file.name}`);
             await saveOrder(currentOrder);
+
+            // Auto-notify mason on first internal approval of a Proof file
+            if (file.type === 'Proof' && !currentOrder.masonNotifiedAt) {
+                try {
+                    const res = await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({
+                            action: 'notifyMason',
+                            orderId: currentOrder.orderId,
+                            triggeredBy: getCurrentUser() + ' (internal approval)',
+                            force: false
+                        })
+                    });
+                    let result = null;
+                    try { result = await res.json(); } catch(e) {}
+                    if (result && result.success) {
+                        currentOrder.masonNotifiedAt = (result.data && result.data.masonNotifiedAt) || new Date().toISOString();
+                        currentOrder.masonNotifiedBy = getCurrentUser() + ' (internal approval)';
+                        await saveOrder(currentOrder);
+                        showToast('✅ Mason notified', 'success');
+                    } else if (result && result.message) {
+                        showToast('⚠ Mason not notified: ' + result.message, 'warn', 5000);
+                    }
+                } catch (err) {
+                    console.error('Auto-notifyMason failed:', err);
+                    showToast('⚠ Could not reach mason notification service', 'warn', 5000);
+                }
+            }
+
             renderOrderDetails();
         }
 
@@ -3282,6 +3326,75 @@
                         <button class="btn btn-cyan" onclick="submitNote()">💬 Add Note</button>
                     </div>
                 </div>`;
+        }
+
+        function renderMasonNotification(order) {
+            const proofFile = (order.files || []).find(f => f.type === 'Proof');
+            const hasApprovedProof = !!(proofFile && proofFile.approved);
+            const notifiedAt = order.masonNotifiedAt
+                ? new Date(order.masonNotifiedAt).toLocaleString('en-GB')
+                : '';
+            const proofRow = proofFile
+                ? `<div style="font-size:0.82rem;color:#374151;margin-bottom:0.5rem;">Proof file: <strong>${(proofFile.name||'').replace(/</g,'&lt;')}</strong> ${hasApprovedProof ? '<span style="color:#15803d;font-weight:600;">· approved</span>' : '<span style="color:#b45309;font-weight:600;">· awaiting approval</span>'}</div>`
+                : `<div style="font-size:0.82rem;color:#b45309;margin-bottom:0.5rem;">⚠️ No proof file uploaded yet — upload one (file type: Proof) before notifying the mason.</div>`;
+
+            const statusBlock = order.masonNotifiedAt
+                ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:0.6rem 0.8rem;font-size:0.85rem;color:#166534;margin-bottom:0.75rem;">
+                       ✅ Mason notified <strong>${notifiedAt}</strong>${order.masonNotifiedBy ? ` by <strong>${order.masonNotifiedBy}</strong>` : ''}.<br>
+                       <span style="font-size:0.78rem;">Email + proof attachment sent to the configured mason address.</span>
+                   </div>`
+                : `<div style="background:#fef9c3;border:1px solid #fde68a;border-radius:6px;padding:0.6rem 0.8rem;font-size:0.85rem;color:#854d0e;margin-bottom:0.75rem;">
+                       ⏳ Mason has not been notified yet.<br>
+                       <span style="font-size:0.78rem;">This will fire automatically when the customer approves the proof, or send manually below.</span>
+                   </div>`;
+
+            const btnLabel = order.masonNotifiedAt ? '📧 Re-send to Mason' : '📧 Send to Mason';
+            const btnDisabled = !proofFile ? 'disabled' : '';
+            return `
+                ${proofRow}
+                ${statusBlock}
+                <div style="display:flex;justify-content:flex-end;">
+                    <button class="btn btn-outline" style="background:#f0fdf4;border-color:#86efac;color:#15803d;${btnDisabled?'opacity:0.5;cursor:not-allowed;':''}" ${btnDisabled} onclick="notifyMasonNow()">${btnLabel}</button>
+                </div>`;
+        }
+
+        async function notifyMasonNow() {
+            if (!currentOrder) return;
+            const proofFile = (currentOrder.files || []).find(f => f.type === 'Proof');
+            if (!proofFile) {
+                alert('Upload a proof file first (file type: Proof) before notifying the mason.');
+                return;
+            }
+            const isResend = !!currentOrder.masonNotifiedAt;
+            if (isResend && !confirm('Re-send the approval email to the mason? They have already been notified once.')) return;
+
+            showToast('📧 Sending to mason…', 'info');
+            try {
+                const res = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action: 'notifyMason',
+                        orderId: currentOrder.orderId,
+                        triggeredBy: getCurrentUser(),
+                        force: isResend
+                    })
+                });
+                let result = null;
+                try { result = await res.json(); } catch(e) {}
+                if (result && result.success) {
+                    currentOrder.masonNotifiedAt = (result.data && result.data.masonNotifiedAt) || new Date().toISOString();
+                    currentOrder.masonNotifiedBy = getCurrentUser();
+                    addActivityLog(`Mason notified manually${isResend ? ' (re-send)' : ''}`);
+                    await saveOrder(currentOrder);
+                    showToast('✅ Mason notified', 'success');
+                } else {
+                    showToast('⚠ ' + ((result && result.message) || 'Notification failed'), 'warn', 5000);
+                }
+            } catch (err) {
+                console.error('notifyMason failed:', err);
+                showToast('⚠ Network error sending to mason', 'warn', 5000);
+            }
         }
 
         function renderMasonNotes(order) {

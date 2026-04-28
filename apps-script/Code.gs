@@ -12,6 +12,12 @@ const PRICE_BOOK_ID = SHEET_ID;
 // Project Settings → Script Properties → STRIPE_SECRET_KEY
 const STRIPE_SECRET_KEY = PropertiesService.getScriptProperties().getProperty('STRIPE_SECRET_KEY') || '';
 
+// ── STONE MASON CONTACT ──
+// Where the auto-notification email is sent when a proof is approved.
+// Override at runtime by setting Script Property MASON_EMAIL / MASON_NAME.
+const MASON_EMAIL = PropertiesService.getScriptProperties().getProperty('MASON_EMAIL') || 'mason@example.com';
+const MASON_NAME  = PropertiesService.getScriptProperties().getProperty('MASON_NAME')  || 'Stone Mason';
+
 const HEADERS = [
   "Order ID", "Created", "Last Updated", "Status", "Payment Status",
   "Customer Name", "Phone", "Email", "Address",
@@ -32,7 +38,8 @@ const HEADERS = [
   "Folder Link", "Files", "Extra Charges", "Mason Charges",
   "Log Entries",
   "Note Entries", "Mason Note Entries",
-  "Stripe Link ID", "Stripe Payment Date", "Stripe Payment Amount"
+  "Stripe Link ID", "Stripe Payment Date", "Stripe Payment Amount",
+  "Mason Notified At", "Mason Notified By"
 ];
 
 // ============================================================
@@ -51,8 +58,29 @@ function getOrCreateSheet() {
     headerRange.setFontFamily("Arial");
     headerRange.setFontSize(9);
     sheet.setFrozenRows(1);
+  } else {
+    ensureHeaders(sheet);
   }
   return sheet;
+}
+
+// Append any HEADERS that are missing from row 1 so new fields persist
+// instead of being silently dropped by upsertOrder's header-driven mapping.
+function ensureHeaders(sheet) {
+  const lastCol = sheet.getLastColumn();
+  const existing = lastCol > 0
+    ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(String)
+    : [];
+  const missing = HEADERS.filter(h => existing.indexOf(h) === -1);
+  if (missing.length === 0) return;
+  const startCol = existing.length + 1;
+  sheet.getRange(1, startCol, 1, missing.length).setValues([missing]);
+  const newRange = sheet.getRange(1, startCol, 1, missing.length);
+  newRange.setBackground("#1e2530");
+  newRange.setFontColor("#b89a5e");
+  newRange.setFontWeight("bold");
+  newRange.setFontFamily("Arial");
+  newRange.setFontSize(9);
 }
 
 function respond(success, message, data) {
@@ -141,6 +169,7 @@ function doPost(e) {
     if (action === "submitProofResponse") return submitProofResponse(body.orderId, body.approved, body.message);
     if (action === "sendEstimateEmail")   return sendEstimateEmail(body.email, body.customerName, body.ref, body.pdfBase64, body.proofUrl);
     if (action === "storeEstimatePdf")    return storeEstimatePdf(body.orderId, body.ref, body.pdfBase64);
+    if (action === "notifyMason")         return notifyMason(body.orderId, body.triggeredBy, !!body.force);
     return respond(false, "Unknown action");
   } catch (err) {
     return respond(false, err.toString());
@@ -450,6 +479,8 @@ function upsertOrder(order) {
     "Stripe Link ID":      order.stripePaymentUrl || order.stripeLinkId || "",
     "Stripe Payment Date": order.stripePaymentDate || "",
     "Stripe Payment Amount": order.stripePaymentAmount || 0,
+    "Mason Notified At":   order.masonNotifiedAt || "",
+    "Mason Notified By":   order.masonNotifiedBy || "",
   };
 
   const row = headers.map(h => valueMap.hasOwnProperty(h) ? valueMap[h] : "");
@@ -598,6 +629,8 @@ function mapSheetOrderToTracker(sheetOrder) {
     stripePaymentDate:   sheetOrder["Stripe Payment Date"] || "",
     stripePaymentAmount: parseFloat(sheetOrder["Stripe Payment Amount"]) || 0,
     stripePaymentReceived: !!(sheetOrder["Stripe Payment Date"] && sheetOrder["Stripe Payment Date"] !== ""),
+    masonNotifiedAt:     sheetOrder["Mason Notified At"] || "",
+    masonNotifiedBy:     sheetOrder["Mason Notified By"] || "",
     log:                 parseLogEntries(sheetOrder["Log Entries"])
   };
 }
@@ -943,6 +976,15 @@ function submitProofResponse(orderId, approved, message) {
       if (luCol >= 0) sheet.getRange(rowNum, luCol + 1)
         .setValue(Utilities.formatDate(new Date(), 'Europe/London', 'dd/MM/yyyy HH:mm'));
 
+      // Auto-notify mason when the customer approves (skip on changes-requested)
+      if (approved) {
+        try {
+          notifyMason(orderId, 'Customer approval', false);
+        } catch (e) {
+          Logger.log('Auto-notifyMason failed: ' + e);
+        }
+      }
+
       return respond(true, approved ? 'Proof approved' : 'Changes requested recorded');
     }
     return respond(false, 'Order not found');
@@ -997,6 +1039,158 @@ function storeEstimatePdf(orderId, ref, pdfBase64) {
   } catch (err) {
     return respond(false, 'Drive store error: ' + err.toString());
   }
+}
+
+// ============================================================
+// NOTIFY STONE MASON — sends approved proof + full order details
+// ============================================================
+// Called automatically from submitProofResponse() when the customer
+// approves a proof, and on demand from the tracker's "Notify Mason" button.
+// Looks up the order, finds the latest "Proof" file in Drive, attaches it,
+// and emails MASON_EMAIL with all the build-relevant fields.
+function notifyMason(orderId, triggeredBy, force) {
+  try {
+    if (!MASON_EMAIL || MASON_EMAIL === 'mason@example.com') {
+      return respond(false, 'MASON_EMAIL not configured. Set Script Property MASON_EMAIL in Apps Script project settings.');
+    }
+    const sheet   = getOrCreateSheet();
+    const data    = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    let rowNum = -1, rowVals = null;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(orderId)) {
+        rowNum = i + 1;
+        rowVals = data[i];
+        break;
+      }
+    }
+    if (rowNum < 0) return respond(false, 'Order not found: ' + orderId);
+
+    // Build a sheetOrder map and parse it the same way getAllOrders does
+    const sheetOrder = {};
+    headers.forEach((h, idx) => sheetOrder[h] = rowVals[idx] !== undefined ? String(rowVals[idx]) : '');
+    const order = mapSheetOrderToTracker(sheetOrder);
+
+    // Skip if already notified — unless force=true (manual resend)
+    if (!force && order.masonNotifiedAt) {
+      return respond(true, 'Mason already notified at ' + order.masonNotifiedAt + ' (use force=true to resend)');
+    }
+
+    // Locate the most recent Proof file
+    const proofFile = (order.files || []).filter(f => f.type === 'Proof')
+      .sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0))[0];
+
+    const attachments = [];
+    if (proofFile && proofFile.fileId) {
+      try {
+        attachments.push(DriveApp.getFileById(proofFile.fileId).getBlob());
+      } catch (e) {
+        Logger.log('Could not attach proof file ' + proofFile.fileId + ': ' + e);
+      }
+    }
+
+    const ref = (order.orderId || '').slice(-6).toUpperCase();
+    const subject = 'New Approved Job — ' + (order.deceasedName || 'Memorial') + ' — Ref ' + ref;
+
+    const fmt = v => v == null || v === '' ? '<em style="color:#888;">—</em>' : String(v);
+    const fmtList = arr => (arr && arr.length) ? arr.join(', ') : '<em style="color:#888;">none</em>';
+    const noteEntries = (order.masonNoteEntries || [])
+      .map(n => '<li>' + (n.text || '').replace(/</g, '&lt;') + ' <span style="color:#888;font-size:11px;">— ' + (n.author || '') + ', ' + (n.ts ? new Date(n.ts).toLocaleString('en-GB') : '') + '</span></li>')
+      .join('');
+    const masonNotesBlock = (order.masonNotes || noteEntries)
+      ? '<h3 style="color:#15803d;margin:18px 0 6px;">Mason Notes</h3>'
+        + (order.masonNotes ? '<p style="white-space:pre-wrap;background:#f0fdf4;border-left:3px solid #16a34a;padding:8px 12px;margin:0 0 8px;">' + String(order.masonNotes).replace(/</g, '&lt;') + '</p>' : '')
+        + (noteEntries ? '<ul style="margin:0;padding-left:18px;">' + noteEntries + '</ul>' : '')
+      : '';
+
+    const proofLink = proofFile && proofFile.viewUrl
+      ? '<p>Proof file: <a href="' + proofFile.viewUrl + '">' + (proofFile.name || 'View in Drive') + '</a> (also attached)</p>'
+      : '<p style="color:#b45309;"><strong>No proof file attached — please request from office.</strong></p>';
+
+    const htmlBody =
+      '<div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;color:#1f2937;">'
+      + '<div style="background:#15803d;padding:18px 22px;">'
+      + '<h1 style="color:white;margin:0;font-size:20px;">David Crymble &amp; Sons — Approved Job</h1>'
+      + '<p style="color:rgba(255,255,255,0.85);margin:4px 0 0;font-size:13px;">Ref ' + ref + ' — Proof approved</p>'
+      + '</div>'
+      + '<div style="padding:22px;">'
+      + '<p>Hello ' + MASON_NAME + ',</p>'
+      + '<p>The customer has approved the proof for the following memorial. Please proceed with manufacture.</p>'
+      + proofLink
+      + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:14px;">'
+      + tr('Customer', fmt(order.customerName))
+      + tr('Deceased', fmt(order.deceasedName))
+      + tr('DOB / DOD', fmt(order.deceasedDob) + ' — ' + fmt(order.deceasedDod))
+      + tr('Cemetery', fmt(order.cemetery))
+      + tr('Install date', fmt(order.installDate))
+      + '</table>'
+      + '<h3 style="margin:20px 0 6px;">Headstone</h3>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+      + tr('Type', fmt(order.hsType))
+      + tr('Size', fmt(order.hsSize))
+      + tr('Colour', fmt(order.hsColour))
+      + tr('Finish', fmt(order.hsFinish))
+      + '</table>'
+      + '<h3 style="margin:20px 0 6px;">Surround / Stone</h3>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+      + tr('Surround', fmt(order.surroundType) + (order.surroundGranite ? ' (Granite upgrade)' : ''))
+      + tr('Stone / chippings', fmt(order.stoneType))
+      + tr('Accessories', fmtList(order.accessories))
+      + '</table>'
+      + '<h3 style="margin:20px 0 6px;">Inscription</h3>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+      + tr('Type', order.inscriptionType === 'additional' ? 'Additional on existing' : 'New inscription')
+      + tr('Letter style', fmt(order.inscriptionStyle))
+      + tr('Colour', fmt(order.inscriptionColour))
+      + tr('Lines', fmt(order.inscriptionLines))
+      + '</table>'
+      + (order.inscriptionText
+          ? '<pre style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;padding:10px 12px;margin-top:8px;font-family:Georgia,serif;font-size:13px;white-space:pre-wrap;">'
+            + String(order.inscriptionText).replace(/</g, '&lt;') + '</pre>'
+          : '')
+      + masonNotesBlock
+      + '<hr style="border:none;border-top:1px solid #e5e7eb;margin:22px 0;">'
+      + '<p style="font-size:12px;color:#6b7280;">Sent automatically by the DC&amp;S Memorial Tracker on customer proof approval'
+      + (triggeredBy ? ' (manually re-sent by ' + triggeredBy + ')' : '')
+      + '.</p>'
+      + '</div></div>';
+
+    MailApp.sendEmail({
+      to: MASON_EMAIL,
+      subject: subject,
+      htmlBody: htmlBody,
+      attachments: attachments,
+      name: 'David Crymble & Sons'
+    });
+
+    // Stamp masonNotifiedAt + log entry on the order row
+    const ts = new Date().toISOString();
+    const notifiedAtCol = headers.indexOf('Mason Notified At');
+    const notifiedByCol = headers.indexOf('Mason Notified By');
+    if (notifiedAtCol >= 0) sheet.getRange(rowNum, notifiedAtCol + 1).setValue(ts);
+    if (notifiedByCol >= 0) sheet.getRange(rowNum, notifiedByCol + 1).setValue(triggeredBy || 'auto');
+
+    const logCol = headers.indexOf('Log Entries');
+    if (logCol >= 0) {
+      const existing = String(rowVals[logCol] || '');
+      const stamp = Utilities.formatDate(new Date(), 'Europe/London', 'dd/MM/yyyy HH:mm');
+      const author = triggeredBy || 'System';
+      const entry = '[' + stamp + '] ' + author + ': 📧 Mason notified — ' + MASON_EMAIL
+        + (proofFile ? ' (proof attached)' : ' (no proof file found)');
+      sheet.getRange(rowNum, logCol + 1).setValue(existing ? existing + ' | ' + entry : entry);
+    }
+
+    return respond(true, 'Mason notified', { masonNotifiedAt: ts, attached: !!proofFile });
+  } catch (err) {
+    return respond(false, 'notifyMason error: ' + err.toString());
+  }
+}
+
+// Tiny helper used by the mason-email HTML builder above
+function tr(label, value) {
+  return '<tr><td style="padding:4px 10px 4px 0;color:#6b7280;width:140px;vertical-align:top;">' + label
+    + '</td><td style="padding:4px 0;font-weight:600;">' + value + '</td></tr>';
 }
 
 // ============================================================
