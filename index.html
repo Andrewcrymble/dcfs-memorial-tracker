@@ -2291,7 +2291,11 @@
                         if (order.notes && String(order.notes).trim()) {
                             arr.push({ ts: order.lastUpdated || order.createdAt || '', author: '', text: String(order.notes).trim() });
                         }
-                        arr.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+                        arr.sort((a, b) => {
+                            const tA = new Date(a.ts).getTime();
+                            const tB = new Date(b.ts).getTime();
+                            return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+                        });
                         return arr.slice(0, 3);
                     })();
                     const notesAttr = tooltipNotes.length
@@ -2531,7 +2535,14 @@
                     });
                 });
             });
-            entries.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+            // Sort newest first. Treat invalid/missing timestamps as 0 so
+            // they fall to the bottom instead of producing NaN comparisons
+            // that leave them stuck at the top.
+            entries.sort((a, b) => {
+                const tA = new Date(a.ts).getTime();
+                const tB = new Date(b.ts).getTime();
+                return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+            });
 
             const filtered = filter
                 ? entries.filter(e =>
