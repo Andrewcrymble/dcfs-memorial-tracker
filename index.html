@@ -6690,7 +6690,7 @@
             // currentOrder.hsType (last persisted value) over the global
             // _selectedStoneType cache (which can go stale across orders).
             const formType  = (document.getElementById('f_hsType') || {}).value || '';
-            const orderType = (window.currentOrder && window.currentOrder.hsType) || '';
+            const orderType = (currentOrder && currentOrder.hsType) || '';
             const cachedType = window._selectedStoneType || '';
             const resolvedType = formType || orderType || cachedType;
             // Keep the global cache in sync so subsequent renders see the
@@ -6880,7 +6880,7 @@
             // existing orders AND new orders (where currentOrder may be stale
             // or null).
             const orderForm = document.getElementById('orderForm');
-            const order = window.currentOrder ? Object.assign({}, window.currentOrder) : {};
+            const order = currentOrder ? Object.assign({}, currentOrder) : {};
             if (orderForm) {
                 try {
                     const fd = new FormData(orderForm);
@@ -6917,8 +6917,8 @@
 
             // Mirror onto currentOrder so other UI (estimate PDF, proof page)
             // sees the live design while the modal is still open.
-            if (window.currentOrder && (window.currentOrder.orderId === oid)) {
-                Object.assign(window.currentOrder, order);
+            if (currentOrder && (currentOrder.orderId === oid)) {
+                Object.assign(currentOrder, order);
             }
 
             // Save button feedback — flash 'Saving…' → '✅ Saved!' / '⚠ Failed'
@@ -6963,7 +6963,7 @@
         // Migrates older designs (text + global font/size/colour) into the
         // new per-line model on first open.
         function idApplyStoredDesign() {
-            const d = (window.currentOrder && window.currentOrder.inscriptionDesign) || null;
+            const d = (currentOrder && currentOrder.inscriptionDesign) || null;
             const formText = ((document.getElementById('f_inscText') || {}).value || '').trim();
 
             // 1. Resolve _idLines from stored design, legacy globals, or form text
