@@ -5015,63 +5015,46 @@
                             fr.onload = () => res(fr.result);
                             fr.readAsDataURL(blob);
                         });
-                        doc.addImage(stoneDataUrl, 'PNG', imgX, py, imgW, imgH);
 
-                        // Overlay inscription text on the stone — per-line styling
-                        // when an inscriptionDesign is present, fall back to the legacy
-                        // single-style render otherwise.
+                        // If we have a saved per-line design, render it onto an
+                        // off-screen canvas with the stone underneath — exactly
+                        // matching the designer preview. Embed that combined
+                        // canvas as the proof image.
                         const design = currentOrder.inscriptionDesign;
                         const designLines = design && Array.isArray(design.lines) && design.lines.length
                             ? design.lines.filter(l => (l.text || '').trim())
                             : null;
 
                         if (designLines && designLines.length) {
-                            // Map each line's display size (px) to a PDF size, capped so it
-                            // fits the stone's middle ~40%.
-                            const totalScreenPx = designLines.reduce((s, l) => s + (parseFloat(l.size) || 22) * (design.lsp || 1.7), 0);
-                            const availMm = imgH * 0.40;
-                            const pxToMm = totalScreenPx > 0 ? Math.min(0.45, availMm / totalScreenPx) : 0.35;
-                            const totalH = designLines.reduce((s, l) => s + (parseFloat(l.size) || 22) * (design.lsp || 1.7) * pxToMm, 0);
-                            let ity = py + imgH * 0.50 - totalH / 2;
-                            designLines.forEach(l => {
-                                const sizeMm = (parseFloat(l.size) || 22) * pxToMm;
-                                const fontSize = Math.max(6, Math.min(14, sizeMm * 2.2));
-                                const styleStr = l.style || 'normal';
-                                const jsStyle = styleStr.includes('bold') && styleStr.includes('italic') ? 'bolditalic'
-                                              : styleStr.includes('bold')   ? 'bold'
-                                              : styleStr.includes('italic') ? 'italic' : 'normal';
-                                // jsPDF only ships helvetica/times/courier — pick the closest
-                                const family = (l.font || '').toLowerCase();
-                                const jsFont = family.includes('arial') || family.includes('verdana') ? 'helvetica'
-                                             : family.includes('courier') ? 'courier'
-                                             : 'times';
-                                const rgb = idHexToRgb(l.colour || '#c8a84b');
-                                doc.setTextColor(rgb.r, rgb.g, rgb.b);
-                                doc.setFont(jsFont, jsStyle);
-                                doc.setFontSize(fontSize);
-                                ity += sizeMm * (design.lsp || 1.7) * 0.5;
-                                doc.text((l.text || '').trim(), 105, ity, { align: 'center' });
-                                ity += sizeMm * (design.lsp || 1.7) * 0.5;
-                            });
-                            doc.setTextColor(0,0,0);
-                        } else if (currentOrder.inscriptionText) {
-                            const ic = (currentOrder.inscriptionColour || '').toLowerCase();
-                            if (ic === 'gold')        doc.setTextColor(200, 168, 75);
-                            else if (ic === 'silver') doc.setTextColor(210, 210, 210);
-                            else if (ic === 'white')  doc.setTextColor(240, 240, 240);
-                            else                      doc.setTextColor(210, 195, 140);
+                            const composedDataUrl = await renderInscriptionPreview(stoneDataUrl, design);
+                            if (composedDataUrl) {
+                                doc.addImage(composedDataUrl, 'PNG', imgX, py, imgW, imgH);
+                            } else {
+                                doc.addImage(stoneDataUrl, 'PNG', imgX, py, imgW, imgH);
+                            }
+                        } else {
+                            doc.addImage(stoneDataUrl, 'PNG', imgX, py, imgW, imgH);
 
-                            const rawLines = currentOrder.inscriptionText.split('\n').filter(l => l.trim());
-                            const overlayLH = Math.min(8, (imgH * 0.40) / Math.max(rawLines.length, 1));
-                            const overlaySize = Math.max(6, Math.min(10, overlayLH * 0.85));
-                            doc.setFont('helvetica', 'italic'); doc.setFontSize(overlaySize);
-                            const totalTxtH = rawLines.length * overlayLH;
-                            let ity = py + imgH * 0.50 - totalTxtH / 2;
-                            rawLines.forEach(line => {
-                                doc.text(line.trim(), 105, ity, { align: 'center' });
-                                ity += overlayLH;
-                            });
-                            doc.setTextColor(0,0,0);
+                            // Legacy inscription text overlay for orders without a design
+                            if (currentOrder.inscriptionText) {
+                                const ic = (currentOrder.inscriptionColour || '').toLowerCase();
+                                if (ic === 'gold')        doc.setTextColor(200, 168, 75);
+                                else if (ic === 'silver') doc.setTextColor(210, 210, 210);
+                                else if (ic === 'white')  doc.setTextColor(240, 240, 240);
+                                else                      doc.setTextColor(210, 195, 140);
+
+                                const rawLines = currentOrder.inscriptionText.split('\n').filter(l => l.trim());
+                                const overlayLH = Math.min(8, (imgH * 0.40) / Math.max(rawLines.length, 1));
+                                const overlaySize = Math.max(6, Math.min(10, overlayLH * 0.85));
+                                doc.setFont('helvetica', 'italic'); doc.setFontSize(overlaySize);
+                                const totalTxtH = rawLines.length * overlayLH;
+                                let ity = py + imgH * 0.50 - totalTxtH / 2;
+                                rawLines.forEach(line => {
+                                    doc.text(line.trim(), 105, ity, { align: 'center' });
+                                    ity += overlayLH;
+                                });
+                                doc.setTextColor(0,0,0);
+                            }
                         }
 
                         // Stone label — sits just below image, above footer
@@ -6860,6 +6843,68 @@
                 : h.padEnd(6, '0').slice(0, 6);
             const n = parseInt(v, 16);
             return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+        }
+
+        // Render the stone + per-line inscription onto an off-screen canvas
+        // and return a PNG data URL. Used by Estimate PDF generation so the
+        // proof image looks identical to the designer preview, including all
+        // fonts, colours, kerning, and shadow.
+        async function renderInscriptionPreview(stoneDataUrl, design) {
+            try {
+                const stone = await new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload  = () => resolve(img);
+                    img.onerror = reject;
+                    img.src = stoneDataUrl;
+                });
+                const canvas = document.createElement('canvas');
+                // Render at 2x resolution for crisp PDF embedding
+                const targetW = 1120;
+                canvas.width  = targetW;
+                canvas.height = Math.round(targetW * (stone.height / stone.width));
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(stone, 0, 0, canvas.width, canvas.height);
+
+                const lineSpacing = parseFloat(design.lsp) || 1.7;
+                const posX = (parseFloat(design.posX) || 50) / 100;
+                const posY = (parseFloat(design.posY) || 35) / 100;
+                const maxW = (parseFloat(design.maxW) || 52) / 100;
+                const shadow = parseFloat(design.shadow) || 0;
+                const opacity = parseFloat(design.opacity) || 0.95;
+
+                // Match the designer's coordinate system (canvas was 560 wide there)
+                const canvScale = canvas.width / 560;
+                const cx = canvas.width * posX;
+                const startY = canvas.height * posY;
+                const maxWidth = canvas.width * maxW;
+
+                ctx.save();
+                ctx.globalAlpha  = opacity;
+                ctx.textAlign    = 'center';
+                ctx.textBaseline = 'middle';
+                if (shadow > 0) {
+                    ctx.shadowColor   = 'rgba(0,0,0,0.6)';
+                    ctx.shadowBlur    = shadow * canvScale;
+                    ctx.shadowOffsetX = canvScale;
+                    ctx.shadowOffsetY = canvScale;
+                }
+
+                let y = startY;
+                (design.lines || []).forEach(line => {
+                    const sz = Math.round((parseFloat(line.size) || 22) * canvScale);
+                    const rowH = sz * lineSpacing;
+                    ctx.fillStyle = line.colour || '#c8a84b';
+                    ctx.font = `${line.style || 'normal'} ${sz}px ${line.font || "'Times New Roman', serif"}`;
+                    idDrawTextSpaced(ctx, (line.text || '').trim(), cx, y + rowH / 2, maxWidth, (parseFloat(line.ksp) || 0) * canvScale);
+                    y += rowH;
+                });
+                ctx.restore();
+
+                return canvas.toDataURL('image/png');
+            } catch (err) {
+                console.warn('renderInscriptionPreview failed:', err);
+                return null;
+            }
         }
 
         function idReset() {
