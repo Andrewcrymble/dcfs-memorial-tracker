@@ -5553,22 +5553,21 @@
                 y += 16;
             }
 
-            // ── Install / Grave info row (if present) ──
-            const hasInstall = currentOrder.installDate || currentOrder.graveNumber || currentOrder.cemetery;
-            if (hasInstall) {
+            // ── Install date strip (only if set — Cemetery and Grave No now
+            //    live inside the deceased box below for prominence) ──
+            if (currentOrder.installDate) {
                 doc.setFillColor(245, 245, 245); doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.2);
                 doc.rect(20, y, 170, 10, 'FD');
                 doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0);
-                const infoItems = [];
-                if (currentOrder.installDate) infoItems.push(`Install Date: ${currentOrder.installDate}`);
-                if (currentOrder.cemetery)    infoItems.push(`Cemetery: ${currentOrder.cemetery}`);
-                if (currentOrder.graveNumber) infoItems.push(`Grave No: ${currentOrder.graveNumber}`);
-                doc.text(infoItems.join('     '), 24, y + 7);
+                doc.text(`Install Date: ${currentOrder.installDate}`, 24, y + 7);
                 y += 15;
             }
 
             // ── Customer / Deceased boxes ──
-            const boxH = 32;
+            // Box height grows when Cemetery / Grave No are present so the
+            // deceased side has room without text crashing into the box border.
+            const hasGrave = !!(currentOrder.cemetery || currentOrder.graveNumber);
+            const boxH = hasGrave ? 44 : 32;
             // Left box — Customer
             doc.setFillColor(246, 251, 242); doc.setDrawColor(134, 200, 130); doc.setLineWidth(0.3);
             doc.roundedRect(20, y, 82, boxH, 2, 2, 'FD');
@@ -5581,6 +5580,7 @@
             if (currentOrder.address) {
                 const al = doc.splitTextToSize(currentOrder.address, 72);
                 doc.text(al[0] || '', 24, y + 28);
+                if (al[1]) doc.text(al[1], 24, y + 33);
             }
 
             // Right box — Deceased
@@ -5593,6 +5593,11 @@
             doc.setFontSize(8); doc.setFont('helvetica', 'normal');
             if (currentOrder.deceasedDob) doc.text(`Born:   ${currentOrder.deceasedDob}`, 112, y + 22);
             if (currentOrder.deceasedDod) doc.text(`Passed: ${currentOrder.deceasedDod}`, 112, y + 28);
+            if (currentOrder.cemetery) {
+                const cl = doc.splitTextToSize(`Grave Location: ${currentOrder.cemetery}`, 76);
+                doc.text(cl[0] || '', 112, y + 34);
+            }
+            if (currentOrder.graveNumber) doc.text(`Grave No: ${currentOrder.graveNumber}`, 112, y + 40);
             y += boxH + 10;
 
             // ── Items table ──
@@ -5611,20 +5616,28 @@
             let alt = false;
             function row(label, sub, amount) {
                 if (y > 250) { doc.addPage(); y = 20; }
-                if (alt) { doc.setFillColor(250, 250, 250); doc.rect(20, y - 5, 170, 11, 'F'); }
+                // Wrap each column so long values don't crash into the next.
+                // DESCRIPTION column: x=23 → ~80mm wide before the DETAIL col at 105
+                // DETAIL column: x=105 → ~75mm wide before the COST col at 188
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+                const labelLines = doc.splitTextToSize(String(label || ''), 78);
+                const subLines = sub ? doc.splitTextToSize(String(sub), 75) : [];
+                const lineCount = Math.max(1, labelLines.length, subLines.length);
+                const rowH = 11 + (lineCount - 1) * 5;
+                if (alt) { doc.setFillColor(250, 250, 250); doc.rect(20, y - 5, 170, rowH, 'F'); }
                 alt = !alt;
                 doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(0, 0, 0);
-                doc.text(label, 23, y);
-                if (sub) {
+                labelLines.forEach((l, i) => doc.text(l, 23, y + i * 5));
+                if (subLines.length) {
                     doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
-                    doc.text(sub, 105, y);
+                    subLines.forEach((l, i) => doc.text(l, 105, y + i * 5));
                     doc.setTextColor(0, 0, 0);
                 }
                 if (amount !== null && amount !== undefined) {
                     doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(0, 0, 0);
                     doc.text(`£${parseFloat(amount).toFixed(2)}`, 188, y, { align: 'right' });
                 }
-                y += 11;
+                y += rowH;
             }
 
             if (currentOrder.hsType || currentOrder.hsSize) {
@@ -6939,22 +6952,19 @@
                 return;
             }
 
-            console.log('[Designer] Saving order', oid, '— design has', design.lines.length, 'lines, posY=' + design.posY + '%, payload size=' + payload.length + ' bytes');
-
             fetch(SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'text/plain' },
                 body: payload
-            }).then((resp) => {
-                console.log('[Designer] fetch resolved for', oid, '— resp.type=' + resp.type + ' (opaque expected with no-cors)');
+            }).then(() => {
                 flashSaved('✅ Saved!', '#16a34a');
                 const idx = allOrders.findIndex(o => o.orderId === oid);
                 if (idx >= 0) allOrders[idx] = Object.assign({}, allOrders[idx], order);
                 else allOrders.unshift(order);
                 window._idLastDesignDirty = false;
             }).catch(err => {
-                console.error('[Designer] fetch failed:', err);
+                console.warn('Designer save failed:', err);
                 flashSaved('⚠ Sync failed', '#d97706');
             });
         }
