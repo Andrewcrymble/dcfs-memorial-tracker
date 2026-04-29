@@ -1634,14 +1634,15 @@
                 <button class="installed-view-btn" onclick="setFilter('Installed'); renderKanbanBoard()">View all →</button>
             </div>
 
-            <!-- Recent Activity panel — quick at-a-glance feed across all orders -->
+            <!-- Recent Activity panel — full feed across every order -->
             <div class="dashboard-activity" id="dashboardActivity" style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);margin-top:1rem;padding:1rem 1.25rem;">
-                <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+                <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap;">
                     <span style="font-size:0.95rem;">📋</span>
                     <span style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);">Recent Activity</span>
-                    <span id="dashboardActivityCount" style="margin-left:auto;font-size:0.72rem;color:var(--text-muted);"></span>
+                    <span id="dashboardActivityCount" style="font-size:0.72rem;color:var(--text-muted);"></span>
+                    <input type="text" id="dashboardActivityFilter" placeholder="Filter…" oninput="renderDashboardActivity()" style="margin-left:auto;padding:0.3rem 0.6rem;border:1px solid var(--border);border-radius:6px;font-size:0.78rem;width:170px;">
                 </div>
-                <div id="dashboardActivityList" style="font-size:0.85rem;"></div>
+                <div id="dashboardActivityList" style="font-size:0.85rem;max-height:380px;overflow-y:auto;padding-right:0.5rem;"></div>
             </div>
 
             <!-- hidden: full order-grid used by filter tabs when a specific filter is set -->
@@ -2299,17 +2300,19 @@
             renderDashboardActivity();
         }
 
-        // Recent Activity feed on the main dashboard — pulls the latest log
-        // entries across every order, sorts newest first, and renders the
-        // top 12 with click-to-open. Hidden if no entries.
+        // Recent Activity feed on the main dashboard — pulls every log
+        // entry from every order (including archived ones), sorts newest
+        // first, supports filtering, and renders all in a scrollable list.
         function renderDashboardActivity() {
             const list = document.getElementById('dashboardActivityList');
             const count = document.getElementById('dashboardActivityCount');
             if (!list) return;
 
+            const filterRaw = (document.getElementById('dashboardActivityFilter') || {}).value || '';
+            const filter = filterRaw.trim().toLowerCase();
+
             const entries = [];
             (allOrders || []).forEach(o => {
-                if (o.archived) return;
                 (o.log || []).forEach(e => {
                     if (!e || !e.text) return;
                     entries.push({
@@ -2317,15 +2320,29 @@
                         author: e.author || '',
                         text: e.text,
                         ref: o.deceasedName || o.customerName || o.orderRef || '',
+                        archived: !!o.archived,
+                        status: o.status || 'Enquiry',
                         orderId: o.orderId
                     });
                 });
             });
             entries.sort((a, b) => new Date(b.ts) - new Date(a.ts));
 
-            if (count) count.textContent = entries.length ? `${entries.length} events` : '';
-            if (!entries.length) {
-                list.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;padding:0.4rem 0;">No activity yet — events will appear here as orders progress.</div>';
+            const filtered = filter
+                ? entries.filter(e =>
+                    e.text.toLowerCase().includes(filter) ||
+                    e.ref.toLowerCase().includes(filter) ||
+                    e.author.toLowerCase().includes(filter) ||
+                    e.status.toLowerCase().includes(filter))
+                : entries;
+
+            if (count) {
+                count.textContent = filter
+                    ? `${filtered.length} of ${entries.length} events`
+                    : (entries.length ? `${entries.length} events` : '');
+            }
+            if (!filtered.length) {
+                list.innerHTML = `<div style="color:var(--text-muted);font-size:0.82rem;padding:0.4rem 0;">${filter ? 'No matches.' : 'No activity yet — events will appear here as orders progress.'}</div>`;
                 return;
             }
 
@@ -2334,18 +2351,19 @@
                 if (!ts || isNaN(d.getTime())) return '';
                 let diff = (Date.now() - d) / 60000;
                 if (diff < 0) diff = 0;
-                if (diff < 1)    return 'just now';
-                if (diff < 60)   return Math.round(diff) + 'm ago';
-                if (diff < 1440) return Math.round(diff / 60) + 'h ago';
+                if (diff < 1)     return 'just now';
+                if (diff < 60)    return Math.round(diff) + 'm ago';
+                if (diff < 1440)  return Math.round(diff / 60) + 'h ago';
                 if (diff < 10080) return Math.round(diff / 1440) + 'd ago';
-                return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
             };
             const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-            list.innerHTML = entries.slice(0, 12).map(e => `
+            list.innerHTML = filtered.map(e => `
                 <div class="dash-act-row" data-order-id="${(e.orderId||'').replace(/"/g,'&quot;')}" style="display:flex;gap:0.6rem;padding:0.45rem 0;border-bottom:1px solid rgba(0,0,0,0.06);cursor:pointer;align-items:flex-start;">
-                    <div style="flex:1;line-height:1.4;">
+                    <div style="flex:1;line-height:1.4;min-width:0;">
                         <span style="font-weight:600;color:var(--text);">${esc(e.ref)}</span>
+                        ${e.archived ? '<span style="font-size:0.65rem;background:#f3f4f6;color:#6b7280;padding:0 5px;border-radius:4px;margin:0 4px;">archived</span>' : ''}
                         <span style="color:var(--text-muted);">·</span>
                         <span style="color:var(--text);">${esc(e.text)}</span>
                         ${e.author ? `<span style="color:var(--text-muted);font-size:0.75rem;"> — ${esc(e.author)}</span>` : ''}
@@ -2446,22 +2464,62 @@
         function showMobileDetail() { showDetailView(); }
         function backToList() { showListView(); }
 
+        // Track which orders we've already logged a "viewed" event for in
+        // this browser session — prevents spamming the activity log when
+        // someone clicks back and forth between orders.
+        const _viewedThisSession = new Set();
+
+        // Append a "Viewed by X" entry to the order's log and silently sync
+        // to the sheet. Skips the master record if this order has already
+        // been viewed in this session.
+        function logOrderView(order) {
+            if (!order || !order.orderId) return;
+            if (_viewedThisSession.has(order.orderId)) return;
+            _viewedThisSession.add(order.orderId);
+
+            if (!order.log) order.log = [];
+            const author = (typeof getCurrentUser === 'function' ? getCurrentUser() : '') || 'User';
+            order.log.push({
+                id: Date.now().toString() + '-v',
+                ts: new Date().toISOString(),
+                author,
+                text: 'Viewed'
+            });
+
+            // Background sync — don't block the UI on this. If it fails the
+            // entry stays in memory and goes up with the next save.
+            try {
+                fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'upsert', order })
+                }).catch(() => {});
+            } catch(e) { /* best effort */ }
+        }
+
         // Select order
         function selectOrder(orderId) {
             currentOrder = allOrders.find(o => o.orderId === orderId || o.id === orderId || o.ID === orderId);
             if (!currentOrder) return;
+            logOrderView(currentOrder);
             renderOrderList();
             renderOrderDetails();
             showDetailView();
+            // Refresh activity feed if visible so the new "Viewed" event
+            // shows up at the top.
+            try { if (document.getElementById('dashboardActivityList')) renderDashboardActivity(); } catch(e){}
         }
 
         // Select order by array index (fallback)
         function selectOrderByIndex(index) {
             currentOrder = allOrders[index];
             if (!currentOrder) return;
+            logOrderView(currentOrder);
             renderOrderList();
             renderOrderDetails();
             showDetailView();
+            try { if (document.getElementById('dashboardActivityList')) renderDashboardActivity(); } catch(e){}
         }
 
         // Render order details
