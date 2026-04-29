@@ -174,6 +174,7 @@ function doPost(e) {
     if (action === "sendEstimateEmail")   return sendEstimateEmail(body.email, body.customerName, body.ref, body.pdfBase64, body.proofUrl);
     if (action === "storeEstimatePdf")    return storeEstimatePdf(body.orderId, body.ref, body.pdfBase64);
     if (action === "notifyMason")         return notifyMason(body.orderId, body.triggeredBy, !!body.force);
+    if (action === "submitEstimateChanges") return submitEstimateChanges(body.orderId, body.changes);
     return respond(false, "Unknown action");
   } catch (err) {
     return respond(false, err.toString());
@@ -1050,6 +1051,87 @@ function submitProofResponse(orderId, approved, message) {
       return respond(true, approved ? 'Proof approved' : 'Changes requested recorded');
     }
     return respond(false, 'Order not found');
+  } catch (err) {
+    return respond(false, err.toString());
+  }
+}
+
+// ============================================================
+// CUSTOMER ESTIMATE CHANGE REQUEST
+// Triggered from estimate-decline.html. Logs the change request to
+// the order and emails the office so staff are notified.
+// ============================================================
+function submitEstimateChanges(orderId, changes) {
+  try {
+    if (!orderId) return respond(false, 'No orderId');
+    const cleanChanges = String(changes || '').trim();
+    if (!cleanChanges) return respond(false, 'Please describe the changes you need.');
+
+    const sheet   = getOrCreateSheet();
+    const data    = sheet.getDataRange().getValues();
+    const headers = data[0];
+    let rowVals = null, rowNum = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(orderId)) { rowVals = data[i]; rowNum = i + 1; break; }
+    }
+    if (!rowVals) return respond(false, 'Order not found');
+
+    // Append to log
+    const logCol = headers.indexOf('Log Entries');
+    if (logCol >= 0) {
+      const existing = String(rowVals[logCol] || '');
+      const ts = Utilities.formatDate(new Date(), 'Europe/London', 'dd/MM/yyyy HH:mm');
+      const entry = '[' + ts + '] Customer: ✏️ ESTIMATE CHANGES REQUESTED — ' + cleanChanges.replace(/\n/g, ' / ').slice(0, 300);
+      sheet.getRange(rowNum, logCol + 1).setValue(existing ? existing + ' | ' + entry : entry);
+    }
+
+    // Stamp Last Updated
+    const luCol = headers.indexOf('Last Updated');
+    if (luCol >= 0) sheet.getRange(rowNum, luCol + 1)
+      .setValue(Utilities.formatDate(new Date(), 'Europe/London', 'dd/MM/yyyy HH:mm'));
+
+    // Email the office
+    const customerName = headers.indexOf('Customer Name') >= 0 ? String(rowVals[headers.indexOf('Customer Name')] || '') : '';
+    const deceasedName = headers.indexOf('Deceased Name') >= 0 ? String(rowVals[headers.indexOf('Deceased Name')] || '') : '';
+    const customerEmail = headers.indexOf('Email') >= 0 ? String(rowVals[headers.indexOf('Email')] || '') : '';
+    const customerPhone = headers.indexOf('Phone') >= 0 ? String(rowVals[headers.indexOf('Phone')] || '') : '';
+    const refDisplay = String(orderId).slice(-8).toUpperCase();
+
+    try {
+      const officeEmail = PropertiesService.getScriptProperties().getProperty('OFFICE_EMAIL') || 'info@crymbleandsons.com';
+      const html =
+        '<div style="font-family:Arial,sans-serif;max-width:620px;">'
+        + '<div style="background:#b45309;padding:18px 22px;color:white;">'
+        + '<h2 style="margin:0;font-size:18px;">✏️ Estimate Changes Requested</h2>'
+        + '<p style="margin:4px 0 0;font-size:13px;opacity:0.9;">Ref ' + refDisplay + '</p>'
+        + '</div>'
+        + '<div style="padding:20px;">'
+        + '<p>The following customer has requested changes to their estimate via the WhatsApp link.</p>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin:14px 0;">'
+        + '<tr><td style="padding:4px 12px 4px 0;color:#6b7280;width:130px;">Customer</td><td style="padding:4px 0;font-weight:600;">' + customerName + '</td></tr>'
+        + '<tr><td style="padding:4px 12px 4px 0;color:#6b7280;">Deceased</td><td style="padding:4px 0;font-weight:600;">' + deceasedName + '</td></tr>'
+        + (customerEmail ? '<tr><td style="padding:4px 12px 4px 0;color:#6b7280;">Email</td><td style="padding:4px 0;">' + customerEmail + '</td></tr>' : '')
+        + (customerPhone ? '<tr><td style="padding:4px 12px 4px 0;color:#6b7280;">Phone</td><td style="padding:4px 0;">' + customerPhone + '</td></tr>' : '')
+        + '<tr><td style="padding:4px 12px 4px 0;color:#6b7280;">Reference</td><td style="padding:4px 0;">' + refDisplay + '</td></tr>'
+        + '</table>'
+        + '<h3 style="margin:18px 0 6px;color:#b45309;">Changes Requested</h3>'
+        + '<div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:12px 14px;white-space:pre-wrap;font-size:14px;">'
+        + cleanChanges.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        + '</div>'
+        + '<p style="margin-top:16px;font-size:12px;color:#6b7280;">Open the order in the tracker to follow up.</p>'
+        + '</div></div>';
+
+      MailApp.sendEmail({
+        to: officeEmail,
+        subject: '✏️ Estimate Changes Requested — ' + (deceasedName || customerName || 'Memorial') + ' — Ref ' + refDisplay,
+        htmlBody: html,
+        name: 'David Crymble & Sons Tracker'
+      });
+    } catch (mailErr) {
+      Logger.log('submitEstimateChanges email failed: ' + mailErr);
+    }
+
+    return respond(true, 'Changes recorded — we will be in touch shortly');
   } catch (err) {
     return respond(false, err.toString());
   }

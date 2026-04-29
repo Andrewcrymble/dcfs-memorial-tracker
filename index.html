@@ -1903,8 +1903,22 @@
                     lines.push('');
                     lines.push('Clicking the link above confirms your estimate and proceeds to deposit payment.');
                 }
+
+                // Build a request-changes link to estimate-decline.html with
+                // pre-filled order context. Customer fills in a textarea,
+                // submit notifies the office by email + logs on the order.
+                const declineParams = new URLSearchParams({
+                    id: currentOrder.orderId || '',
+                    ref: refDisplay,
+                    cust: currentOrder.customerName || '',
+                    deceased: currentOrder.deceasedName || ''
+                });
+                const declineUrl = window.location.origin + '/estimate-decline.html?' + declineParams.toString();
                 lines.push('');
-                lines.push('✏️ To request changes, please reply to this message or call 028 9066 7784.');
+                lines.push('✏️ NEED CHANGES? Use this link:');
+                lines.push(declineUrl);
+                lines.push('');
+                lines.push('Or reply to this message or call 028 9066 7784.');
                 lines.push('');
                 lines.push('Kind regards,');
                 lines.push('David Crymble & Sons');

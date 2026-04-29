@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Request Changes — David Crymble &amp; Sons</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green:  #4a7c2f;
+    --amber:  #b45309;
+    --gold:   #c8a84b;
+    --bg:     #f2f2f7;
+    --card:   #ffffff;
+    --text:   #1c1c1e;
+    --sub:    #6c6c70;
+    --border: rgba(60,60,67,0.18);
+    --radius: 16px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+  .header h1 {
+    font-family: 'Times New Roman', serif;
+    font-weight: 900;
+    font-size: 1.75rem;
+    letter-spacing: 0.06em;
+    line-height: 1.1;
+  }
+  .header h1 small {
+    display: block;
+    font-size: 0.65em;
+    letter-spacing: 0.18em;
+    color: var(--sub);
+    margin-top: 0.4rem;
+    font-weight: 700;
+  }
+
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    width: 100%;
+    max-width: 540px;
+    padding: 2rem 1.6rem;
+  }
+  .card .accent {
+    height: 4px;
+    background: var(--amber);
+    border-radius: 4px;
+    margin: -2rem -1.6rem 1.5rem;
+    border-top-left-radius: var(--radius);
+    border-top-right-radius: var(--radius);
+  }
+  .card h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+  .card p.subline {
+    color: var(--sub);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+  }
+  .info-row {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+  }
+  .info-row .label { color: var(--sub); width: 110px; flex-shrink: 0; }
+  .info-row .value { color: var(--text); font-weight: 600; }
+
+  label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin: 1.2rem 0 0.5rem;
+  }
+  textarea {
+    width: 100%;
+    min-height: 140px;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    resize: vertical;
+    background: var(--bg);
+  }
+  textarea:focus {
+    outline: none;
+    border-color: var(--amber);
+    background: var(--card);
+  }
+  .hint {
+    font-size: 0.78rem;
+    color: var(--sub);
+    margin-top: 0.4rem;
+  }
+
+  button.primary {
+    width: 100%;
+    background: var(--amber);
+    color: white;
+    border: none;
+    padding: 0.95rem;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 1.5rem;
+    transition: background 0.15s;
+  }
+  button.primary:hover:not(:disabled) { background: #92400e; }
+  button.primary:disabled { background: #d1d5db; cursor: not-allowed; }
+
+  .footer {
+    margin-top: 1.5rem;
+    text-align: center;
+    color: var(--sub);
+    font-size: 0.78rem;
+    line-height: 1.6;
+  }
+  .footer strong { color: var(--text); }
+  .footer a { color: var(--green); text-decoration: none; }
+
+  .success {
+    text-align: center;
+    padding: 1rem 0;
+  }
+  .success .icon {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+  }
+  .success h2 {
+    color: var(--green);
+    margin-bottom: 0.5rem;
+  }
+  .success p {
+    color: var(--sub);
+    line-height: 1.5;
+  }
+  .error {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+    border-radius: 8px;
+    padding: 0.75rem 0.9rem;
+    margin-top: 1rem;
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>DAVID CRYMBLE<br>&amp; SONS<small>FUNERAL DIRECTORS &amp; MEMORIAL MASONS</small></h1>
+</div>
+
+<div class="card">
+  <div class="accent"></div>
+  <div id="form">
+    <h2>Request Changes</h2>
+    <p class="subline">Please tell us what you would like changed on your memorial estimate. As soon as we receive your request a member of our team will be in touch to discuss.</p>
+
+    <div id="orderInfo"></div>
+
+    <label for="changes">What changes would you like? *</label>
+    <textarea id="changes" placeholder="For example: a different stone shape, a different inscription wording, an extra accessory, a different cemetery, a smaller budget…" required></textarea>
+    <div class="hint">Be as specific as you can — names, dates, prices and so on.</div>
+
+    <div id="errorBox"></div>
+
+    <button class="primary" id="submitBtn" onclick="submit()">Send Change Request</button>
+  </div>
+
+  <div id="thankyou" class="success" style="display:none;">
+    <div class="icon">✅</div>
+    <h2>Thank you</h2>
+    <p>Your change request has been received. A member of the David Crymble &amp; Sons team will be in touch shortly.</p>
+  </div>
+</div>
+
+<div class="footer">
+  <strong>David Crymble &amp; Sons</strong><br>
+  T: <a href="tel:02890667784">028 9066 7784</a> &nbsp;·&nbsp; E: <a href="mailto:info@crymbleandsons.com">info@crymbleandsons.com</a>
+</div>
+
+<script>
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykAIR6S2ZLHQel0Ot-QTtbIfDzEeL78oYR9Ba7W6gkDNwHnXOj1ErLJ653k4vB5VqJ/exec';
+
+  // Pull orderId from URL
+  const params = new URLSearchParams(window.location.search);
+  const orderId = params.get('id') || params.get('orderId') || '';
+  const ref = params.get('ref') || (orderId ? orderId.slice(-8).toUpperCase() : '');
+
+  // Show order info if we have it
+  const orderInfoEl = document.getElementById('orderInfo');
+  const customerName = params.get('cust') || '';
+  const deceasedName = params.get('deceased') || '';
+  if (orderId || ref || customerName || deceasedName) {
+    let html = '<div style="background:#fef3c7;border-radius:8px;padding:0.75rem 0.9rem;margin-bottom:1rem;font-size:0.85rem;">';
+    if (deceasedName) html += '<div class="info-row" style="border:0;padding:0.2rem 0;"><span class="label">Memorial for</span><span class="value">' + escHtml(deceasedName) + '</span></div>';
+    if (customerName) html += '<div class="info-row" style="border:0;padding:0.2rem 0;"><span class="label">Customer</span><span class="value">' + escHtml(customerName) + '</span></div>';
+    if (ref)          html += '<div class="info-row" style="border:0;padding:0.2rem 0;"><span class="label">Reference</span><span class="value">' + escHtml(ref) + '</span></div>';
+    html += '</div>';
+    orderInfoEl.innerHTML = html;
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function showError(msg) {
+    const box = document.getElementById('errorBox');
+    box.innerHTML = '<div class="error">' + escHtml(msg) + '</div>';
+  }
+  function clearError() {
+    document.getElementById('errorBox').innerHTML = '';
+  }
+
+  async function submit() {
+    clearError();
+    if (!orderId) {
+      showError('No order reference in the link — please contact us directly on 028 9066 7784.');
+      return;
+    }
+    const changes = (document.getElementById('changes').value || '').trim();
+    if (!changes) {
+      showError('Please describe the changes you would like.');
+      return;
+    }
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    try {
+      const resp = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({
+          action: 'submitEstimateChanges',
+          orderId: orderId,
+          changes: changes
+        })
+      });
+      let result = {};
+      try { result = await resp.json(); } catch (e) {}
+      if (result && result.success) {
+        document.getElementById('form').style.display = 'none';
+        document.getElementById('thankyou').style.display = 'block';
+      } else {
+        showError((result && result.message) || 'Could not send your request — please call us on 028 9066 7784.');
+        btn.disabled = false;
+        btn.textContent = 'Send Change Request';
+      }
+    } catch (err) {
+      // no-cors / network error — assume it went through
+      console.warn('Submit error:', err);
+      document.getElementById('form').style.display = 'none';
+      document.getElementById('thankyou').style.display = 'block';
+    }
+  }
+
+  // Submit on Ctrl+Enter for convenience
+  document.getElementById('changes').addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'Enter') submit();
+  });
+</script>
+
+</body>
+</html>
