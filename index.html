@@ -4610,41 +4610,42 @@
 
         async function deleteOrder() {
             if (!currentOrder) return;
-            
-            if (!confirm(`Are you sure you want to delete order ${currentOrder.orderRef}?`)) {
-                return;
-            }
 
+            const label = currentOrder.deceasedName || currentOrder.customerName || currentOrder.orderRef;
+            if (!confirm(`Permanently delete the order for "${label}"?\n\nThis removes the row from the sheet and cannot be undone. To hide an order without deleting it, use the 📦 archive button on the dashboard card instead.`)) return;
+
+            const orderId = currentOrder.orderId;
+
+            // Optimistic UI: remove from local list and reset detail view immediately
+            const idx = allOrders.findIndex(o => o.orderId === orderId);
+            if (idx >= 0) allOrders.splice(idx, 1);
+            currentOrder = null;
+            try { renderOrderList && renderOrderList(); } catch(e) {}
+            try { renderKanbanBoard && renderKanbanBoard(); } catch(e) {}
+            backToList();
+            const ca = document.getElementById('contentArea');
+            if (ca) ca.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📋</div>
+                    <h2>Select an order to view details</h2>
+                    <p>or create a new order to get started</p>
+                </div>
+            `;
+
+            // Send to API. Use text/plain so the no-cors request actually
+            // ships the body (application/json gets silently dropped by the
+            // browser when paired with mode:'no-cors').
             try {
-                const response = await fetch(SCRIPT_URL, {
+                await fetch(SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: 'delete',
-                        orderId: currentOrder.orderId
-                    })
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'delete', orderId })
                 });
-
-                setTimeout(() => {
-                    loadOrders();
-                    currentOrder = null;
-                    backToList();
-                    document.getElementById('contentArea').innerHTML = `
-                        <div class="empty-state">
-                            <div class="empty-state-icon">📋</div>
-                            <h2>Select an order to view details</h2>
-                            <p>or create a new order to get started</p>
-                        </div>
-                    `;
-                }, 1000);
-                
-                alert('Order deleted successfully!');
-            } catch (error) {
-                console.error('Error deleting order:', error);
-                alert('Error deleting order. Please try again.');
+                showToast('🗑️ Order deleted', 'success');
+            } catch (err) {
+                console.error('Delete sync failed:', err);
+                showToast('⚠ Deleted locally — server sync failed. Refresh to retry.', 'warn', 6000);
             }
         }
 
