@@ -1646,8 +1646,10 @@
                 <div id="dashboardActivityList" style="font-size:0.85rem;max-height:380px;overflow-y:auto;padding-right:0.5rem;"></div>
             </div>
 
-            <!-- Outlook Inbox panel — recent emails from Microsoft 365 -->
-            <div id="dashboardInbox" style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);margin-top:1rem;padding:1rem 1.25rem;">
+            <!-- Outlook Inbox panel — recent emails from Microsoft 365.
+                 Hidden until OUTLOOK_ENABLED is flipped on; show/hide is also
+                 enforced in JS during render so the flag is the source of truth. -->
+            <div id="dashboardInbox" style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);margin-top:1rem;padding:1rem 1.25rem;display:none;">
                 <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap;">
                     <span style="font-size:0.95rem;">📧</span>
                     <span style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);">Outlook Inbox</span>
@@ -1739,6 +1741,10 @@
 
         // ── Microsoft Outlook (Graph) integration ──
         // Configured against the "DCS Memorial Tracker" Azure AD app (single-tenant).
+        // OUTLOOK_ENABLED toggles the entire integration UI on/off without removing
+        // the code — flip to true to bring the dashboard inbox + per-order email
+        // cards back.
+        const OUTLOOK_ENABLED = false;
         const MS_CLIENT_ID = 'efad74f8-9446-4398-8376-53c3ed618ca8';
         const MS_TENANT    = 'f8e29d93-70ca-4c92-94f8-1a5d51ea728f'; // crymbleandsons.com tenant — required because the app is "My organization only"
         const MS_REDIRECT  = window.location.origin + window.location.pathname;
@@ -2006,13 +2012,19 @@
     
     // Data is already mapped by Apps Script - use directly!
     allOrders = data.orders;
-    
+
     console.log('Loaded', allOrders.length, 'orders from Apps Script');
     if (allOrders.length > 0) {
         console.log('Sample order:', allOrders[0]);
     }
-    
+
     renderOrderList();
+    // Explicit kanban + activity feed render after data loads. renderOrderList
+    // *can* call renderKanbanBoard at the end, but if filtered orders is empty
+    // it returns early — so do the render here too to guarantee the dashboard
+    // panels populate on first load.
+    try { if (document.getElementById('boardWrap')) renderKanbanBoard(); } catch(e) { console.warn('Kanban render error:', e); }
+    try { renderDashboardActivity(); } catch(e) { console.warn('Activity render error:', e); }
 }
 
         // Refresh orders
@@ -2320,8 +2332,10 @@
             renderPipelineChart(groups, colors, fmt);
             // render recent activity feed below
             renderDashboardActivity();
-            // render Outlook inbox if available
-            try { renderDashboardInbox(); } catch(e) { console.warn('Inbox render error:', e); }
+            // render Outlook inbox if the integration is enabled
+            if (OUTLOOK_ENABLED) {
+                try { renderDashboardInbox(); } catch(e) { console.warn('Inbox render error:', e); }
+            }
         }
 
         // ── Microsoft / Outlook UI helpers ──
@@ -2911,8 +2925,8 @@
                     </div>
                 </div>
 
-                <!-- Customer Emails (Outlook) — only if order has an email address -->
-                ${o.email ? `
+                <!-- Customer Emails (Outlook) — gated behind OUTLOOK_ENABLED flag -->
+                ${OUTLOOK_ENABLED && o.email ? `
                 <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);border-left:4px solid #0078d4;margin-bottom:1.25rem;">
                     <div class="card-header" style="background:#eff6ff;">
                         <span class="card-header-icon">📨</span>
@@ -3124,8 +3138,10 @@
             `;
             maybeRenderQR();
             // Fire-and-forget: load Outlook emails for this order's customer
-            // if the integration is configured + signed in.
-            try { if (currentOrder && currentOrder.email) renderOrderEmails(); } catch(e) { console.warn('Order emails render error:', e); }
+            // when the integration is enabled, configured, and signed in.
+            if (OUTLOOK_ENABLED) {
+                try { if (currentOrder && currentOrder.email) renderOrderEmails(); } catch(e) { console.warn('Order emails render error:', e); }
+            }
         }
 
         // Calculate total
