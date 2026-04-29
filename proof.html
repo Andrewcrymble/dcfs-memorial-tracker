@@ -810,7 +810,54 @@ function drawCanvas(p) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(hsImage, 0, 0, canvas.width, canvas.height);
 
-  // Inscription overlay
+  // Inscription overlay — prefer the per-line design built in the
+  // inscription designer (positions, fonts, sizes, colours per line)
+  // and fall back to the legacy single-style render when no design
+  // is present on the order.
+  const design = p.inscriptionDesign;
+  const designLines = design && Array.isArray(design.lines)
+    ? design.lines.filter(l => l && (l.text || '').trim())
+    : null;
+
+  if (designLines && designLines.length) {
+    // Designer canvas was 560 wide — every per-line size was authored at
+    // that scale. Match it here so the proof matches the designer.
+    const canvScale  = canvas.width / 560;
+    const lineSpacing = parseFloat(design.lsp) || 1.7;
+    const posX = (parseFloat(design.posX) || 50) / 100;
+    const posY = (parseFloat(design.posY) || 35) / 100;
+    const maxW = (parseFloat(design.maxW) || 52) / 100;
+    const shadow = parseFloat(design.shadow) || 0;
+    const opacity = parseFloat(design.opacity) || 0.95;
+
+    const cx = canvas.width * posX;
+    let y    = canvas.height * posY;
+    const maxTextW = canvas.width * maxW;
+
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    if (shadow > 0) {
+      ctx.shadowColor   = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur    = shadow * canvScale;
+      ctx.shadowOffsetX = canvScale;
+      ctx.shadowOffsetY = canvScale;
+    }
+
+    designLines.forEach(line => {
+      const sz = Math.round((parseFloat(line.size) || 22) * canvScale);
+      const rowH = sz * lineSpacing;
+      ctx.fillStyle = line.colour || colourToHex(p.inscriptionColour);
+      ctx.font = `${line.style || 'normal'} ${sz}px ${line.font || "'Times New Roman', serif"}`;
+      drawSpaced(ctx, (line.text || '').trim(), cx, y + rowH / 2, maxTextW, (parseFloat(line.ksp) || 0) * canvScale);
+      y += rowH;
+    });
+    ctx.restore();
+    return;
+  }
+
+  // Legacy single-style render — used when the order has no design saved
   const text = (p.inscriptionText || '').trim();
   if (!text) return;
 
@@ -819,14 +866,14 @@ function drawCanvas(p) {
 
   // Scale font so all lines fit comfortably within the stone face area
   const lineSpacing = 1.65;
-  const stoneAreaH  = canvas.height * 0.48;  // usable stone face height
+  const stoneAreaH  = canvas.height * 0.48;
   const maxFontByH  = Math.floor(stoneAreaH / (lines.length * lineSpacing));
   const fontSize    = Math.min(Math.round(canvas.width * 0.038), Math.max(maxFontByH, 8));
   const scaledLineH = fontSize * lineSpacing;
   const totalH      = lines.length * scaledLineH;
 
   const cx     = canvas.width  * 0.50;
-  const startY = canvas.height * 0.58;   // stone face centre is ~58% down
+  const startY = canvas.height * 0.58;
   const topY   = startY - totalH / 2;
   const maxTextW = canvas.width * 0.50;
 

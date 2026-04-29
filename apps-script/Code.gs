@@ -994,6 +994,10 @@ function getProofData(orderId, callback) {
         hsColour:          get(row, 'Headstone Colour'),
         inscriptionText:   get(row, 'Inscription Text'),
         inscriptionColour: get(row, 'Inscription Colour') || 'Gold',
+        // Per-line design built in the inscription designer (font, size,
+        // colour, position per line). Proof page renders this when present
+        // and falls back to single-style legacy render otherwise.
+        inscriptionDesign: parseJSONObject(get(row, 'Inscription Design')),
         proofStatus:       proofStatus,
         totalSellPrice:    totalSell,
         depositPaid:       depositPaid,
