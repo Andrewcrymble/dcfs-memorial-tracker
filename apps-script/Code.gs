@@ -1102,7 +1102,7 @@ function submitEstimateChanges(orderId, changes) {
     const refDisplay = String(orderId).slice(-8).toUpperCase();
 
     try {
-      const officeEmail = PropertiesService.getScriptProperties().getProperty('OFFICE_EMAIL') || 'info@crymbleandsons.com';
+      const officeEmail = PropertiesService.getScriptProperties().getProperty('OFFICE_EMAIL') || 'memorials@crymbleandsons.com';
       const html =
         '<div style="font-family:Arial,sans-serif;max-width:620px;">'
         + '<div style="background:#b45309;padding:18px 22px;color:white;">'

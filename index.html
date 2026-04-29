@@ -1635,6 +1635,18 @@
                 <button class="installed-view-btn" onclick="setFilter('Installed'); renderKanbanBoard()">View all →</button>
             </div>
 
+            <!-- Change Requests panel — pending estimate + proof change
+                 requests aggregated from order activity logs. -->
+            <div id="dashboardChangeRequests" style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);margin-top:1rem;padding:1rem 1.25rem;border-left:4px solid #f59e0b;display:none;">
+                <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap;">
+                    <span style="font-size:0.95rem;">✏️</span>
+                    <span style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#b45309;">Change Requests</span>
+                    <span id="dashboardChangeRequestsCount" style="font-size:0.72rem;color:var(--text-muted);"></span>
+                    <span style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);">Click a card to open the order. Mark resolved when handled.</span>
+                </div>
+                <div id="dashboardChangeRequestsList" style="font-size:0.85rem;max-height:340px;overflow-y:auto;padding-right:0.5rem;"></div>
+            </div>
+
             <!-- Recent Activity panel — full feed across every order -->
             <div class="dashboard-activity" id="dashboardActivity" style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);margin-top:1rem;padding:1rem 1.25rem;">
                 <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap;">
@@ -2540,11 +2552,176 @@
 
             // render pie chart
             renderPipelineChart(groups, colors, fmt);
-            // render recent activity feed below
+            // render change requests panel + recent activity feed
+            try { renderChangeRequests(); } catch(e) { console.warn('Change requests render error:', e); }
             renderDashboardActivity();
             // render Outlook inbox if the integration is enabled
             if (OUTLOOK_ENABLED) {
                 try { renderDashboardInbox(); } catch(e) { console.warn('Inbox render error:', e); }
+            }
+        }
+
+        // Change Requests panel — pulls every "CHANGES REQUESTED" entry from
+        // order logs (proof + estimate), de-duplicates, and shows the open
+        // ones at the top of the dashboard. A request counts as resolved
+        // once a later "Resolved", "Estimate approved", "Proof approved",
+        // or "Status changed" entry follows it on the same order.
+        function renderChangeRequests() {
+            const wrap = document.getElementById('dashboardChangeRequests');
+            const list = document.getElementById('dashboardChangeRequestsList');
+            const count = document.getElementById('dashboardChangeRequestsCount');
+            if (!wrap || !list) return;
+
+            const requests = [];
+            (allOrders || []).forEach(o => {
+                if (o.archived) return;
+                const log = (o.log || []).slice().sort((a, b) => {
+                    const tA = new Date(a.ts).getTime(); const tB = new Date(b.ts).getTime();
+                    return (isNaN(tA) ? 0 : tA) - (isNaN(tB) ? 0 : tB);
+                });
+                // Walk forward; for each CHANGES REQUESTED entry, look at any
+                // subsequent log entries to decide if the request is resolved.
+                log.forEach((entry, i) => {
+                    if (!entry || !entry.text) return;
+                    const t = String(entry.text);
+                    const isEstimateReq = /ESTIMATE CHANGES REQUESTED/i.test(t);
+                    const isProofReq    = /CHANGES REQUESTED/i.test(t) && !isEstimateReq;
+                    if (!isEstimateReq && !isProofReq) return;
+
+                    let resolved = false;
+                    let resolvedBy = '';
+                    let resolvedTs = '';
+                    for (let j = i + 1; j < log.length; j++) {
+                        const later = log[j];
+                        const lt = String(later.text || '');
+                        if (/Marked change request resolved/i.test(lt)
+                            || /Status changed/i.test(lt)
+                            || /Proof approved/i.test(lt)
+                            || /PROOF APPROVED/.test(lt)
+                            || /Estimate approved/i.test(lt)
+                            || /Stripe payment received/i.test(lt)) {
+                            resolved = true;
+                            resolvedBy = later.author || '';
+                            resolvedTs = later.ts || '';
+                            break;
+                        }
+                    }
+
+                    requests.push({
+                        orderId: o.orderId,
+                        ref: o.deceasedName || o.customerName || o.orderRef || '',
+                        customerName: o.customerName || '',
+                        type: isEstimateReq ? 'estimate' : 'proof',
+                        text: t.replace(/^\[\s*[^\]]*\]\s*/, '').replace(/^Customer:\s*/, ''),
+                        ts: entry.ts,
+                        author: entry.author || '',
+                        resolved,
+                        resolvedBy,
+                        resolvedTs
+                    });
+                });
+            });
+
+            // Sort by timestamp newest first; open ones first regardless
+            requests.sort((a, b) => {
+                if (a.resolved !== b.resolved) return a.resolved ? 1 : -1;
+                const tA = new Date(a.ts).getTime(); const tB = new Date(b.ts).getTime();
+                return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+            });
+
+            const open = requests.filter(r => !r.resolved);
+            const total = requests.length;
+
+            // Hide the panel entirely when there are no requests at all
+            if (total === 0) { wrap.style.display = 'none'; return; }
+            wrap.style.display = '';
+            if (count) count.textContent = open.length + ' open' + (total > open.length ? ' · ' + (total - open.length) + ' resolved' : '');
+
+            const fmtAgo = ts => {
+                const d = new Date(ts);
+                if (!ts || isNaN(d.getTime())) return '';
+                let diff = (Date.now() - d) / 60000;
+                if (diff < 0) diff = 0;
+                if (diff < 1)     return 'just now';
+                if (diff < 60)    return Math.round(diff) + 'm ago';
+                if (diff < 1440)  return Math.round(diff / 60) + 'h ago';
+                if (diff < 10080) return Math.round(diff / 1440) + 'd ago';
+                return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            };
+            const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            // Show open requests prominently; resolved ones dimmed below
+            const renderRow = (r) => {
+                const typeBadge = r.type === 'estimate'
+                    ? '<span style="background:#fef3c7;color:#92400e;font-size:0.65rem;font-weight:700;padding:1px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">Estimate</span>'
+                    : '<span style="background:#dbeafe;color:#1d4ed8;font-size:0.65rem;font-weight:700;padding:1px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">Proof</span>';
+                const resolvedBadge = r.resolved
+                    ? `<span style="background:#dcfce7;color:#15803d;font-size:0.65rem;font-weight:700;padding:1px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">Resolved</span>`
+                    : '';
+                const resolveBtn = r.resolved
+                    ? ''
+                    : `<button class="cr-resolve-btn" data-order-id="${(r.orderId||'').replace(/"/g,'&quot;')}" data-ts="${(r.ts||'').replace(/"/g,'&quot;')}" style="background:#16a34a;color:white;border:none;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:600;cursor:pointer;flex-shrink:0;">✓ Mark resolved</button>`;
+
+                return `
+                    <div class="cr-row" data-order-id="${(r.orderId||'').replace(/"/g,'&quot;')}" style="display:flex;gap:0.7rem;padding:0.6rem 0;border-bottom:1px solid rgba(0,0,0,0.06);align-items:flex-start;cursor:pointer;${r.resolved?'opacity:0.55;':''}">
+                        <div style="flex:1;line-height:1.45;min-width:0;">
+                            <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-bottom:0.25rem;">
+                                ${typeBadge}
+                                ${resolvedBadge}
+                                <span style="font-weight:700;color:var(--text);">${esc(r.ref)}</span>
+                                ${r.customerName ? `<span style="color:var(--text-muted);font-size:0.78rem;">· ${esc(r.customerName)}</span>` : ''}
+                                <span style="color:var(--text-muted);font-size:0.72rem;margin-left:auto;">${fmtAgo(r.ts)}</span>
+                            </div>
+                            <div style="font-size:0.85rem;color:var(--text);white-space:pre-wrap;">${esc(r.text)}</div>
+                        </div>
+                        ${resolveBtn}
+                    </div>`;
+            };
+
+            list.innerHTML = requests.map(renderRow).join('');
+
+            // Click row → open order
+            list.querySelectorAll('.cr-row').forEach(row => {
+                row.addEventListener('click', function(e) {
+                    if (e.target.closest('.cr-resolve-btn')) return;
+                    const id = this.getAttribute('data-order-id');
+                    if (id) selectOrder(id);
+                });
+            });
+            // Mark resolved button
+            list.querySelectorAll('.cr-resolve-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const id = this.getAttribute('data-order-id');
+                    markChangeRequestResolved(id);
+                });
+            });
+        }
+
+        async function markChangeRequestResolved(orderId) {
+            const order = allOrders.find(o => o.orderId === orderId);
+            if (!order) return;
+            if (!order.log) order.log = [];
+            order.log.push({
+                id: Date.now().toString() + '-r',
+                ts: new Date().toISOString(),
+                author: (typeof getCurrentUser === 'function' ? getCurrentUser() : '') || 'User',
+                text: 'Marked change request resolved'
+            });
+            // Optimistic UI refresh
+            try { renderChangeRequests(); } catch(e){}
+            try { renderDashboardActivity(); } catch(e){}
+            // Sync to sheet
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST', mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'upsert', order })
+                });
+                showToast('✓ Change request resolved', 'success');
+            } catch (err) {
+                console.warn('markChangeRequestResolved sync failed:', err);
+                showToast('⚠ Marked locally — sync failed', 'warn', 5000);
             }
         }
 
