@@ -123,11 +123,17 @@
                 var time = '';
                 try {
                     var d = new Date(e.ts);
-                    var now = new Date();
-                    var diff = (now - d) / 60000; // minutes
-                    if (diff < 60) time = Math.round(diff) + 'm ago';
-                    else if (diff < 1440) time = Math.round(diff/60) + 'h ago';
-                    else time = d.toLocaleDateString('en-GB', {day:'numeric',month:'short'});
+                    if (!e.ts || isNaN(d.getTime())) {
+                        time = '';
+                    } else {
+                        var now = new Date();
+                        var diff = (now - d) / 60000; // minutes
+                        if (diff < 0) diff = 0; // future timestamps clamp to "now"
+                        if (diff < 1) time = 'just now';
+                        else if (diff < 60) time = Math.round(diff) + 'm ago';
+                        else if (diff < 1440) time = Math.round(diff/60) + 'h ago';
+                        else time = d.toLocaleDateString('en-GB', {day:'numeric',month:'short'});
+                    }
                 } catch(err){}
                 return '<div style="padding:0.45rem 0;border-bottom:1px solid rgba(255,255,255,0.15);display:flex;gap:0.5rem;align-items:flex-start;">'
                     + '<span style="flex:1;line-height:1.4;">'
@@ -2150,15 +2156,21 @@
             };
             const fmt = n => '£' + (n||0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 
-            // Filter by search term
+            // Filter by search term + archived state
             const searchTerm = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+            const showArchived = !!window._showArchivedEnquiries;
             const filtered = allOrders.filter(o => {
+                // Archived enquiries only appear when the user opts in
+                if (o.archived && !showArchived) return false;
                 if (!searchTerm) return true;
                 return (o.deceasedName||'').toLowerCase().includes(searchTerm)
                     || (o.customerName||'').toLowerCase().includes(searchTerm)
                     || (o.orderRef||'').toLowerCase().includes(searchTerm)
                     || (o.cemetery||'').toLowerCase().includes(searchTerm);
             });
+
+            // Track archived count for the toggle below the Enquiry column
+            const archivedCount = allOrders.filter(o => o.archived && (o.status || 'Enquiry') === 'Enquiry').length;
 
             // Group by status
             const groups = {};
@@ -2222,8 +2234,20 @@
                         ? `<span style="font-size:0.68rem;color:#8e8e93;">Created ${createdFmt}</span>`
                         : '';
 
-                    return `<li class="order-item" data-order-id="${safeId}" style="border-left:3px solid ${borderColor};margin:0;border-radius:10px;padding:0.7rem 0.85rem;">
-                        <div class="order-item-top" style="margin-bottom:0.15rem;">
+                    // Archive button — only on Enquiry cards (and Quoted, where
+                    // jobs sometimes also need parking). Archived cards get an
+                    // "Unarchive" button instead.
+                    const showArchiveBtn = (status === 'Enquiry' || status === 'Quoted');
+                    const archiveBtnHtml = showArchiveBtn
+                        ? (order.archived
+                            ? `<button class="kanban-archive-btn" title="Restore to active list" data-archive-action="unarchive" data-order-id="${safeId}" style="position:absolute;top:6px;right:6px;background:#f0fdf4;border:1px solid #86efac;color:#15803d;border-radius:6px;font-size:0.65rem;font-weight:700;padding:1px 6px;cursor:pointer;">↺ Restore</button>`
+                            : `<button class="kanban-archive-btn" title="Archive — hide from main view" data-archive-action="archive" data-order-id="${safeId}" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.04);border:1px solid rgba(0,0,0,0.1);color:#6b7280;border-radius:6px;font-size:0.78rem;line-height:1;padding:2px 6px;cursor:pointer;">📦</button>`)
+                        : '';
+                    const archivedDim = order.archived ? 'opacity:0.55;' : '';
+
+                    return `<li class="order-item" data-order-id="${safeId}" style="position:relative;border-left:3px solid ${borderColor};margin:0;border-radius:10px;padding:0.7rem 0.85rem;${archivedDim}">
+                        ${archiveBtnHtml}
+                        <div class="order-item-top" style="margin-bottom:0.15rem;${showArchiveBtn?'padding-right:30px;':''}">
                             <div class="order-name" style="font-size:0.83rem;">${order.deceasedName||'Unknown'}</div>
                             ${daysBadge}
                         </div>
@@ -2233,10 +2257,28 @@
                     </li>`;
                 }).join('');
 
-                // attach click handlers
+                // Append "Show/Hide archived" toggle to Enquiry column footer
+                if (status === 'Enquiry' && archivedCount > 0) {
+                    const label = showArchived ? `× Hide archived (${archivedCount})` : `📦 Show ${archivedCount} archived`;
+                    listEl.innerHTML += `<li style="list-style:none;margin-top:6px;text-align:center;">
+                        <button onclick="toggleShowArchived()" style="background:none;border:1px dashed rgba(0,0,0,0.15);color:#6b7280;font-size:0.72rem;padding:4px 10px;border-radius:6px;cursor:pointer;">${label}</button>
+                    </li>`;
+                }
+
+                // attach click handlers — skip clicks on the archive button
                 listEl.querySelectorAll('.order-item').forEach(item => {
-                    item.addEventListener('click', function() {
+                    item.addEventListener('click', function(e) {
+                        if (e.target.closest('.kanban-archive-btn')) return;
                         selectOrder(this.getAttribute('data-order-id'));
+                    });
+                });
+                listEl.querySelectorAll('.kanban-archive-btn').forEach(btn => {
+                    btn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const id = this.getAttribute('data-order-id');
+                        const action = this.getAttribute('data-archive-action');
+                        if (action === 'archive') archiveOrder(id);
+                        else unarchiveOrder(id);
                     });
                 });
             });
@@ -4428,6 +4470,67 @@
         }
 
         // Delete order
+        // Archive an enquiry/quote — keeps it in the sheet but hides it from
+        // the kanban dashboard. User can restore via the "Show archived"
+        // toggle at the bottom of the Enquiry column.
+        async function archiveOrder(orderId) {
+            const order = allOrders.find(o => o.orderId === orderId);
+            if (!order) return;
+            const label = order.deceasedName || order.customerName || 'this order';
+            if (!confirm(`Archive "${label}"? It will be hidden from the dashboard but kept on the sheet so you can restore it later.`)) return;
+            order.archived = true;
+            if (!order.log) order.log = [];
+            order.log.push({
+                id: Date.now().toString(),
+                ts: new Date().toISOString(),
+                author: getCurrentUser ? getCurrentUser() : 'User',
+                text: 'Archived'
+            });
+            renderKanbanBoard();
+            renderOrderList && renderOrderList();
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST', mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'upsert', order })
+                });
+                showToast('📦 Archived', 'success');
+            } catch (e) {
+                console.warn('Archive sync failed:', e);
+                showToast('⚠ Archive saved locally — sync failed', 'warn', 5000);
+            }
+        }
+
+        async function unarchiveOrder(orderId) {
+            const order = allOrders.find(o => o.orderId === orderId);
+            if (!order) return;
+            order.archived = false;
+            if (!order.log) order.log = [];
+            order.log.push({
+                id: Date.now().toString(),
+                ts: new Date().toISOString(),
+                author: getCurrentUser ? getCurrentUser() : 'User',
+                text: 'Restored from archive'
+            });
+            renderKanbanBoard();
+            renderOrderList && renderOrderList();
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST', mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'upsert', order })
+                });
+                showToast('↺ Restored', 'success');
+            } catch (e) {
+                console.warn('Restore sync failed:', e);
+            }
+        }
+
+        function toggleShowArchived() {
+            window._showArchivedEnquiries = !window._showArchivedEnquiries;
+            renderKanbanBoard();
+        }
+
         async function deleteOrder() {
             if (!currentOrder) return;
             

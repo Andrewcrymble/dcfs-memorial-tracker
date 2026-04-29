@@ -42,7 +42,8 @@ const HEADERS = [
   "Mason Notified At", "Mason Notified By",
   "Stripe Session IDs",
   "Inscription Design",
-  "Grave Number"
+  "Grave Number",
+  "Archived"
 ];
 
 // ============================================================
@@ -501,6 +502,7 @@ function upsertOrder(order) {
     "Mason Notified By":   order.masonNotifiedBy || "",
     "Inscription Design":  order.inscriptionDesign ? JSON.stringify(order.inscriptionDesign) : "",
     "Grave Number":        order.graveNumber || "",
+    "Archived":            order.archived ? "Yes" : "",
   };
 
   // For columns the tracker UI doesn't manage (e.g., Stripe Session IDs,
@@ -660,6 +662,7 @@ function mapSheetOrderToTracker(sheetOrder) {
     masonNotifiedBy:     sheetOrder["Mason Notified By"] || "",
     inscriptionDesign:   parseJSONObject(sheetOrder["Inscription Design"]),
     graveNumber:         sheetOrder["Grave Number"] || "",
+    archived:            sheetOrder["Archived"] === "Yes",
     log:                 parseLogEntries(sheetOrder["Log Entries"])
   };
 }
@@ -693,11 +696,33 @@ function parseLogEntries(logString) {
     return logString.split(" | ").map((entry, index) => {
       const match = entry.match(/\[(.*?)\]\s*(.*?):\s*(.*)/);
       if (match) {
-        return { id: Date.now() + index, ts: match[1], author: match[2], text: match[3] };
+        return { id: Date.now() + index, ts: parseGbDateTime(match[1]), author: match[2], text: match[3] };
       }
       return null;
     }).filter(Boolean);
   } catch (e) { return []; }
+}
+
+// Convert "dd/mm/yyyy HH:MM" (en-GB toLocaleDateString format) to an ISO
+// string the browser can parse unambiguously. Falls back to the raw value
+// if the format doesn't match — protects log entries written by other code
+// paths or older formats.
+function parseGbDateTime(s) {
+  if (!s) return '';
+  const str = String(s).trim();
+  // Already ISO? Pass through.
+  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) return str;
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[\s,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return str;
+  const dd = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10) - 1;
+  const yyyy = parseInt(m[3], 10);
+  const hh = parseInt(m[4] || '0', 10);
+  const mn = parseInt(m[5] || '0', 10);
+  const ss = parseInt(m[6] || '0', 10);
+  const d = new Date(yyyy, mm, dd, hh, mn, ss);
+  if (isNaN(d.getTime())) return str;
+  return d.toISOString();
 }
 
 // ============================================================
