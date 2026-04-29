@@ -6934,25 +6934,27 @@
             try {
                 payload = JSON.stringify({ action: 'upsert', order });
             } catch (jsonErr) {
-                console.error('idSaveToForm: JSON.stringify failed', jsonErr, order);
+                console.error('[Designer] JSON.stringify failed', jsonErr, order);
                 flashSaved('⚠ Bad data — see console', '#d97706');
                 return;
             }
+
+            console.log('[Designer] Saving order', oid, '— design has', design.lines.length, 'lines, posY=' + design.posY + '%, payload size=' + payload.length + ' bytes');
+
             fetch(SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'text/plain' },
                 body: payload
-            }).then(() => {
+            }).then((resp) => {
+                console.log('[Designer] fetch resolved for', oid, '— resp.type=' + resp.type + ' (opaque expected with no-cors)');
                 flashSaved('✅ Saved!', '#16a34a');
                 const idx = allOrders.findIndex(o => o.orderId === oid);
                 if (idx >= 0) allOrders[idx] = Object.assign({}, allOrders[idx], order);
                 else allOrders.unshift(order);
-                // Saved into the sheet — clear the dirty flag so saveOrderForm
-                // doesn't double-write.
                 window._idLastDesignDirty = false;
             }).catch(err => {
-                console.warn('Designer save failed:', err);
+                console.error('[Designer] fetch failed:', err);
                 flashSaved('⚠ Sync failed', '#d97706');
             });
         }
