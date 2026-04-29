@@ -2279,6 +2279,25 @@
                         ? `<span style="font-size:0.68rem;color:#8e8e93;">Created ${createdFmt}</span>`
                         : '';
 
+                    // Last 3 internal notes (newest first) for the hover tooltip.
+                    // Combines the legacy free-text 'notes' field with the
+                    // timestamped noteEntries array. JSON-stringified into a
+                    // data-* attribute so the hover handler can read it back.
+                    const tooltipNotes = (() => {
+                        const arr = [];
+                        (order.noteEntries || []).forEach(n => {
+                            if (n && n.text) arr.push({ ts: n.ts, author: n.author || '', text: n.text });
+                        });
+                        if (order.notes && String(order.notes).trim()) {
+                            arr.push({ ts: order.lastUpdated || order.createdAt || '', author: '', text: String(order.notes).trim() });
+                        }
+                        arr.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+                        return arr.slice(0, 3);
+                    })();
+                    const notesAttr = tooltipNotes.length
+                        ? ` data-notes="${encodeURIComponent(JSON.stringify(tooltipNotes))}"`
+                        : '';
+
                     // Archive button — only on Enquiry cards (and Quoted, where
                     // jobs sometimes also need parking). Archived cards get an
                     // "Unarchive" button instead.
@@ -2290,7 +2309,7 @@
                         : '';
                     const archivedDim = order.archived ? 'opacity:0.55;' : '';
 
-                    return `<li class="order-item" data-order-id="${safeId}" style="position:relative;border-left:3px solid ${borderColor};margin:0;border-radius:10px;padding:0.7rem 0.85rem;${archivedDim}">
+                    return `<li class="order-item" data-order-id="${safeId}"${notesAttr} style="position:relative;border-left:3px solid ${borderColor};margin:0;border-radius:10px;padding:0.7rem 0.85rem;${archivedDim}">
                         ${archiveBtnHtml}
                         <div class="order-item-top" style="margin-bottom:0.15rem;${showArchiveBtn?'padding-right:30px;':''}">
                             <div class="order-name" style="font-size:0.83rem;">${order.deceasedName||'Unknown'}</div>
@@ -2316,6 +2335,9 @@
                         if (e.target.closest('.kanban-archive-btn')) return;
                         selectOrder(this.getAttribute('data-order-id'));
                     });
+                    // Hover tooltip showing the last 3 internal notes
+                    item.addEventListener('mouseenter', kanbanShowNotesTooltip);
+                    item.addEventListener('mouseleave', kanbanHideNotesTooltip);
                 });
                 listEl.querySelectorAll('.kanban-archive-btn').forEach(btn => {
                     btn.addEventListener('click', function(e) {
@@ -2563,6 +2585,70 @@
                 row.addEventListener('mouseenter', function() { this.style.background = 'rgba(0,0,0,0.03)'; });
                 row.addEventListener('mouseleave', function() { this.style.background = ''; });
             });
+        }
+
+        // ── Kanban card hover tooltip — last 3 internal notes ──
+        function kanbanShowNotesTooltip(ev) {
+            const card = ev.currentTarget;
+            const raw = card.getAttribute('data-notes');
+            if (!raw) return;
+            let notes = [];
+            try { notes = JSON.parse(decodeURIComponent(raw)); } catch (e) { return; }
+            if (!notes.length) return;
+
+            let tip = document.getElementById('kanbanNoteTooltip');
+            if (!tip) {
+                tip = document.createElement('div');
+                tip.id = 'kanbanNoteTooltip';
+                tip.style.cssText = 'position:fixed;z-index:9999;background:#1c1c1e;color:white;padding:0.55rem 0.75rem;border-radius:8px;font-size:0.78rem;line-height:1.4;box-shadow:0 6px 20px rgba(0,0,0,0.25);max-width:340px;pointer-events:none;opacity:0;transition:opacity 0.12s;';
+                document.body.appendChild(tip);
+            }
+            const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const fmtTs = ts => {
+                const d = new Date(ts);
+                if (!ts || isNaN(d.getTime())) return '';
+                let diff = (Date.now() - d) / 60000;
+                if (diff < 0) diff = 0;
+                if (diff < 60)    return Math.round(diff) + 'm ago';
+                if (diff < 1440)  return Math.round(diff / 60) + 'h ago';
+                if (diff < 10080) return Math.round(diff / 1440) + 'd ago';
+                return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            };
+            tip.innerHTML = `
+                <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:rgba(255,255,255,0.5);margin-bottom:0.4rem;font-weight:700;">Last ${notes.length} note${notes.length !== 1 ? 's' : ''}</div>
+                ${notes.map(n => `
+                    <div style="margin-bottom:0.45rem;">
+                        <div style="display:flex;gap:0.4rem;justify-content:space-between;font-size:0.7rem;color:rgba(255,255,255,0.6);margin-bottom:0.15rem;">
+                            <span>${esc(n.author) || 'Note'}</span>
+                            <span>${fmtTs(n.ts)}</span>
+                        </div>
+                        <div style="white-space:pre-wrap;">${esc(n.text)}</div>
+                    </div>
+                `).join('')}`;
+
+            // Position the tip just to the right of the card; flip to the
+            // left if it would overflow the viewport.
+            const rect = card.getBoundingClientRect();
+            tip.style.opacity = '0';
+            tip.style.left = '0px';
+            tip.style.top = '0px';
+            // Force a reflow to get accurate dimensions before positioning
+            const tipW = tip.offsetWidth;
+            const tipH = tip.offsetHeight;
+            let left = rect.right + 8;
+            if (left + tipW > window.innerWidth - 8) left = rect.left - tipW - 8;
+            if (left < 8) left = 8;
+            let top = rect.top + (rect.height - tipH) / 2;
+            if (top + tipH > window.innerHeight - 8) top = window.innerHeight - tipH - 8;
+            if (top < 8) top = 8;
+            tip.style.left = left + 'px';
+            tip.style.top  = top + 'px';
+            tip.style.opacity = '1';
+        }
+
+        function kanbanHideNotesTooltip() {
+            const tip = document.getElementById('kanbanNoteTooltip');
+            if (tip) tip.style.opacity = '0';
         }
 
         function renderPipelineChart(groups, colors, fmt) {
