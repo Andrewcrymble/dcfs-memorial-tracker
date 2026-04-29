@@ -2319,22 +2319,26 @@
 
             // Render each column
             statuses.forEach(status => {
-                const listEl = document.getElementById('cards-' + status);
-                if (!listEl) return;
                 const orders = groups[status] || [];
                 const total = orders.reduce((sum,o) => sum + (parseFloat(o.totalSellPrice)||0), 0);
+
+                // Installed has no kanban-cards column — only a summary bar.
+                // Update it first so the early-return-on-missing-listEl below
+                // doesn't strand the count at 0.
+                if (status === 'Installed') {
+                    const installedCount = document.getElementById('installed-count');
+                    if (installedCount) installedCount.textContent = orders.length + ' jobs completed';
+                    return;
+                }
+
+                const listEl = document.getElementById('cards-' + status);
+                if (!listEl) return;
 
                 // update header counts/values
                 const countEl = document.getElementById('col-count-' + status);
                 const valueEl = document.getElementById('col-value-' + status);
                 if (countEl) countEl.textContent = orders.length;
                 if (valueEl) valueEl.textContent = fmt(total);
-
-                if (status === 'Installed') {
-                    const installedCount = document.getElementById('installed-count');
-                    if (installedCount) installedCount.textContent = orders.length + ' jobs completed';
-                    return;
-                }
 
                 if (orders.length === 0) {
                     listEl.innerHTML = '<li class="kanban-empty">No orders</li>';
