@@ -1738,10 +1738,9 @@
         const SHEET_ID = '1_pbyhKL1IElgneBZHFIWG76Cv6hNKdUw0fgSHQjMN6M';
 
         // ── Microsoft Outlook (Graph) integration ──
-        // Set MS_CLIENT_ID after registering an Azure AD app (see SETUP-OUTLOOK.md).
-        // Until then, the inbox panels show a "Connect Outlook" prompt.
-        const MS_CLIENT_ID = '';                                  // ← paste your Azure AD app's Application (client) ID here
-        const MS_TENANT    = 'common';                            // 'common' lets any work/school account sign in
+        // Configured against the "DCS Memorial Tracker" Azure AD app (single-tenant).
+        const MS_CLIENT_ID = 'efad74f8-9446-4398-8376-53c3ed618ca8';
+        const MS_TENANT    = 'f8e29d93-70ca-4c92-94f8-1a5d51ea728f'; // crymbleandsons.com tenant — required because the app is "My organization only"
         const MS_REDIRECT  = window.location.origin + window.location.pathname;
         const MS_SCOPES    = ['Mail.Read', 'User.Read'];
         const STONE_IMAGES = {
