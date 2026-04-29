@@ -4642,11 +4642,14 @@
         }
 
         function dcsPdfCustomerBoxes(doc, order, y) {
-            // Subtle light-grey boxes with black border
+            // Subtle light-grey boxes with black border. Box height grows with
+            // the deceased rows — Grave No. adds a 7th line when present.
+            const hasGrave = !!order.graveNumber;
+            const boxH = hasGrave ? 40 : 34;
             doc.setFillColor(248, 248, 248);
             doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3);
-            doc.roundedRect(20, y, 82, 34, 1, 1, 'FD');
-            doc.roundedRect(108, y, 82, 34, 1, 1, 'FD');
+            doc.roundedRect(20, y, 82, boxH, 1, 1, 'FD');
+            doc.roundedRect(108, y, 82, boxH, 1, 1, 'FD');
 
             // Customer box
             doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(80, 80, 80);
@@ -4665,8 +4668,9 @@
             doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
             if (order.deceasedDob) doc.text(`Born:   ${order.deceasedDob}`, 112, y + 19);
             if (order.deceasedDod) doc.text(`Passed: ${order.deceasedDod}`, 112, y + 25);
-            if (order.cemetery)    doc.text(`Cemetery: ${order.cemetery}`, 112, y + 31);
-            return y + 40;
+            if (order.cemetery)    doc.text(`Grave Location: ${order.cemetery}`, 112, y + 31);
+            if (hasGrave)          doc.text(`Grave No: ${order.graveNumber}`, 112, y + 37);
+            return y + boxH + 6;
         }
 
         function dcsPdfTableHeader(doc, y, rightLabel) {
