@@ -1634,6 +1634,16 @@
                 <button class="installed-view-btn" onclick="setFilter('Installed'); renderKanbanBoard()">View all →</button>
             </div>
 
+            <!-- Recent Activity panel — quick at-a-glance feed across all orders -->
+            <div class="dashboard-activity" id="dashboardActivity" style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);margin-top:1rem;padding:1rem 1.25rem;">
+                <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+                    <span style="font-size:0.95rem;">📋</span>
+                    <span style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);">Recent Activity</span>
+                    <span id="dashboardActivityCount" style="margin-left:auto;font-size:0.72rem;color:var(--text-muted);"></span>
+                </div>
+                <div id="dashboardActivityList" style="font-size:0.85rem;"></div>
+            </div>
+
             <!-- hidden: full order-grid used by filter tabs when a specific filter is set -->
             <div class="order-grid-wrap" id="orderGridWrap" style="display:none;">
                 <ul class="order-grid" id="orderList">
@@ -2285,6 +2295,73 @@
 
             // render pie chart
             renderPipelineChart(groups, colors, fmt);
+            // render recent activity feed below
+            renderDashboardActivity();
+        }
+
+        // Recent Activity feed on the main dashboard — pulls the latest log
+        // entries across every order, sorts newest first, and renders the
+        // top 12 with click-to-open. Hidden if no entries.
+        function renderDashboardActivity() {
+            const list = document.getElementById('dashboardActivityList');
+            const count = document.getElementById('dashboardActivityCount');
+            if (!list) return;
+
+            const entries = [];
+            (allOrders || []).forEach(o => {
+                if (o.archived) return;
+                (o.log || []).forEach(e => {
+                    if (!e || !e.text) return;
+                    entries.push({
+                        ts: e.ts,
+                        author: e.author || '',
+                        text: e.text,
+                        ref: o.deceasedName || o.customerName || o.orderRef || '',
+                        orderId: o.orderId
+                    });
+                });
+            });
+            entries.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+
+            if (count) count.textContent = entries.length ? `${entries.length} events` : '';
+            if (!entries.length) {
+                list.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;padding:0.4rem 0;">No activity yet — events will appear here as orders progress.</div>';
+                return;
+            }
+
+            const fmtAgo = ts => {
+                const d = new Date(ts);
+                if (!ts || isNaN(d.getTime())) return '';
+                let diff = (Date.now() - d) / 60000;
+                if (diff < 0) diff = 0;
+                if (diff < 1)    return 'just now';
+                if (diff < 60)   return Math.round(diff) + 'm ago';
+                if (diff < 1440) return Math.round(diff / 60) + 'h ago';
+                if (diff < 10080) return Math.round(diff / 1440) + 'd ago';
+                return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            };
+            const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            list.innerHTML = entries.slice(0, 12).map(e => `
+                <div class="dash-act-row" data-order-id="${(e.orderId||'').replace(/"/g,'&quot;')}" style="display:flex;gap:0.6rem;padding:0.45rem 0;border-bottom:1px solid rgba(0,0,0,0.06);cursor:pointer;align-items:flex-start;">
+                    <div style="flex:1;line-height:1.4;">
+                        <span style="font-weight:600;color:var(--text);">${esc(e.ref)}</span>
+                        <span style="color:var(--text-muted);">·</span>
+                        <span style="color:var(--text);">${esc(e.text)}</span>
+                        ${e.author ? `<span style="color:var(--text-muted);font-size:0.75rem;"> — ${esc(e.author)}</span>` : ''}
+                    </div>
+                    <span style="color:var(--text-muted);font-size:0.75rem;white-space:nowrap;flex-shrink:0;">${fmtAgo(e.ts)}</span>
+                </div>
+            `).join('');
+
+            list.querySelectorAll('.dash-act-row').forEach(row => {
+                row.addEventListener('click', function() {
+                    const id = this.getAttribute('data-order-id');
+                    if (id) selectOrder(id);
+                });
+                row.addEventListener('mouseenter', function() { this.style.background = 'rgba(0,0,0,0.03)'; });
+                row.addEventListener('mouseleave', function() { this.style.background = ''; });
+            });
         }
 
         function renderPipelineChart(groups, colors, fmt) {
