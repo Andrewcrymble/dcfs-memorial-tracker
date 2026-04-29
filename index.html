@@ -6641,32 +6641,66 @@
                 formField.value = joinedText;
                 formField.dispatchEvent(new Event('input', { bubbles: true }));
             }
-            // Persist all designer settings on the active order so reopening
-            // restores the same layout (and per-line styling) instead of
-            // falling back to defaults.
-            if (window.currentOrder) {
-                const get = (id, fallback) => {
-                    const el = document.getElementById(id);
-                    return el ? el.value : fallback;
-                };
-                window.currentOrder.inscriptionDesign = {
-                    lines:   _idLines.map(l => Object.assign({}, l)),
-                    lsp:     parseFloat(get('id_lsp', 1.7)),
-                    posX:    parseInt(get('id_posX', 50)),
-                    posY:    parseInt(get('id_posY', 35)),
-                    maxW:    parseInt(get('id_maxW', 52)),
-                    shadow:  parseFloat(get('id_shad', 3)),
-                    opacity: parseFloat(get('id_opac', 0.95))
-                };
+            if (!window.currentOrder) return;
+
+            const get = (id, fallback) => {
+                const el = document.getElementById(id);
+                return el ? el.value : fallback;
+            };
+            window.currentOrder.inscriptionDesign = {
+                lines:   _idLines.map(l => Object.assign({}, l)),
+                lsp:     parseFloat(get('id_lsp', 1.7)),
+                posX:    parseInt(get('id_posX', 50)),
+                posY:    parseInt(get('id_posY', 35)),
+                maxW:    parseInt(get('id_maxW', 52)),
+                shadow:  parseFloat(get('id_shad', 3)),
+                opacity: parseFloat(get('id_opac', 0.95))
+            };
+            // Also keep the form-text mirror on the order so PDFs and
+            // anywhere reading inscriptionText sees the latest joined text.
+            window.currentOrder.inscriptionText = joinedText;
+
+            // Capture any in-flight edits in the order edit form so we don't
+            // overwrite them with stale order data when we POST to the sheet.
+            const orderForm = document.getElementById('orderForm');
+            if (orderForm) {
+                try {
+                    const fd = new FormData(orderForm);
+                    for (let [k, v] of fd.entries()) {
+                        if (k === 'accessories') continue;
+                        window.currentOrder[k] = v;
+                    }
+                    const accs = fd.getAll('accessories');
+                    if (accs.length) window.currentOrder.accessories = accs;
+                } catch(e) { console.warn('idSaveToForm form sync skipped:', e); }
             }
-            // Flash the save button green to confirm
+
+            // Persist immediately to the sheet so the design survives a
+            // refresh — even if the user closes the order edit modal without
+            // hitting "Save Order".
             const btn = document.getElementById('idSaveBtn');
-            if (btn) {
-                const orig = btn.innerHTML;
-                btn.innerHTML = '✅ Saved!';
-                btn.style.background = '#16a34a';
-                setTimeout(() => { btn.innerHTML = orig; btn.style.background = '#2563eb'; }, 1500);
-            }
+            const flashSaved = (label, bg) => {
+                if (!btn) return;
+                btn.innerHTML = label;
+                btn.style.background = bg;
+                setTimeout(() => { btn.innerHTML = '💾 Save'; btn.style.background = '#2563eb'; }, 1800);
+            };
+            flashSaved('💾 Saving…', '#2563eb');
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'upsert', order: window.currentOrder })
+            }).then(() => {
+                flashSaved('✅ Saved!', '#16a34a');
+                // Refresh the underlying order list silently so other views
+                // pick up the new design without disrupting the modal.
+                const idx = allOrders.findIndex(o => o.orderId === window.currentOrder.orderId);
+                if (idx >= 0) allOrders[idx] = window.currentOrder;
+            }).catch(err => {
+                console.warn('Designer save failed:', err);
+                flashSaved('⚠ Sync failed', '#d97706');
+            });
         }
 
         // Apply persisted design settings to the open designer's controls.
