@@ -6405,6 +6405,10 @@
         let _idImage  = null;
         // Per-line inscription model: array of { text, font, style, size, ksp, colour }
         let _idLines  = [];
+        // Auto-save debounce timer + initial-render guard so we don't write
+        // back the same design on the first render after opening.
+        let _idAutoSaveTimer = null;
+        let _idAutoSaveArmed = false;
 
         const ID_FONT_OPTIONS = [
             { v: "Georgia, serif",                label: "Georgia" },
@@ -6615,13 +6619,17 @@
 
             // Load stone image
             _idImage = null;
+            _idAutoSaveArmed = false;
             const img = new Image();
             img.onload = function() {
                 _idImage = img;
                 idSetupCanvas();
                 idApplyStoredDesign();
                 idRender();
-                document.getElementById('id_hint').textContent = '💡 Click canvas to reposition text';
+                document.getElementById('id_hint').textContent = '💡 Click canvas to reposition text · Changes auto-save';
+                // Arm auto-save after the initial render+layout settles so
+                // we only write back genuine user edits.
+                setTimeout(() => { _idAutoSaveArmed = true; }, 400);
             };
             img.onerror = function() {
                 document.getElementById('id_hint').textContent = '⚠ Stone image not found — using placeholder';
@@ -6758,7 +6766,16 @@
         }
 
         function closeInscriptionDesigner(save) {
-            if (save) idSaveToForm();
+            // If an auto-save is pending, flush it now so the latest changes
+            // make it to the sheet before the modal disappears.
+            if (_idAutoSaveTimer) {
+                clearTimeout(_idAutoSaveTimer);
+                _idAutoSaveTimer = null;
+                if (_idAutoSaveArmed) idSaveToForm();
+            } else if (save) {
+                idSaveToForm();
+            }
+            _idAutoSaveArmed = false;
             const el = document.getElementById('inscDesignerOverlay');
             if (el) el.remove();
         }
@@ -6789,6 +6806,15 @@
             });
         }
 
+        function idScheduleAutoSave() {
+            if (!_idAutoSaveArmed) return;
+            if (_idAutoSaveTimer) clearTimeout(_idAutoSaveTimer);
+            _idAutoSaveTimer = setTimeout(() => {
+                _idAutoSaveTimer = null;
+                if (document.getElementById('inscDesignerOverlay')) idSaveToForm();
+            }, 900);
+        }
+
         function idRender() {
             if (!_idImage) return;
             const canvas = document.getElementById('id_canvas');
@@ -6797,6 +6823,11 @@
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(_idImage, 0, 0, canvas.width, canvas.height);
+            // Debounced auto-save — every user-initiated render schedules a
+            // sheet save ~1s after the last change. The initial render after
+            // the designer opens is suppressed by _idAutoSaveArmed (set true
+            // shortly after open) so we don't re-save the same design.
+            idScheduleAutoSave();
 
             const lineSpacing = parseFloat((document.getElementById('id_lsp')  || {}).value || 1.7);
             const posXpct   = parseInt((document.getElementById('id_posX') || {}).value || 50) / 100;
