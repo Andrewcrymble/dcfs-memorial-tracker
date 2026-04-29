@@ -6676,9 +6676,19 @@
             const existing = document.getElementById('inscDesignerOverlay');
             if (existing) existing.remove();
 
-            // Determine which stone image to use
-            const stoneFile = (window._selectedStoneType && STONE_IMAGES[window._selectedStoneType])
-                ? STONE_IMAGES[window._selectedStoneType]
+            // Determine which stone image to use. Prefer the form's current
+            // hsType value (most recent user choice in this session) over
+            // currentOrder.hsType (last persisted value) over the global
+            // _selectedStoneType cache (which can go stale across orders).
+            const formType  = (document.getElementById('f_hsType') || {}).value || '';
+            const orderType = (window.currentOrder && window.currentOrder.hsType) || '';
+            const cachedType = window._selectedStoneType || '';
+            const resolvedType = formType || orderType || cachedType;
+            // Keep the global cache in sync so subsequent renders see the
+            // same source-of-truth.
+            if (resolvedType) window._selectedStoneType = resolvedType;
+            const stoneFile = (resolvedType && STONE_IMAGES[resolvedType])
+                ? STONE_IMAGES[resolvedType]
                 : 'headstone.png';
 
             // Pre-fill from form fields
