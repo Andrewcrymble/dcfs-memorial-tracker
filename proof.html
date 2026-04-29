@@ -732,11 +732,34 @@ function renderProof(p) {
   loadStoneCanvas(p);
 }
 
+// Stone-type → image filename mapping. Mirrors STONE_IMAGES in
+// index.html so the proof page shows the customer's actual stone shape
+// instead of always falling back to the generic headstone.png.
+const STONE_IMAGES = {
+  'OG':            'ogee.png',
+  'Ogee':          'ogee.png',
+  'G3':            'g3.png',
+  'Densmore':      'densmore.png',
+  '1/2 Densmore':  'halfdensmore.png',
+  '½ Densmore':    'halfdensmore.png',
+  'Half Densmore': 'halfdensmore.png',
+  'Murphy':        'Murphy.png'
+};
+
 // ── STONE CANVAS ──
 function loadStoneCanvas(p) {
-  // Determine stone image source — same logic as inscription-preview.html
-  // Try hsType-based image first, then fall back to generic headstone.png
-  const stoneImgSrc = 'headstone.png';
+  // Resolve the stone image from hsType (case-insensitive, trimmed).
+  // Falls back to the generic headstone.png if the type isn't mapped or
+  // the per-shape image fails to load.
+  const rawType = String(p.hsType || '').trim();
+  let stoneImgSrc = STONE_IMAGES[rawType] || null;
+  if (!stoneImgSrc && rawType) {
+    // Case-insensitive match
+    const lower = rawType.toLowerCase();
+    const key = Object.keys(STONE_IMAGES).find(k => k.toLowerCase() === lower);
+    if (key) stoneImgSrc = STONE_IMAGES[key];
+  }
+  if (!stoneImgSrc) stoneImgSrc = 'headstone.png';
 
   const img = new Image();
   img.crossOrigin = 'anonymous';
@@ -747,9 +770,27 @@ function loadStoneCanvas(p) {
     document.getElementById('proofCanvas').style.display = 'block';
   };
   img.onerror = () => {
-    document.getElementById('canvasPlaceholder').textContent =
-      '(Stone image preview not available)';
-    document.getElementById('canvasPlaceholder').style.color = 'rgba(255,255,255,0.3)';
+    // Specific stone image missing — try the generic headstone.png once
+    if (stoneImgSrc !== 'headstone.png') {
+      const fb = new Image();
+      fb.crossOrigin = 'anonymous';
+      fb.onload = () => {
+        hsImage = fb;
+        drawCanvas(p);
+        document.getElementById('canvasPlaceholder').style.display = 'none';
+        document.getElementById('proofCanvas').style.display = 'block';
+      };
+      fb.onerror = () => {
+        document.getElementById('canvasPlaceholder').textContent =
+          '(Stone image preview not available)';
+        document.getElementById('canvasPlaceholder').style.color = 'rgba(255,255,255,0.3)';
+      };
+      fb.src = 'headstone.png';
+    } else {
+      document.getElementById('canvasPlaceholder').textContent =
+        '(Stone image preview not available)';
+      document.getElementById('canvasPlaceholder').style.color = 'rgba(255,255,255,0.3)';
+    }
   };
   img.src = stoneImgSrc;
 }
