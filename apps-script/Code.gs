@@ -40,7 +40,8 @@ const HEADERS = [
   "Note Entries", "Mason Note Entries",
   "Stripe Link ID", "Stripe Payment Date", "Stripe Payment Amount",
   "Mason Notified At", "Mason Notified By",
-  "Stripe Session IDs"
+  "Stripe Session IDs",
+  "Inscription Design"
 ];
 
 // ============================================================
@@ -497,6 +498,7 @@ function upsertOrder(order) {
     "Stripe Payment Amount": order.stripePaymentAmount || 0,
     "Mason Notified At":   order.masonNotifiedAt || "",
     "Mason Notified By":   order.masonNotifiedBy || "",
+    "Inscription Design":  order.inscriptionDesign ? JSON.stringify(order.inscriptionDesign) : "",
   };
 
   // For columns the tracker UI doesn't manage (e.g., Stripe Session IDs,
@@ -654,8 +656,17 @@ function mapSheetOrderToTracker(sheetOrder) {
     stripePaymentReceived: !!(sheetOrder["Stripe Payment Date"] && sheetOrder["Stripe Payment Date"] !== ""),
     masonNotifiedAt:     sheetOrder["Mason Notified At"] || "",
     masonNotifiedBy:     sheetOrder["Mason Notified By"] || "",
+    inscriptionDesign:   parseJSONObject(sheetOrder["Inscription Design"]),
     log:                 parseLogEntries(sheetOrder["Log Entries"])
   };
+}
+
+function parseJSONObject(str) {
+  if (!str || str === "") return null;
+  try {
+    const v = JSON.parse(str);
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : null;
+  } catch (e) { return null; }
 }
 
 function capitalizeStatus(status) {

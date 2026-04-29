@@ -6567,6 +6567,7 @@
             img.onload = function() {
                 _idImage = img;
                 idSetupCanvas();
+                idApplyStoredDesign();
                 idRender();
                 document.getElementById('id_hint').textContent = '💡 Click canvas to reposition text';
             };
@@ -6583,11 +6584,34 @@
         }
 
         function idSaveToForm() {
-            const designerText = (document.getElementById('id_inscText') || {}).value;
+            // Sync inscription text into the form (designer textarea is id_text)
+            const designerText = (document.getElementById('id_text') || {}).value;
             const formField = document.getElementById('f_inscText');
             if (formField && designerText !== undefined) {
                 formField.value = designerText;
                 formField.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            // Persist all designer settings on the active order so reopening
+            // restores the same layout instead of falling back to defaults.
+            if (window.currentOrder) {
+                const get = (id, fallback) => {
+                    const el = document.getElementById(id);
+                    return el ? el.value : fallback;
+                };
+                window.currentOrder.inscriptionDesign = {
+                    text:    designerText || '',
+                    font:    get('id_font', "'Times New Roman', serif"),
+                    style:   get('id_style', 'normal'),
+                    size:    parseInt(get('id_size', 22)),
+                    lsp:     parseFloat(get('id_lsp', 1.7)),
+                    ksp:     parseFloat(get('id_ksp', 2)),
+                    colour:  _idColour || '#c8a84b',
+                    posX:    parseInt(get('id_posX', 50)),
+                    posY:    parseInt(get('id_posY', 35)),
+                    maxW:    parseInt(get('id_maxW', 52)),
+                    shadow:  parseFloat(get('id_shad', 3)),
+                    opacity: parseFloat(get('id_opac', 0.95))
+                };
             }
             // Flash the save button green to confirm
             const btn = document.getElementById('idSaveBtn');
@@ -6596,6 +6620,40 @@
                 btn.innerHTML = '✅ Saved!';
                 btn.style.background = '#16a34a';
                 setTimeout(() => { btn.innerHTML = orig; btn.style.background = '#2563eb'; }, 1500);
+            }
+        }
+
+        // Apply persisted design settings to the open designer's controls
+        function idApplyStoredDesign() {
+            const d = window.currentOrder && window.currentOrder.inscriptionDesign;
+            if (!d || typeof d !== 'object') return;
+            const setVal = (id, v, suffix) => {
+                if (v === undefined || v === null) return;
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.value = v;
+                if (suffix !== undefined) {
+                    const lbl = document.getElementById(id + 'V');
+                    if (lbl) lbl.textContent = (typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : v) + suffix;
+                }
+            };
+            if (d.font)  setVal('id_font',  d.font);
+            if (d.style) setVal('id_style', d.style);
+            setVal('id_size', d.size, 'px');
+            setVal('id_lsp',  d.lsp,  '×');
+            setVal('id_ksp',  d.ksp,  'px');
+            setVal('id_posX', d.posX, '%');
+            setVal('id_posY', d.posY, '%');
+            setVal('id_maxW', d.maxW, '%');
+            setVal('id_shad', d.shadow, 'px');
+            setVal('id_opac', d.opacity);
+            if (d.colour) {
+                _idColour = d.colour;
+                const cc = document.getElementById('id_customCol');
+                if (cc) cc.value = d.colour;
+                document.querySelectorAll('#inscDesignerOverlay .id-swatch').forEach(s => {
+                    s.classList.toggle('active', s.dataset.color === d.colour);
+                });
             }
         }
 
