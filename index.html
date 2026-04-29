@@ -13,6 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
 
     <!-- LOGIN — isolated script, immune to app errors -->
     <script>
@@ -1645,6 +1646,20 @@
                 <div id="dashboardActivityList" style="font-size:0.85rem;max-height:380px;overflow-y:auto;padding-right:0.5rem;"></div>
             </div>
 
+            <!-- Outlook Inbox panel — recent emails from Microsoft 365 -->
+            <div id="dashboardInbox" style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);margin-top:1rem;padding:1rem 1.25rem;">
+                <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap;">
+                    <span style="font-size:0.95rem;">📧</span>
+                    <span style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);">Outlook Inbox</span>
+                    <span id="dashboardInboxStatus" style="font-size:0.72rem;color:var(--text-muted);"></span>
+                    <div style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
+                        <button id="dashboardInboxRefresh" onclick="renderDashboardInbox()" style="display:none;padding:0.25rem 0.6rem;background:#f3f4f6;border:1px solid var(--border);border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;">🔄</button>
+                        <button id="dashboardInboxAuthBtn" onclick="msSignInOrOut()" style="padding:0.3rem 0.7rem;background:#0078d4;color:white;border:none;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">Connect Outlook</button>
+                    </div>
+                </div>
+                <div id="dashboardInboxList" style="font-size:0.85rem;max-height:380px;overflow-y:auto;padding-right:0.5rem;"></div>
+            </div>
+
             <!-- hidden: full order-grid used by filter tabs when a specific filter is set -->
             <div class="order-grid-wrap" id="orderGridWrap" style="display:none;">
                 <ul class="order-grid" id="orderList">
@@ -1721,6 +1736,14 @@
         // Configuration
        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykAIR6S2ZLHQel0Ot-QTtbIfDzEeL78oYR9Ba7W6gkDNwHnXOj1ErLJ653k4vB5VqJ/exec';
         const SHEET_ID = '1_pbyhKL1IElgneBZHFIWG76Cv6hNKdUw0fgSHQjMN6M';
+
+        // ── Microsoft Outlook (Graph) integration ──
+        // Set MS_CLIENT_ID after registering an Azure AD app (see SETUP-OUTLOOK.md).
+        // Until then, the inbox panels show a "Connect Outlook" prompt.
+        const MS_CLIENT_ID = '';                                  // ← paste your Azure AD app's Application (client) ID here
+        const MS_TENANT    = 'common';                            // 'common' lets any work/school account sign in
+        const MS_REDIRECT  = window.location.origin + window.location.pathname;
+        const MS_SCOPES    = ['Mail.Read', 'User.Read'];
         const STONE_IMAGES = {
             'OG':           'ogee.png',
             'Ogee':         'ogee.png',
@@ -2298,6 +2321,153 @@
             renderPipelineChart(groups, colors, fmt);
             // render recent activity feed below
             renderDashboardActivity();
+            // render Outlook inbox if available
+            try { renderDashboardInbox(); } catch(e) { console.warn('Inbox render error:', e); }
+        }
+
+        // ── Microsoft / Outlook UI helpers ──
+        async function msSignInOrOut() {
+            if (!MS_CLIENT_ID) {
+                alert('Outlook integration is not configured yet.\n\nTo enable it, register an Azure AD app, paste its Application (client) ID into MS_CLIENT_ID at the top of index.html, and reload.\n\nFull steps: see SETUP-OUTLOOK.md in the project repo.');
+                return;
+            }
+            try {
+                if (msAuth.isSignedIn()) {
+                    await msAuth.signOut();
+                    showToast('Signed out of Outlook', 'success');
+                } else {
+                    await msAuth.signIn();
+                    showToast('✅ Connected to Outlook', 'success');
+                }
+            } catch (err) {
+                console.error('MS auth error:', err);
+                showToast('⚠ ' + (err && err.message ? err.message : 'Microsoft sign-in failed'), 'warn', 5000);
+            }
+            renderDashboardInbox();
+            try { if (currentOrder) renderOrderDetails(); } catch(e){}
+        }
+
+        function fmtEmailTime(iso) {
+            const d = new Date(iso);
+            if (!iso || isNaN(d.getTime())) return '';
+            let diff = (Date.now() - d) / 60000;
+            if (diff < 0) diff = 0;
+            if (diff < 1) return 'just now';
+            if (diff < 60) return Math.round(diff) + 'm';
+            if (diff < 1440) return Math.round(diff / 60) + 'h';
+            if (diff < 10080) return Math.round(diff / 1440) + 'd';
+            return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        }
+
+        function escEmail(s) {
+            return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function renderEmailRow(m) {
+            const sender = (m.from && m.from.emailAddress && (m.from.emailAddress.name || m.from.emailAddress.address)) || '—';
+            const subject = m.subject || '(no subject)';
+            const preview = (m.bodyPreview || '').replace(/\s+/g, ' ').trim().slice(0, 110);
+            const unread = !m.isRead;
+            const link = m.webLink || '#';
+            return `
+                <div style="display:flex;gap:0.6rem;padding:0.5rem 0;border-bottom:1px solid rgba(0,0,0,0.06);align-items:flex-start;">
+                    <div style="flex:1;line-height:1.4;min-width:0;">
+                        <div style="display:flex;gap:0.4rem;align-items:baseline;">
+                            ${unread ? '<span style="display:inline-block;width:7px;height:7px;background:#0078d4;border-radius:50%;flex-shrink:0;"></span>' : ''}
+                            <a href="${escEmail(link)}" target="_blank" rel="noopener" style="font-weight:${unread?700:600};color:var(--text);text-decoration:none;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escEmail(subject)}</a>
+                            <span style="color:var(--text-muted);font-size:0.72rem;white-space:nowrap;flex-shrink:0;">${fmtEmailTime(m.receivedDateTime)}</span>
+                        </div>
+                        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:1px;">${escEmail(sender)}</div>
+                        ${preview ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escEmail(preview)}</div>` : ''}
+                    </div>
+                </div>`;
+        }
+
+        // Customer-emails panel on the order detail. Pulls emails involving
+        // the order's email address from the signed-in user's mailbox.
+        async function renderOrderEmails() {
+            const list = document.getElementById('orderEmailList');
+            const status = document.getElementById('orderEmailStatus');
+            if (!list) return;
+            if (!currentOrder || !currentOrder.email) {
+                list.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;padding:0.4rem 0;">No email address on this order.</div>';
+                return;
+            }
+
+            if (!MS_CLIENT_ID) {
+                if (status) status.textContent = 'not configured';
+                list.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;padding:0.4rem 0;">Outlook integration not set up — see SETUP-OUTLOOK.md.</div>';
+                return;
+            }
+
+            await msAuth.init();
+            if (!msAuth.isSignedIn()) {
+                if (status) status.textContent = 'signed out';
+                list.innerHTML = `<div style="color:var(--text-muted);font-size:0.82rem;padding:0.4rem 0;">Sign in to Outlook on the dashboard to see emails for ${escEmail(currentOrder.email)}.</div>`;
+                return;
+            }
+
+            if (status) status.textContent = 'searching ' + currentOrder.email;
+            list.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;padding:0.4rem 0;">Loading…</div>';
+
+            try {
+                const messages = await msAuth.getEmailsForAddress(currentOrder.email, 25);
+                if (!messages.length) {
+                    if (status) status.textContent = '0 found';
+                    list.innerHTML = `<div style="color:var(--text-muted);font-size:0.82rem;padding:0.4rem 0;">No emails found involving <strong>${escEmail(currentOrder.email)}</strong> in your Outlook account.</div>`;
+                    return;
+                }
+                if (status) status.textContent = messages.length + ' found';
+                list.innerHTML = messages.map(renderEmailRow).join('');
+            } catch (err) {
+                console.error('Order emails load failed:', err);
+                if (status) status.textContent = 'error';
+                list.innerHTML = `<div style="color:#b45309;font-size:0.82rem;padding:0.4rem 0;">Could not load emails: ${escEmail(err && err.message ? err.message : 'unknown error')}</div>`;
+            }
+        }
+
+        async function renderDashboardInbox() {
+            const list = document.getElementById('dashboardInboxList');
+            const status = document.getElementById('dashboardInboxStatus');
+            const authBtn = document.getElementById('dashboardInboxAuthBtn');
+            const refreshBtn = document.getElementById('dashboardInboxRefresh');
+            if (!list) return;
+
+            // Not configured? Show a setup nudge.
+            if (!msAuth.isConfigured() && !MS_CLIENT_ID) {
+                if (status) status.textContent = 'not configured';
+                if (refreshBtn) refreshBtn.style.display = 'none';
+                if (authBtn) authBtn.textContent = 'Set up Outlook';
+                list.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;padding:0.6rem 0;line-height:1.5;">Microsoft Outlook integration is available but not yet configured. Register an Azure AD app and paste its client ID into <code style="background:#f3f4f6;padding:1px 5px;border-radius:3px;">MS_CLIENT_ID</code> in index.html — see SETUP-OUTLOOK.md.</div>';
+                return;
+            }
+
+            await msAuth.init();
+            if (!msAuth.isSignedIn()) {
+                if (status) status.textContent = 'signed out';
+                if (refreshBtn) refreshBtn.style.display = 'none';
+                if (authBtn) authBtn.textContent = 'Connect Outlook';
+                list.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;padding:0.6rem 0;">Sign in to Microsoft to see your inbox here.</div>';
+                return;
+            }
+
+            const account = msAuth.getAccount();
+            if (status) status.textContent = (account && account.username) ? account.username : 'connected';
+            if (authBtn) authBtn.textContent = 'Sign out';
+            if (refreshBtn) refreshBtn.style.display = 'inline-block';
+            list.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;padding:0.6rem 0;">Loading…</div>';
+
+            try {
+                const messages = await msAuth.getInbox(15);
+                if (!messages.length) {
+                    list.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;padding:0.6rem 0;">Inbox is empty.</div>';
+                    return;
+                }
+                list.innerHTML = messages.map(renderEmailRow).join('');
+            } catch (err) {
+                console.error('Inbox load failed:', err);
+                list.innerHTML = `<div style="color:#b45309;font-size:0.82rem;padding:0.6rem 0;">Could not load inbox: ${escEmail(err && err.message ? err.message : 'unknown error')}</div>`;
+            }
         }
 
         // Recent Activity feed on the main dashboard — pulls every log
@@ -2742,6 +2912,19 @@
                     </div>
                 </div>
 
+                <!-- Customer Emails (Outlook) — only if order has an email address -->
+                ${o.email ? `
+                <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);border-left:4px solid #0078d4;margin-bottom:1.25rem;">
+                    <div class="card-header" style="background:#eff6ff;">
+                        <span class="card-header-icon">📨</span>
+                        <span class="card-header-title" style="color:#0078d4;">Customer Emails</span>
+                        <span id="orderEmailStatus" style="margin-left:auto;font-size:0.72rem;color:#6b7280;"></span>
+                        <button onclick="renderOrderEmails()" style="margin-left:0.5rem;padding:0.25rem 0.6rem;background:#f3f4f6;border:1px solid var(--border);border-radius:6px;font-size:0.72rem;font-weight:600;cursor:pointer;">🔄</button>
+                    </div>
+                    <div class="card-body" id="orderEmailList" style="font-size:0.85rem;max-height:300px;overflow-y:auto;"></div>
+                </div>
+                ` : ''}
+
                 <!-- Payment card (shown when payment link exists) -->
                 ${o.stripePaymentUrl ? `
                 <div class="card detail-grid-wide" style="border:2px solid #635bff;">
@@ -2941,6 +3124,9 @@
                 </div>
             `;
             maybeRenderQR();
+            // Fire-and-forget: load Outlook emails for this order's customer
+            // if the integration is configured + signed in.
+            try { if (currentOrder && currentOrder.email) renderOrderEmails(); } catch(e) { console.warn('Order emails render error:', e); }
         }
 
         // Calculate total
@@ -4541,6 +4727,105 @@
         }
 
         // Show a non-blocking toast notification
+        // ════════════════════════════════════════════════════════════════
+        // OUTLOOK / MICROSOFT GRAPH INTEGRATION
+        // ════════════════════════════════════════════════════════════════
+        const msAuth = (() => {
+            let _msal = null;
+            let _account = null;
+            let _initPromise = null;
+
+            const isConfigured = () => !!(MS_CLIENT_ID && window.msal);
+
+            function init() {
+                if (_initPromise) return _initPromise;
+                _initPromise = (async () => {
+                    if (!isConfigured()) return null;
+                    _msal = new msal.PublicClientApplication({
+                        auth: {
+                            clientId: MS_CLIENT_ID,
+                            authority: 'https://login.microsoftonline.com/' + MS_TENANT,
+                            redirectUri: MS_REDIRECT
+                        },
+                        cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
+                    });
+                    if (_msal.initialize) await _msal.initialize();
+                    // Pick up an existing signed-in account, if any
+                    const accounts = _msal.getAllAccounts();
+                    if (accounts.length) _account = accounts[0];
+                    return _msal;
+                })();
+                return _initPromise;
+            }
+
+            async function signIn() {
+                await init();
+                if (!_msal) throw new Error('MS_CLIENT_ID not configured');
+                const result = await _msal.loginPopup({ scopes: MS_SCOPES, prompt: 'select_account' });
+                _account = result.account;
+                return _account;
+            }
+
+            async function signOut() {
+                await init();
+                if (!_msal || !_account) return;
+                await _msal.logoutPopup({ account: _account });
+                _account = null;
+            }
+
+            function getAccount() { return _account; }
+            function isSignedIn() { return !!_account; }
+
+            async function getToken() {
+                await init();
+                if (!_msal || !_account) throw new Error('Not signed in to Microsoft');
+                try {
+                    const r = await _msal.acquireTokenSilent({ scopes: MS_SCOPES, account: _account });
+                    return r.accessToken;
+                } catch (silentErr) {
+                    // Fallback to interactive popup if silent fails
+                    const r = await _msal.acquireTokenPopup({ scopes: MS_SCOPES, account: _account });
+                    return r.accessToken;
+                }
+            }
+
+            // Recent inbox messages (top N, newest first).
+            async function getInbox(top = 15) {
+                const token = await getToken();
+                const url = 'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages'
+                          + '?$top=' + top
+                          + '&$orderby=receivedDateTime desc'
+                          + '&$select=id,subject,from,receivedDateTime,bodyPreview,isRead,webLink';
+                const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+                if (!r.ok) throw new Error('Graph error ' + r.status);
+                const j = await r.json();
+                return j.value || [];
+            }
+
+            // All emails (sent OR received) involving a given address.
+            // Uses Graph $search which matches subject, body, recipients, sender.
+            async function getEmailsForAddress(address, top = 25) {
+                if (!address) return [];
+                const token = await getToken();
+                const q = encodeURIComponent('"' + address + '"');
+                const url = 'https://graph.microsoft.com/v1.0/me/messages'
+                          + '?$top=' + top
+                          + '&$search=' + q
+                          + '&$select=id,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,webLink';
+                const r = await fetch(url, {
+                    headers: {
+                        Authorization: 'Bearer ' + token,
+                        ConsistencyLevel: 'eventual'
+                    }
+                });
+                if (!r.ok) throw new Error('Graph error ' + r.status);
+                const j = await r.json();
+                return j.value || [];
+            }
+
+            return { init, signIn, signOut, getAccount, isSignedIn, getToken, getInbox, getEmailsForAddress, isConfigured };
+        })();
+
         function showToast(msg, type = 'success', duration = 3000) {
             const existing = document.getElementById('appToast');
             if (existing) existing.remove();
