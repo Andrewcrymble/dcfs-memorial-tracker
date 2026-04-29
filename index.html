@@ -1787,10 +1787,11 @@
             return 'https://wa.me/' + cleaned + '?text=' + encodeURIComponent(message);
         }
 
-        // Generate an Estimate PDF, upload it to the order's Drive folder,
-        // then open WhatsApp Web with a prefilled message addressed to the
-        // customer's phone — link to the PDF included so the customer can
-        // open it directly. The user just clicks Send in WhatsApp.
+        // Generate an Estimate PDF, upload it to Drive, create a 50%
+        // deposit Stripe payment link (acts as the "approve & pay" CTA),
+        // then open WhatsApp Web with the message addressed to the
+        // customer's phone — PDF link + deposit link both included so the
+        // user just clicks Send in WhatsApp.
         async function sendEstimateToCustomerWhatsApp() {
             if (!currentOrder) return;
             if (!currentOrder.phone) {
@@ -1800,42 +1801,115 @@
 
             showToast('📄 Generating estimate…', 'info');
 
-            // Re-use generateEstimate to build the PDF, but capture the doc
-            // before it auto-saves. Easiest: replicate the upload-and-link
-            // step here using the existing generateEstimate via a shim.
             try {
-                // generateEstimate already ends with sendPdfToWhatsApp(...) which
-                // uploads to Drive. We'll temporarily monkey-patch sendToWhatsApp
-                // to redirect the message to the customer instead of the staff
-                // group, then restore it.
-                const originalSend = sendToWhatsApp;
-                let pdfDriveUrl = null;
-                window.sendToWhatsApp = async function(message) {
-                    // Pull the Drive link out of the auto-built message so we
-                    // can re-use it in the customer-facing message.
-                    const m = String(message || '').match(/https:\/\/drive\.google\.com\/[^\s]+/);
-                    if (m) pdfDriveUrl = m[0];
-                    return true; // suppress the staff-group send for this run
-                };
-
+                // 1. Build the PDF via the existing generator. Suppress the
+                //    staff-group BeepMate send temporarily so we don't
+                //    double-message the office WhatsApp.
+                const origSend = window.sendToWhatsApp;
+                window.sendToWhatsApp = async () => true;
                 await generateEstimate();
+                window.sendToWhatsApp = origSend;
 
-                // Restore staff-group sender for any future calls
-                window.sendToWhatsApp = originalSend;
+                // 2. Pull the doc + ref that generateEstimate stashed onto window.
+                const doc = window._lastEstimateDoc;
+                const ref = window._lastEstimateRef;
+                if (!doc) {
+                    showToast('⚠ Could not capture estimate PDF', 'warn');
+                    return;
+                }
 
-                // Build the customer message
-                const ref = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
+                const total = parseFloat(currentOrder.totalSellPrice) || 0;
+                const refDisplay = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
+
+                // 3. Upload to Drive via storeEstimatePdf — using text/plain
+                //    so the cross-origin response is readable (no preflight,
+                //    Apps Script returns the viewUrl).
+                showToast('☁️ Uploading PDF…', 'info');
+                let pdfDriveUrl = null;
+                try {
+                    const base64 = doc.output('datauristring');
+                    const resp = await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({
+                            action: 'storeEstimatePdf',
+                            orderId: currentOrder.orderId,
+                            ref: ref,
+                            pdfBase64: base64
+                        })
+                    });
+                    const result = await resp.json();
+                    if (result && result.success && result.data && result.data.viewUrl) {
+                        pdfDriveUrl = result.data.viewUrl;
+                    } else {
+                        console.warn('storeEstimatePdf returned:', result);
+                    }
+                } catch (err) {
+                    console.warn('PDF Drive upload failed:', err);
+                }
+
+                // 4. Create a 50% deposit Stripe payment link. Customer paying
+                //    this implicitly approves the estimate and starts the work.
+                let depositLink = null;
+                const depositAmount = total / 2;
+                if (total > 0) {
+                    showToast('💳 Creating deposit payment link…', 'info');
+                    try {
+                        const resp2 = await fetch(SCRIPT_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'text/plain' },
+                            body: JSON.stringify({
+                                action: 'createPaymentLink',
+                                orderId: currentOrder.orderId,
+                                customerName: currentOrder.customerName,
+                                deceasedName: currentOrder.deceasedName,
+                                orderRef: currentOrder.orderRef,
+                                amountPence: Math.round(total * 50),  // 50% in pence: total£ × 100 ÷ 2 = total × 50
+                                description: '50% deposit — DC&S Memorial — Ref ' + refDisplay,
+                                paymentType: 'deposit_50'
+                            })
+                        });
+                        const r2 = await resp2.json();
+                        // Apps Script returns paymentLink at the top level, not nested under .data
+                        depositLink = r2 && (r2.paymentLink || (r2.data && r2.data.paymentLink)) || null;
+                        if (!depositLink) console.warn('createPaymentLink returned:', r2);
+                    } catch (err) {
+                        console.warn('Stripe deposit link creation failed:', err);
+                    }
+                }
+
+                // 5. Build the customer-facing message
                 const greeting = currentOrder.customerName
                     ? 'Hi ' + currentOrder.customerName.split(' ')[0] + ','
                     : 'Hello,';
-                const totalLine = currentOrder.totalSellPrice
-                    ? '\nTotal: £' + parseFloat(currentOrder.totalSellPrice).toFixed(2)
-                    : '';
-                const linkLine = pdfDriveUrl
-                    ? '\n\n📎 Your estimate (PDF):\n' + pdfDriveUrl
-                    : '\n\n(Your estimate is attached separately.)';
-                const message = greeting + ' please find your memorial estimate from David Crymble & Sons.\n\nReference: ' + ref + totalLine + linkLine + '\n\nIf you have any questions please call 028 9066 7784.\n\nKind regards,\nDavid Crymble & Sons';
+                const lines = [
+                    greeting + ' please find your memorial estimate from David Crymble & Sons.',
+                    '',
+                    'Reference: ' + refDisplay
+                ];
+                if (total > 0) lines.push('Total: £' + total.toFixed(2));
+                if (pdfDriveUrl) {
+                    lines.push('');
+                    lines.push('📎 Your estimate (PDF):');
+                    lines.push(pdfDriveUrl);
+                } else {
+                    lines.push('');
+                    lines.push('(Your estimate is attached separately — please ask if you do not see it.)');
+                }
+                if (depositLink) {
+                    lines.push('');
+                    lines.push('✅ APPROVE & PAY 50% DEPOSIT (£' + depositAmount.toFixed(2) + '):');
+                    lines.push(depositLink);
+                    lines.push('');
+                    lines.push('Clicking the link above confirms your estimate and proceeds to deposit payment.');
+                }
+                lines.push('');
+                lines.push('✏️ To request changes, please reply to this message or call 028 9066 7784.');
+                lines.push('');
+                lines.push('Kind regards,');
+                lines.push('David Crymble & Sons');
 
+                const message = lines.join('\n');
                 const waUrl = buildWhatsAppLink(currentOrder.phone, message);
                 window.open(waUrl, '_blank', 'noopener');
                 showToast('💬 Opened WhatsApp — click Send to deliver', 'success', 5000);
