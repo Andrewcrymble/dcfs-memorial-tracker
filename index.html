@@ -5017,8 +5017,44 @@
                         });
                         doc.addImage(stoneDataUrl, 'PNG', imgX, py, imgW, imgH);
 
-                        // Overlay inscription text on the stone
-                        if (currentOrder.inscriptionText) {
+                        // Overlay inscription text on the stone — per-line styling
+                        // when an inscriptionDesign is present, fall back to the legacy
+                        // single-style render otherwise.
+                        const design = currentOrder.inscriptionDesign;
+                        const designLines = design && Array.isArray(design.lines) && design.lines.length
+                            ? design.lines.filter(l => (l.text || '').trim())
+                            : null;
+
+                        if (designLines && designLines.length) {
+                            // Map each line's display size (px) to a PDF size, capped so it
+                            // fits the stone's middle ~40%.
+                            const totalScreenPx = designLines.reduce((s, l) => s + (parseFloat(l.size) || 22) * (design.lsp || 1.7), 0);
+                            const availMm = imgH * 0.40;
+                            const pxToMm = totalScreenPx > 0 ? Math.min(0.45, availMm / totalScreenPx) : 0.35;
+                            const totalH = designLines.reduce((s, l) => s + (parseFloat(l.size) || 22) * (design.lsp || 1.7) * pxToMm, 0);
+                            let ity = py + imgH * 0.50 - totalH / 2;
+                            designLines.forEach(l => {
+                                const sizeMm = (parseFloat(l.size) || 22) * pxToMm;
+                                const fontSize = Math.max(6, Math.min(14, sizeMm * 2.2));
+                                const styleStr = l.style || 'normal';
+                                const jsStyle = styleStr.includes('bold') && styleStr.includes('italic') ? 'bolditalic'
+                                              : styleStr.includes('bold')   ? 'bold'
+                                              : styleStr.includes('italic') ? 'italic' : 'normal';
+                                // jsPDF only ships helvetica/times/courier — pick the closest
+                                const family = (l.font || '').toLowerCase();
+                                const jsFont = family.includes('arial') || family.includes('verdana') ? 'helvetica'
+                                             : family.includes('courier') ? 'courier'
+                                             : 'times';
+                                const rgb = idHexToRgb(l.colour || '#c8a84b');
+                                doc.setTextColor(rgb.r, rgb.g, rgb.b);
+                                doc.setFont(jsFont, jsStyle);
+                                doc.setFontSize(fontSize);
+                                ity += sizeMm * (design.lsp || 1.7) * 0.5;
+                                doc.text((l.text || '').trim(), 105, ity, { align: 'center' });
+                                ity += sizeMm * (design.lsp || 1.7) * 0.5;
+                            });
+                            doc.setTextColor(0,0,0);
+                        } else if (currentOrder.inscriptionText) {
                             const ic = (currentOrder.inscriptionColour || '').toLowerCase();
                             if (ic === 'gold')        doc.setTextColor(200, 168, 75);
                             else if (ic === 'silver') doc.setTextColor(210, 210, 210);
@@ -6380,6 +6416,89 @@
         // ══════════════════════════════════════════════════════
         let _idColour = '#c8a84b';
         let _idImage  = null;
+        // Per-line inscription model: array of { text, font, style, size, ksp, colour }
+        let _idLines  = [];
+
+        const ID_FONT_OPTIONS = [
+            { v: "Georgia, serif",                label: "Georgia" },
+            { v: "'Times New Roman', serif",      label: "Times New Roman" },
+            { v: "'Palatino Linotype', serif",    label: "Palatino" },
+            { v: "'Garamond', serif",             label: "Garamond" },
+            { v: "'Book Antiqua', serif",         label: "Book Antiqua" },
+            { v: "Verdana, sans-serif",           label: "Verdana" },
+            { v: "Arial, sans-serif",             label: "Arial" }
+        ];
+
+        const ID_DEFAULT_LINE = () => ({
+            text: '',
+            font: "'Times New Roman', serif",
+            style: 'normal',
+            size: 22,
+            ksp: 2,
+            colour: _idColour || '#c8a84b'
+        });
+
+        function idAddLine() {
+            _idLines.push(ID_DEFAULT_LINE());
+            idRenderLinesList();
+            idRender();
+        }
+
+        function idDeleteLine(idx) {
+            if (_idLines.length <= 1) {
+                _idLines[0] = ID_DEFAULT_LINE();
+            } else {
+                _idLines.splice(idx, 1);
+            }
+            idRenderLinesList();
+            idRender();
+        }
+
+        function idMoveLine(idx, dir) {
+            const j = idx + dir;
+            if (j < 0 || j >= _idLines.length) return;
+            const tmp = _idLines[idx];
+            _idLines[idx] = _idLines[j];
+            _idLines[j] = tmp;
+            idRenderLinesList();
+            idRender();
+        }
+
+        function idUpdateLine(idx, field, value) {
+            if (!_idLines[idx]) return;
+            if (field === 'size' || field === 'ksp') value = parseFloat(value) || 0;
+            _idLines[idx][field] = value;
+            idRender();
+        }
+
+        function idRenderLinesList() {
+            const host = document.getElementById('id_linesList');
+            if (!host) return;
+            const fontOpts = (selected) => ID_FONT_OPTIONS.map(o =>
+                `<option value="${o.v.replace(/"/g,'&quot;')}" ${o.v === selected ? 'selected' : ''}>${o.label}</option>`
+            ).join('');
+            const styleOpts = (selected) => ['normal','italic','bold','bold italic'].map(s =>
+                `<option value="${s}" ${s === selected ? 'selected' : ''}>${s.replace(/\b\w/g, c => c.toUpperCase())}</option>`
+            ).join('');
+            host.innerHTML = _idLines.map((line, i) => `
+                <div class="id-line-row" style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:8px;background:#fafafa;">
+                    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+                        <span style="font-size:0.7rem;color:#6b7280;font-weight:600;width:18px;">#${i+1}</span>
+                        <input type="text" value="${(line.text||'').replace(/"/g,'&quot;')}" placeholder="Line text…" oninput="idUpdateLine(${i},'text',this.value)" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:0.85rem;">
+                        <button type="button" title="Move up" onclick="idMoveLine(${i},-1)" style="background:none;border:1px solid #d1d5db;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:0.75rem;">▲</button>
+                        <button type="button" title="Move down" onclick="idMoveLine(${i},1)" style="background:none;border:1px solid #d1d5db;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:0.75rem;">▼</button>
+                        <button type="button" title="Delete line" onclick="idDeleteLine(${i})" style="background:#fef2f2;border:1px solid #fca5a5;color:#dc2626;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.85rem;font-weight:600;">×</button>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1.4fr 1fr 0.7fr 0.7fr 0.8fr;gap:6px;align-items:center;">
+                        <select onchange="idUpdateLine(${i},'font',this.value)" style="padding:4px;border:1px solid #d1d5db;border-radius:4px;font-size:0.78rem;">${fontOpts(line.font)}</select>
+                        <select onchange="idUpdateLine(${i},'style',this.value)" style="padding:4px;border:1px solid #d1d5db;border-radius:4px;font-size:0.78rem;">${styleOpts(line.style)}</select>
+                        <input type="number" min="8" max="80" value="${line.size}" title="Font size (px)" onchange="idUpdateLine(${i},'size',this.value)" style="padding:4px;border:1px solid #d1d5db;border-radius:4px;font-size:0.78rem;">
+                        <input type="number" step="0.5" min="-2" max="20" value="${line.ksp}" title="Letter spacing" onchange="idUpdateLine(${i},'ksp',this.value)" style="padding:4px;border:1px solid #d1d5db;border-radius:4px;font-size:0.78rem;">
+                        <input type="color" value="${line.colour||'#c8a84b'}" title="Colour" onchange="idUpdateLine(${i},'colour',this.value)" style="padding:0;border:1px solid #d1d5db;border-radius:4px;height:28px;width:100%;cursor:pointer;">
+                    </div>
+                </div>
+            `).join('');
+        }
 
         function openInscriptionDesigner() {
             // Remove any existing instance
@@ -6415,76 +6534,22 @@
                   <div class="id-controls">
 
                     <div class="id-card">
-                      <div class="id-card-header">📝 Inscription Text</div>
+                      <div class="id-card-header">📝 Inscription Lines <span style="font-size:0.75rem;font-weight:normal;color:#6b7280;margin-left:6px;">— each line styled independently</span></div>
                       <div class="id-card-body">
-                        <textarea id="id_text" oninput="idRender()">${text.replace(/`/g,"'")}</textarea>
+                        <div id="id_linesList"></div>
+                        <button type="button" onclick="idAddLine()" style="margin-top:8px;padding:6px 12px;background:#f0fdf4;border:1px solid #86efac;color:#15803d;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:pointer;">+ Add Line</button>
                       </div>
                     </div>
 
                     <div class="id-card">
-                      <div class="id-card-header">🎨 Font & Style</div>
+                      <div class="id-card-header">📐 Layout</div>
                       <div class="id-card-body">
-                        <div class="id-row">
-                          <div class="id-group">
-                            <label>Font</label>
-                            <select id="id_font" onchange="idRender()">
-                              <option value="Georgia, serif">Georgia</option>
-                              <option value="'Times New Roman', serif" selected>Times New Roman</option>
-                              <option value="'Palatino Linotype', serif">Palatino</option>
-                              <option value="'Garamond', serif">Garamond</option>
-                              <option value="'Book Antiqua', serif">Book Antiqua</option>
-                              <option value="Verdana, sans-serif">Verdana</option>
-                              <option value="Arial, sans-serif">Arial</option>
-                            </select>
-                          </div>
-                          <div class="id-group">
-                            <label>Style</label>
-                            <select id="id_style" onchange="idRender()">
-                              <option value="normal">Normal</option>
-                              <option value="italic">Italic</option>
-                              <option value="bold">Bold</option>
-                              <option value="bold italic">Bold Italic</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div>
-                          <label>Font Size</label>
-                          <div class="slider-row">
-                            <input type="range" id="id_size" min="10" max="60" value="22" oninput="idSv('id_sizeV',this.value,'px');idRender()">
-                            <span class="slider-val" id="id_sizeV">22px</span>
-                          </div>
-                        </div>
                         <div>
                           <label>Line Spacing</label>
                           <div class="slider-row">
                             <input type="range" id="id_lsp" min="1" max="3" step="0.05" value="1.7" oninput="idSv('id_lspV',parseFloat(this.value).toFixed(2),'×');idRender()">
                             <span class="slider-val" id="id_lspV">1.70×</span>
                           </div>
-                        </div>
-                        <div>
-                          <label>Letter Spacing</label>
-                          <div class="slider-row">
-                            <input type="range" id="id_ksp" min="-2" max="12" step="0.5" value="2" oninput="idSv('id_kspV',this.value,'px');idRender()">
-                            <span class="slider-val" id="id_kspV">2px</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="id-card">
-                      <div class="id-card-header">🎨 Colour</div>
-                      <div class="id-card-body">
-                        <div class="id-swatches" id="id_swatches">
-                          <div class="id-swatch ${defaultColour==='#c8a84b'?'active':''}" style="background:#c8a84b" data-color="#c8a84b" onclick="idSetColour(this)" title="Gold"></div>
-                          <div class="id-swatch ${defaultColour==='#e8d5a3'?'active':''}" style="background:#e8d5a3" data-color="#e8d5a3" onclick="idSetColour(this)" title="Light Gold"></div>
-                          <div class="id-swatch ${defaultColour==='#e0e0e0'?'active':''}" style="background:#e0e0e0" data-color="#e0e0e0" onclick="idSetColour(this)" title="Silver"></div>
-                          <div class="id-swatch ${defaultColour==='#ffffff'?'active':''}" style="background:#f5f5f5;border:1px solid #ddd" data-color="#ffffff" onclick="idSetColour(this)" title="White"></div>
-                          <div class="id-swatch" style="background:#d4af37" data-color="#d4af37" onclick="idSetColour(this)" title="Deep Gold"></div>
-                          <div class="id-swatch" style="background:#1c1c1e" data-color="#1c1c1e" onclick="idSetColour(this)" title="Black"></div>
-                        </div>
-                        <div>
-                          <label>Custom Colour</label>
-                          <input type="color" id="id_customCol" value="${defaultColour}" oninput="idSetCustomColour(this.value)" style="width:100%;height:34px;border-radius:8px;border:1px solid rgba(60,60,67,0.2);cursor:pointer;padding:2px;">
                         </div>
                       </div>
                     </div>
@@ -6584,28 +6649,26 @@
         }
 
         function idSaveToForm() {
-            // Sync inscription text into the form (designer textarea is id_text)
-            const designerText = (document.getElementById('id_text') || {}).value;
+            // Build the joined inscription text from all line texts so the
+            // form field (and downstream PDFs that read inscriptionText) stay
+            // in sync with the designer.
+            const joinedText = _idLines.map(l => l.text || '').join('\n');
             const formField = document.getElementById('f_inscText');
-            if (formField && designerText !== undefined) {
-                formField.value = designerText;
+            if (formField) {
+                formField.value = joinedText;
                 formField.dispatchEvent(new Event('input', { bubbles: true }));
             }
             // Persist all designer settings on the active order so reopening
-            // restores the same layout instead of falling back to defaults.
+            // restores the same layout (and per-line styling) instead of
+            // falling back to defaults.
             if (window.currentOrder) {
                 const get = (id, fallback) => {
                     const el = document.getElementById(id);
                     return el ? el.value : fallback;
                 };
                 window.currentOrder.inscriptionDesign = {
-                    text:    designerText || '',
-                    font:    get('id_font', "'Times New Roman', serif"),
-                    style:   get('id_style', 'normal'),
-                    size:    parseInt(get('id_size', 22)),
+                    lines:   _idLines.map(l => Object.assign({}, l)),
                     lsp:     parseFloat(get('id_lsp', 1.7)),
-                    ksp:     parseFloat(get('id_ksp', 2)),
-                    colour:  _idColour || '#c8a84b',
                     posX:    parseInt(get('id_posX', 50)),
                     posY:    parseInt(get('id_posY', 35)),
                     maxW:    parseInt(get('id_maxW', 52)),
@@ -6623,10 +6686,34 @@
             }
         }
 
-        // Apply persisted design settings to the open designer's controls
+        // Apply persisted design settings to the open designer's controls.
+        // Migrates older designs (text + global font/size/colour) into the
+        // new per-line model on first open.
         function idApplyStoredDesign() {
-            const d = window.currentOrder && window.currentOrder.inscriptionDesign;
-            if (!d || typeof d !== 'object') return;
+            const d = (window.currentOrder && window.currentOrder.inscriptionDesign) || null;
+            const formText = ((document.getElementById('f_inscText') || {}).value || '').trim();
+
+            // 1. Resolve _idLines from stored design, legacy globals, or form text
+            if (d && Array.isArray(d.lines) && d.lines.length) {
+                _idLines = d.lines.map(l => Object.assign(ID_DEFAULT_LINE(), l));
+            } else if (d && typeof d === 'object' && (d.text || d.font || d.size)) {
+                // Legacy single-style design — split text into lines, apply globals to each
+                const txt = (d.text || formText || '').split('\n');
+                _idLines = (txt.length ? txt : ['']).map(t => ({
+                    text: t,
+                    font: d.font || "'Times New Roman', serif",
+                    style: d.style || 'normal',
+                    size: parseInt(d.size) || 22,
+                    ksp:  parseFloat(d.ksp) || 2,
+                    colour: d.colour || _idColour || '#c8a84b'
+                }));
+            } else if (formText) {
+                _idLines = formText.split('\n').map(t => Object.assign(ID_DEFAULT_LINE(), { text: t }));
+            } else {
+                _idLines = [ID_DEFAULT_LINE()];
+            }
+
+            // 2. Apply global controls
             const setVal = (id, v, suffix) => {
                 if (v === undefined || v === null) return;
                 const el = document.getElementById(id);
@@ -6637,24 +6724,16 @@
                     if (lbl) lbl.textContent = (typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : v) + suffix;
                 }
             };
-            if (d.font)  setVal('id_font',  d.font);
-            if (d.style) setVal('id_style', d.style);
-            setVal('id_size', d.size, 'px');
-            setVal('id_lsp',  d.lsp,  '×');
-            setVal('id_ksp',  d.ksp,  'px');
-            setVal('id_posX', d.posX, '%');
-            setVal('id_posY', d.posY, '%');
-            setVal('id_maxW', d.maxW, '%');
-            setVal('id_shad', d.shadow, 'px');
-            setVal('id_opac', d.opacity);
-            if (d.colour) {
-                _idColour = d.colour;
-                const cc = document.getElementById('id_customCol');
-                if (cc) cc.value = d.colour;
-                document.querySelectorAll('#inscDesignerOverlay .id-swatch').forEach(s => {
-                    s.classList.toggle('active', s.dataset.color === d.colour);
-                });
+            if (d) {
+                setVal('id_lsp',  d.lsp,    '×');
+                setVal('id_posX', d.posX,   '%');
+                setVal('id_posY', d.posY,   '%');
+                setVal('id_maxW', d.maxW,   '%');
+                setVal('id_shad', d.shadow, 'px');
+                setVal('id_opac', d.opacity);
             }
+
+            idRenderLinesList();
         }
 
         function closeInscriptionDesigner(save) {
@@ -6698,12 +6777,7 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(_idImage, 0, 0, canvas.width, canvas.height);
 
-            const text      = (document.getElementById('id_text')   || {}).value || '';
-            const fontSize  = parseInt((document.getElementById('id_size')  || {}).value || 22);
-            const fontFam   = (document.getElementById('id_font')   || {}).value || "'Times New Roman', serif";
-            const fontStyle = (document.getElementById('id_style')  || {}).value || 'normal';
             const lineSpacing = parseFloat((document.getElementById('id_lsp')  || {}).value || 1.7);
-            const letterSp  = parseFloat((document.getElementById('id_ksp')  || {}).value || 2);
             const posXpct   = parseInt((document.getElementById('id_posX') || {}).value || 50) / 100;
             const posYpct   = parseInt((document.getElementById('id_posY') || {}).value || 35) / 100;
             const maxWpct   = parseInt((document.getElementById('id_maxW') || {}).value || 52) / 100;
@@ -6711,19 +6785,17 @@
             const opacity   = parseFloat((document.getElementById('id_opac') || {}).value || 0.95);
 
             const canvScale  = canvas.width / 560;
-            const scaledSize = Math.round(fontSize * canvScale);
-            const scaledLineH = scaledSize * lineSpacing;
             const cx = canvas.width  * posXpct;
             const startY = canvas.height * posYpct;
             const maxW = canvas.width * maxWpct;
 
+            // Each line gets its own font/size/style/colour/ksp; line spacing
+            // is global and pins from the largest size on each row so big lines
+            // don't crash into smaller ones above.
             ctx.save();
             ctx.globalAlpha  = opacity;
-            ctx.fillStyle    = _idColour;
             ctx.textAlign    = 'center';
             ctx.textBaseline = 'middle';
-            ctx.font         = `${fontStyle} ${scaledSize}px ${fontFam}`;
-
             if (shadowBlur > 0) {
                 ctx.shadowColor   = 'rgba(0,0,0,0.6)';
                 ctx.shadowBlur    = shadowBlur * canvScale;
@@ -6731,11 +6803,14 @@
                 ctx.shadowOffsetY = 1 * canvScale;
             }
 
-            const lines = text.split('\n');
-            // Pin top of text block to posY — text grows downward, nothing shifts
-            lines.forEach((line, i) => {
-                const y = startY + i * scaledLineH + scaledLineH / 2;
-                idDrawTextSpaced(ctx, line.trim(), cx, y, maxW, letterSp * canvScale);
+            let y = startY;
+            (_idLines.length ? _idLines : [ID_DEFAULT_LINE()]).forEach((line) => {
+                const scaledSize = Math.round((line.size || 22) * canvScale);
+                const rowH = scaledSize * lineSpacing;
+                ctx.fillStyle = line.colour || _idColour || '#c8a84b';
+                ctx.font = `${line.style || 'normal'} ${scaledSize}px ${line.font || "'Times New Roman', serif"}`;
+                idDrawTextSpaced(ctx, (line.text || '').trim(), cx, y + rowH / 2, maxW, (line.ksp || 0) * canvScale);
+                y += rowH;
             });
 
             ctx.restore();
@@ -6777,20 +6852,30 @@
             if (el) el.textContent = val + suffix;
         }
 
+        // Convert "#rrggbb" → { r, g, b } for jsPDF's setTextColor
+        function idHexToRgb(hex) {
+            const h = String(hex || '').replace('#', '').trim();
+            const v = h.length === 3
+                ? h.split('').map(c => c + c).join('')
+                : h.padEnd(6, '0').slice(0, 6);
+            const n = parseInt(v, 16);
+            return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+        }
+
         function idReset() {
             const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-            set('id_size', 22); set('id_lsp', 1.7); set('id_ksp', 2);
+            set('id_lsp', 1.7);
             set('id_posX', 50); set('id_posY', 35); set('id_maxW', 52);
             set('id_shad', 3);  set('id_opac', 0.95);
-            idSv('id_sizeV','22','px'); idSv('id_lspV','1.70','×'); idSv('id_kspV','2','px');
+            idSv('id_lspV','1.70','×');
             idSv('id_posXV','50','%'); idSv('id_posYV','35','%'); idSv('id_maxWV','52','%');
             idSv('id_shadV','3','px'); idSv('id_opacV','95','%');
             _idColour = '#c8a84b';
-            document.querySelectorAll('#inscDesignerOverlay .id-swatch').forEach(s => {
-                s.classList.toggle('active', s.dataset.color === '#c8a84b');
-            });
-            const cc = document.getElementById('id_customCol');
-            if (cc) cc.value = '#c8a84b';
+            // Reset every line back to defaults but keep the user's text
+            _idLines = (_idLines.length ? _idLines : [ID_DEFAULT_LINE()]).map(l =>
+                Object.assign(ID_DEFAULT_LINE(), { text: l.text || '' })
+            );
+            idRenderLinesList();
             idRender();
         }
 
