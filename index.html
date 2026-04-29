@@ -4405,7 +4405,7 @@
         // Save order form
         async function saveOrderForm(event) {
             event.preventDefault();
-            
+
             const formData = new FormData(event.target);
             const orderData = editingOrderId ? {...currentOrder} : {
                 orderId: 'ORD' + Date.now(),
@@ -4418,6 +4418,14 @@
                 extraCharges: [],
                 masonCharges: []
             };
+
+            // Pull in any inscription design built in the designer this
+            // session — for new orders this is the only path the design
+            // takes to the sheet (the designer's auto-save needs an orderId
+            // which new orders don't have until we save here first).
+            if (window._idLastDesign && (!orderData.inscriptionDesign || window._idLastDesignDirty)) {
+                orderData.inscriptionDesign = window._idLastDesign;
+            }
 
             // Update order data from form (handle multi-value checkboxes)
             const accessories = formData.getAll('accessories');
@@ -6808,6 +6816,11 @@
                 if (e.target === overlay) closeInscriptionDesigner(false);
             });
 
+            // Reset the per-session design holder so a previous order's
+            // pending design can't leak onto a freshly-opened one.
+            window._idLastDesign = null;
+            window._idLastDesignDirty = false;
+
             // Load stone image
             _idImage = null;
             _idAutoSaveArmed = false;
@@ -6844,13 +6857,13 @@
                 formField.value = joinedText;
                 formField.dispatchEvent(new Event('input', { bubbles: true }));
             }
-            if (!window.currentOrder) return;
 
+            // Build the design object from the designer's controls.
             const get = (id, fallback) => {
                 const el = document.getElementById(id);
                 return el ? el.value : fallback;
             };
-            window.currentOrder.inscriptionDesign = {
+            const design = {
                 lines:   _idLines.map(l => Object.assign({}, l)),
                 lsp:     parseFloat(get('id_lsp', 1.7)),
                 posX:    parseInt(get('id_posX', 50)),
@@ -6859,28 +6872,56 @@
                 shadow:  parseFloat(get('id_shad', 3)),
                 opacity: parseFloat(get('id_opac', 0.95))
             };
-            // Also keep the form-text mirror on the order so PDFs and
-            // anywhere reading inscriptionText sees the latest joined text.
-            window.currentOrder.inscriptionText = joinedText;
 
-            // Capture any in-flight edits in the order edit form so we don't
-            // overwrite them with stale order data when we POST to the sheet.
+            // Build a complete order object from the form (the actual source
+            // of truth while editing). Falling back to currentOrder when the
+            // form is missing — but the form is what the user is touching
+            // right now, so its values take precedence. This handles both
+            // existing orders AND new orders (where currentOrder may be stale
+            // or null).
             const orderForm = document.getElementById('orderForm');
+            const order = window.currentOrder ? Object.assign({}, window.currentOrder) : {};
             if (orderForm) {
                 try {
                     const fd = new FormData(orderForm);
                     for (let [k, v] of fd.entries()) {
                         if (k === 'accessories') continue;
-                        window.currentOrder[k] = v;
+                        order[k] = v;
                     }
                     const accs = fd.getAll('accessories');
-                    if (accs.length) window.currentOrder.accessories = accs;
+                    order.accessories = accs.length ? accs : (order.accessories || []);
                 } catch(e) { console.warn('idSaveToForm form sync skipped:', e); }
             }
+            order.inscriptionDesign = design;
+            order.inscriptionText = joinedText;
 
-            // Persist immediately to the sheet so the design survives a
-            // refresh — even if the user closes the order edit modal without
-            // hitting "Save Order".
+            // Stash the design globally so saveOrderForm can pull it in for
+            // brand-new orders that don't yet have an orderId in the sheet.
+            window._idLastDesign = design;
+            window._idLastDesignDirty = true;
+
+            // Need an orderId to upsert. Without it (typical for a brand new
+            // order before the form is submitted), bail — the design stays
+            // on _idLastDesign and saveOrderForm will include it.
+            const oid = order.orderId || order.id;
+            if (!oid) {
+                const btn = document.getElementById('idSaveBtn');
+                if (btn) {
+                    btn.innerHTML = '💾 Will save with order';
+                    btn.style.background = '#6b7280';
+                    setTimeout(() => { btn.innerHTML = '💾 Save'; btn.style.background = '#2563eb'; }, 1800);
+                }
+                console.warn('idSaveToForm: no orderId — design held until Save Order');
+                return;
+            }
+
+            // Mirror onto currentOrder so other UI (estimate PDF, proof page)
+            // sees the live design while the modal is still open.
+            if (window.currentOrder && (window.currentOrder.orderId === oid)) {
+                Object.assign(window.currentOrder, order);
+            }
+
+            // Save button feedback — flash 'Saving…' → '✅ Saved!' / '⚠ Failed'
             const btn = document.getElementById('idSaveBtn');
             const flashSaved = (label, bg) => {
                 if (!btn) return;
@@ -6889,17 +6930,27 @@
                 setTimeout(() => { btn.innerHTML = '💾 Save'; btn.style.background = '#2563eb'; }, 1800);
             };
             flashSaved('💾 Saving…', '#2563eb');
+            let payload;
+            try {
+                payload = JSON.stringify({ action: 'upsert', order });
+            } catch (jsonErr) {
+                console.error('idSaveToForm: JSON.stringify failed', jsonErr, order);
+                flashSaved('⚠ Bad data — see console', '#d97706');
+                return;
+            }
             fetch(SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({ action: 'upsert', order: window.currentOrder })
+                body: payload
             }).then(() => {
                 flashSaved('✅ Saved!', '#16a34a');
-                // Refresh the underlying order list silently so other views
-                // pick up the new design without disrupting the modal.
-                const idx = allOrders.findIndex(o => o.orderId === window.currentOrder.orderId);
-                if (idx >= 0) allOrders[idx] = window.currentOrder;
+                const idx = allOrders.findIndex(o => o.orderId === oid);
+                if (idx >= 0) allOrders[idx] = Object.assign({}, allOrders[idx], order);
+                else allOrders.unshift(order);
+                // Saved into the sheet — clear the dirty flag so saveOrderForm
+                // doesn't double-write.
+                window._idLastDesignDirty = false;
             }).catch(err => {
                 console.warn('Designer save failed:', err);
                 flashSaved('⚠ Sync failed', '#d97706');
