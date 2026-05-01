@@ -159,7 +159,7 @@
                 localStorage.setItem('dcfs_activity_cache', JSON.stringify(entries.slice(0, 30)));
 
                 // Cache stats
-                var stats = { total: orders.length, Enquiry:0, Quoted:0, Confirmed:0, 'In Design':0, Production:0, Ready:0, Installed:0 };
+                var stats = { total: orders.length, Enquiry:0, Quoted:0, Confirmed:0, 'In Design':0, Production:0, Ready:0, Installed:0, Completed:0 };
                 (orders || []).forEach(function(o) {
                     var s = o.status || 'Enquiry';
                     if (stats[s] !== undefined) stats[s]++;
@@ -1521,6 +1521,7 @@
         <div class="stat-chip"><span class="stat-chip-count" id="st-Production" style="color:#f97316">—</span><span class="stat-chip-label">Production</span></div>
         <div class="stat-chip"><span class="stat-chip-count" id="st-Ready" style="color:#16a34a">—</span><span class="stat-chip-label">Ready</span></div>
         <div class="stat-chip"><span class="stat-chip-count" id="st-Installed" style="color:#5a8f2e">—</span><span class="stat-chip-label">Installed</span></div>
+        <div class="stat-chip"><span class="stat-chip-count" id="st-Completed" style="color:#1e40af">—</span><span class="stat-chip-label">Completed</span></div>
         <div class="stat-bar-divider"></div>
         <div class="stat-chip money"><span class="stat-chip-count" id="st-totalVal">—</span><span class="stat-chip-label">Total Value (Active)</span></div>
         <div class="stat-chip outstanding"><span class="stat-chip-count" id="st-outstanding">—</span><span class="stat-chip-label">Outstanding Balance</span></div>
@@ -1541,6 +1542,7 @@
                 <button class="filter-tab" data-filter="Production" onclick="setFilter('Production')">Production</button>
                 <button class="filter-tab" data-filter="Ready" onclick="setFilter('Ready')">Ready</button>
                 <button class="filter-tab" data-filter="Installed" onclick="setFilter('Installed')">Installed</button>
+                <button class="filter-tab" data-filter="Completed" onclick="setFilter('Completed')">Completed</button>
             </div>
         </div>
 
@@ -1637,6 +1639,14 @@
                 <button class="installed-view-btn" onclick="setFilter('Installed'); renderKanbanBoard()">View all →</button>
             </div>
 
+            <!-- Completed summary row — installed AND billed/paid in full -->
+            <div class="installed-summary" id="completedSummary" style="border-left:4px solid #1e40af;">
+                <span class="installed-icon">📁</span>
+                <span class="installed-label" style="color:#1e40af;">Completed</span>
+                <span class="installed-count" id="completed-count">0 jobs billed &amp; closed</span>
+                <button class="installed-view-btn" style="color:#1e40af;" onclick="setFilter('Completed'); renderKanbanBoard()">View all →</button>
+            </div>
+
             <!-- Change Requests panel — pending estimate + proof change
                  requests aggregated from order activity logs. -->
             <div id="dashboardChangeRequests" style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);margin-top:1rem;padding:1rem 1.25rem;border-left:4px solid #f59e0b;display:none;">
@@ -1718,7 +1728,7 @@
         // ── STATS BAR ──
         function renderStatsBar() {
             const fmtMoney = n => '£' + n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed'];
+            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed'];
             const counts = {};
             statuses.forEach(s => counts[s] = 0);
             let total = 0;
@@ -2241,11 +2251,13 @@
             const board = document.getElementById('boardWrap');
             const grid  = document.getElementById('orderGridWrap');
             const installedSummary = document.getElementById('installedSummary');
+            const completedSummary = document.getElementById('completedSummary');
             const dashActivity = document.getElementById('dashboardActivity');
             const dashInbox    = document.getElementById('dashboardInbox');
             const isAll = (status === 'all');
             if (board) board.style.display = isAll ? '' : 'none';
             if (installedSummary) installedSummary.style.display = isAll ? '' : 'none';
+            if (completedSummary) completedSummary.style.display = isAll ? '' : 'none';
             if (dashActivity) dashActivity.style.display = isAll ? '' : 'none';
             if (dashInbox) dashInbox.style.display = (isAll && OUTLOOK_ENABLED) ? '' : 'none';
             if (grid) grid.style.display = isAll ? 'none' : '';
@@ -2388,10 +2400,10 @@
         }
 
         function renderKanbanBoard() {
-            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed'];
+            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed'];
             const colors   = {
                 'Enquiry':'#94a3b8','Quoted':'#f59e0b','Confirmed':'#0097a7',
-                'In Design':'#8b5cf6','Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e'
+                'In Design':'#8b5cf6','Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e','Completed':'#1e40af'
             };
             const fmt = n => '£' + (n||0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 
@@ -2424,12 +2436,18 @@
                 const orders = groups[status] || [];
                 const total = orders.reduce((sum,o) => sum + (parseFloat(o.totalSellPrice)||0), 0);
 
-                // Installed has no kanban-cards column — only a summary bar.
-                // Update it first so the early-return-on-missing-listEl below
-                // doesn't strand the count at 0.
+                // Installed and Completed have no kanban-cards column — only
+                // summary bars at the bottom of the board. Handle them first
+                // so the early-return-on-missing-listEl below doesn't leave
+                // their counts stranded at 0.
                 if (status === 'Installed') {
                     const installedCount = document.getElementById('installed-count');
-                    if (installedCount) installedCount.textContent = orders.length + ' jobs completed';
+                    if (installedCount) installedCount.textContent = orders.length + ' jobs ' + (orders.length === 1 ? 'completed' : 'completed');
+                    return;
+                }
+                if (status === 'Completed') {
+                    const completedCount = document.getElementById('completed-count');
+                    if (completedCount) completedCount.textContent = orders.length + ' job' + (orders.length === 1 ? '' : 's') + ' billed & closed';
                     return;
                 }
 
@@ -2891,7 +2909,7 @@
         // ── Memorial Report — opens a printable view of every order
         // grouped by status, with latest note + price + date for each ──
         function openMemorialReport() {
-            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed'];
+            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed'];
             const statusColors = {
                 'Enquiry':'#94a3b8','Quoted':'#f59e0b','Confirmed':'#0097a7',
                 'In Design':'#8b5cf6','Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e'

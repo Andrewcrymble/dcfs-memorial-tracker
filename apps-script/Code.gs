@@ -681,7 +681,8 @@ function capitalizeStatus(status) {
   const statusMap = {
     "enquiry": "Enquiry", "quoted": "Quoted", "confirmed": "Confirmed",
     "design": "In Design", "in design": "In Design", "production": "Production",
-    "ready": "Ready", "installed": "Installed"
+    "ready": "Ready", "installed": "Installed",
+    "completed": "Completed", "complete": "Completed", "closed": "Completed"
   };
   return statusMap[status.toLowerCase()] || "Enquiry";
 }
