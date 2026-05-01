@@ -1842,7 +1842,16 @@
                     return;
                 }
 
-                const total = parseFloat(currentOrder.totalSellPrice) || 0;
+                // Recalc the customer total fresh — calculateOrderTotals
+                // pulls the cemetery fee from the price book even when the
+                // order's saved totalSellPrice predates the cemetery being
+                // selected. This makes the 50% deposit reflect the true
+                // amount the customer pays.
+                let total = parseFloat(currentOrder.totalSellPrice) || 0;
+                try {
+                    const t = calculateOrderTotals(currentOrder);
+                    if (t && t.totalSell > total) total = t.totalSell;
+                } catch (e) { console.warn('Recalc total for WhatsApp deposit failed:', e); }
                 const refDisplay = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
 
                 // 3. Upload to Drive via storeEstimatePdf — using text/plain
@@ -7265,7 +7274,15 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
         function createPaymentLink() {
             if (!currentOrder) return;
 
-            const total = parseFloat(currentOrder.totalSellPrice || 0);
+            // Recompute the customer total fresh — calculateOrderTotals
+            // pulls cemetery from the price book if not stored on the order,
+            // so the deposit reflects the real customer-pays figure even
+            // when the order's saved totalSellPrice is stale.
+            let total = parseFloat(currentOrder.totalSellPrice || 0);
+            try {
+                const t = calculateOrderTotals(currentOrder);
+                if (t && t.totalSell > total) total = t.totalSell;
+            } catch (e) { console.warn('Recalc total for payment link failed:', e); }
             const deposit = parseFloat(currentOrder.depositPaid || 0);
             const balance = Math.max(0, total - deposit);
 
@@ -7363,7 +7380,14 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             // Already has a link — reuse it
             if (currentOrder.stripePaymentUrl) return currentOrder.stripePaymentUrl;
 
-            const total = parseFloat(currentOrder.totalSellPrice || 0);
+            // Recalculate from scratch so cemetery (which the price-book
+            // lookup folds in even when not stored on the order) is part
+            // of the deposit base.
+            let total = parseFloat(currentOrder.totalSellPrice || 0);
+            try {
+                const t = calculateOrderTotals(currentOrder);
+                if (t && t.totalSell > total) total = t.totalSell;
+            } catch (e) { console.warn('Recalc total for deposit link failed:', e); }
             if (total <= 0) return null;
 
             const amount = Math.round((total / 2) * 100) / 100;
