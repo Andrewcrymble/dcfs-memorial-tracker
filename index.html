@@ -1505,6 +1505,8 @@
             <button id="userChip" onclick="toggleUserDropdown()" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:0.3rem;font-weight:600;">👤 <span id="userChipName">Andrew</span> ▾</button>
             <button class="btn btn-primary" onclick="showNewOrderModal()">+ New Order</button>
             <button class="btn btn-secondary" onclick="refreshOrders()">🔄 Refresh</button>
+            <button class="btn btn-secondary" onclick="openMemorialReport()">📊 Report</button>
+            <button class="btn btn-secondary" onclick="openPriceBook()" title="Open the Google Sheet to update product prices">💷 Price Book</button>
             <button id="testConnBtn" class="btn btn-secondary" onclick="testConnection()">🔍 Test</button>
         </div>
     </div>
@@ -2874,6 +2876,178 @@
                 console.error('Inbox load failed:', err);
                 list.innerHTML = `<div style="color:#b45309;font-size:0.82rem;padding:0.6rem 0;">Could not load inbox: ${escEmail(err && err.message ? err.message : 'unknown error')}</div>`;
             }
+        }
+
+        // ── Price Book — open the Google Sheet so prices can be edited
+        // directly. Tries to land on the Headstones tab; otherwise opens
+        // the spreadsheet at its default tab. SHEET_ID is the same sheet
+        // that holds the order list, with separate tabs for Headstones,
+        // Surrounds, Stones, Accessories, Cemetery_Fees, etc. ──
+        function openPriceBook() {
+            const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/edit';
+            window.open(url, '_blank', 'noopener');
+        }
+
+        // ── Memorial Report — opens a printable view of every order
+        // grouped by status, with latest note + price + date for each ──
+        function openMemorialReport() {
+            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed'];
+            const statusColors = {
+                'Enquiry':'#94a3b8','Quoted':'#f59e0b','Confirmed':'#0097a7',
+                'In Design':'#8b5cf6','Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e'
+            };
+            const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const fmtMoney = n => '£' + (n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+            const fmtDate = d => {
+                const dt = new Date(d);
+                if (!d || isNaN(dt.getTime())) return '—';
+                return dt.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+            };
+
+            // Build sections — each status with its orders
+            const groups = {};
+            statuses.forEach(s => groups[s] = []);
+            (allOrders || []).forEach(o => {
+                if (o.archived) return;
+                const s = o.status || 'Enquiry';
+                if (groups[s]) groups[s].push(o);
+            });
+
+            const totalCount = Object.values(groups).reduce((a, g) => a + g.length, 0);
+            const totalValue = Object.values(groups).reduce((a, g) =>
+                a + g.reduce((s, o) => s + (parseFloat(o.totalSellPrice) || 0), 0), 0);
+            const totalOutstanding = Object.values(groups).reduce((a, g) =>
+                a + g.reduce((s, o) => s + Math.max(0, (parseFloat(o.totalSellPrice)||0) - (parseFloat(o.depositPaid)||0)), 0), 0);
+
+            const sections = statuses.map(status => {
+                const orders = groups[status];
+                if (!orders.length) return '';
+                // Most recently updated first
+                orders.sort((a, b) => {
+                    const tA = new Date(a.lastUpdated || a.createdAt || 0).getTime();
+                    const tB = new Date(b.lastUpdated || b.createdAt || 0).getTime();
+                    return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+                });
+
+                const sectionValue = orders.reduce((s, o) => s + (parseFloat(o.totalSellPrice) || 0), 0);
+                const rows = orders.map(o => {
+                    const total = parseFloat(o.totalSellPrice) || 0;
+                    const paid  = parseFloat(o.depositPaid) || 0;
+                    const balance = Math.max(0, total - paid);
+                    // Latest note: prefer timestamped noteEntries, fall back to legacy notes
+                    let latestNote = null;
+                    if (Array.isArray(o.noteEntries) && o.noteEntries.length) {
+                        latestNote = o.noteEntries.slice().sort((a,b) => {
+                            const tA = new Date(a.ts).getTime(); const tB = new Date(b.ts).getTime();
+                            return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+                        })[0];
+                    }
+                    const noteText = latestNote ? latestNote.text : (o.notes || '');
+                    const noteAuthor = latestNote && latestNote.author ? latestNote.author : '';
+                    const noteDate = latestNote ? fmtDate(latestNote.ts) : '';
+                    const updated = fmtDate(o.lastUpdated || o.createdAt);
+                    const lastNoteCell = noteText
+                        ? `<div style="line-height:1.35;">${esc(noteText)}${noteAuthor ? `<div style="font-size:0.72rem;color:#666;margin-top:2px;">— ${esc(noteAuthor)}${noteDate ? ' · ' + noteDate : ''}</div>` : (noteDate ? `<div style="font-size:0.72rem;color:#666;margin-top:2px;">${noteDate}</div>` : '')}</div>`
+                        : '<span style="color:#aaa;">—</span>';
+                    return `
+                        <tr>
+                            <td style="font-weight:600;">${esc(o.deceasedName || '—')}</td>
+                            <td>${esc(o.customerName || '—')}</td>
+                            <td>${esc(o.orderRef || '')}</td>
+                            <td style="text-align:right;font-weight:600;">${fmtMoney(total)}</td>
+                            <td style="text-align:right;">${balance > 0 ? `<span style="color:#0369a1;font-weight:600;">${fmtMoney(balance)}</span>` : `<span style="color:#16a34a;">paid</span>`}</td>
+                            <td style="font-size:0.78rem;">${updated}</td>
+                            <td style="font-size:0.82rem;max-width:280px;">${lastNoteCell}</td>
+                        </tr>`;
+                }).join('');
+
+                const colour = statusColors[status] || '#666';
+                return `
+                    <section style="margin-bottom:1.4rem;">
+                        <h2 style="font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:white;background:${colour};padding:6px 10px;border-radius:4px;display:flex;align-items:center;gap:0.6rem;margin:0 0 8px;">
+                            ${esc(status)}
+                            <span style="font-weight:400;font-size:11px;">${orders.length} ${orders.length === 1 ? 'job' : 'jobs'} · ${fmtMoney(sectionValue)}</span>
+                        </h2>
+                        <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+                            <thead>
+                                <tr style="border-bottom:1.5px solid #333;">
+                                    <th style="text-align:left;padding:5px 8px;width:20%;">Memorial For</th>
+                                    <th style="text-align:left;padding:5px 8px;width:14%;">Customer</th>
+                                    <th style="text-align:left;padding:5px 8px;width:11%;">Ref</th>
+                                    <th style="text-align:right;padding:5px 8px;width:9%;">Total</th>
+                                    <th style="text-align:right;padding:5px 8px;width:9%;">Outstanding</th>
+                                    <th style="text-align:left;padding:5px 8px;width:9%;">Updated</th>
+                                    <th style="text-align:left;padding:5px 8px;width:28%;">Latest Note</th>
+                                </tr>
+                            </thead>
+                            <tbody style="border-bottom:1px solid #ccc;">${rows}</tbody>
+                        </table>
+                    </section>`;
+            }).join('');
+
+            const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Memorial Report — David Crymble &amp; Sons — ${fmtDate(new Date())}</title>
+<style>
+  @media print { @page { size: A4 landscape; margin: 12mm; } }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color:#1c1c1e; margin:0; padding:18px; background:#fff; }
+  h1 { font-family:'Times New Roman', serif; font-weight:900; letter-spacing:0.06em; font-size:24px; margin:0; }
+  h1 small { display:block; font-size:0.5em; letter-spacing:0.18em; color:#6c6c70; margin-top:4px; font-weight:700; }
+  table { page-break-inside:auto; }
+  tbody tr { page-break-inside:avoid; }
+  tbody tr:nth-child(even) { background:#fafafa; }
+  td { padding:5px 8px; vertical-align:top; border-bottom:1px solid #ececec; }
+  th { font-weight:700; font-size:11px; text-transform:uppercase; color:#444; letter-spacing:0.04em; }
+  .summary {
+    display:flex; gap:1.5rem; flex-wrap:wrap;
+    background:#f6f7f9; border-radius:6px; padding:10px 14px; margin:10px 0 18px;
+    font-size:13px;
+  }
+  .summary div strong { display:block; font-size:18px; color:#1c1c1e; margin-top:1px; }
+  .top { display:flex; align-items:flex-end; justify-content:space-between; gap:1rem; padding-bottom:8px; border-bottom:2px solid #4a7c2f; margin-bottom:14px; }
+  .top .meta { text-align:right; font-size:12px; color:#6c6c70; line-height:1.5; }
+  .print-btn {
+    position:fixed; top:12px; right:12px;
+    background:#4a7c2f; color:white; border:none; padding:0.6rem 1.2rem;
+    border-radius:6px; font-size:0.95rem; font-weight:600; cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.15); z-index:1000;
+  }
+  @media print { .print-btn { display:none; } }
+</style>
+</head>
+<body>
+<button class="print-btn" onclick="window.print()">🖨️ Print</button>
+
+<div class="top">
+  <h1>DAVID CRYMBLE &amp; SONS<small>FUNERAL DIRECTORS &amp; MEMORIAL MASONS</small></h1>
+  <div class="meta">
+    <strong>Memorial Report</strong><br>
+    Generated ${fmtDate(new Date())}<br>
+    All orders, all statuses (excluding archived)
+  </div>
+</div>
+
+<div class="summary">
+  <div><span style="color:#6c6c70;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Total Memorials</span><strong>${totalCount}</strong></div>
+  <div><span style="color:#6c6c70;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Total Value</span><strong>${fmtMoney(totalValue)}</strong></div>
+  <div><span style="color:#6c6c70;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Outstanding Balance</span><strong style="color:#0369a1;">${fmtMoney(totalOutstanding)}</strong></div>
+</div>
+
+${sections || '<p style="color:#888;">No orders to report.</p>'}
+
+</body>
+</html>`;
+
+            const win = window.open('', '_blank');
+            if (!win) {
+                alert('Pop-up blocked — please allow pop-ups for tracker.crymbleandsons.com to open the report.');
+                return;
+            }
+            win.document.open();
+            win.document.write(html);
+            win.document.close();
         }
 
         // Recent Activity feed on the main dashboard — pulls every log
