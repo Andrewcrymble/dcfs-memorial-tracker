@@ -3803,8 +3803,14 @@
                         const isPdf = /\.pdf$/i.test(file.name || '');
                         const isProof = file.type === 'Proof';
                         const isGravePaper = file.type === 'Grave Paper';
+                        // Permit-style files use a two-step Submitted → Approved
+                        // workflow (apply for permission → permission granted)
+                        const isPermit = file.type === 'Cemetery Permit'
+                                       || file.type === 'Grave Paper'
+                                       || file.type === 'Signed Form';
                         const icon = isImg ? '🖼️' : isPdf ? '📄' : isGravePaper ? '📜' : '📎';
-                        const approved = file.approved;
+                        const approved = !!file.approved;
+                        const submitted = !!file.submitted;
 
                         // Type tag colour
                         let tagBg = '#e0f2fe', tagCol = '#0369a1';
@@ -3815,6 +3821,15 @@
                             ? `<span style="display:inline-block;padding:0.1rem 0.45rem;background:${tagBg};color:${tagCol};border-radius:4px;font-size:0.7rem;font-weight:600;margin-bottom:0.3rem;">${file.type}</span>`
                             : '';
 
+                        // Status badges — permit files can show Submitted +
+                        // Approved as separate stages. Proofs and other types
+                        // just show Approved.
+                        const submittedBadge = (isPermit && submitted)
+                            ? `<div style="display:flex;align-items:center;gap:0.3rem;padding:0.2rem 0.5rem;background:#dbeafe;border:1px solid #93c5fd;border-radius:4px;font-size:0.7rem;font-weight:700;color:#1d4ed8;margin-top:0.2rem;">
+                                📤 SUBMITTED
+                                <span style="font-weight:400;color:#3b82f6;">${file.submittedAt ? new Date(file.submittedAt).toLocaleDateString('en-GB') : ''}</span>
+                               </div>`
+                            : '';
                         const approvedBadge = approved
                             ? `<div style="display:flex;align-items:center;gap:0.3rem;padding:0.2rem 0.5rem;background:#dcfce7;border:1px solid #86efac;border-radius:4px;font-size:0.7rem;font-weight:700;color:#15803d;margin-top:0.2rem;">
                                 ✅ APPROVED
@@ -3822,12 +3837,24 @@
                                </div>`
                             : '';
 
-                        const approveBtn = isProof && !approved
-                            ? `<button onclick="approveFile(${idx})" style="padding:0.2rem 0.55rem;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;color:#16a34a;font-size:0.75rem;font-weight:600;cursor:pointer;">✅ Approve</button>`
-                            : '';
+                        // Action buttons in workflow order. For permit files:
+                        //   not submitted → "Mark Submitted"
+                        //   submitted, not approved → "Mark Approved"
+                        //   approved → no buttons (just badges above)
+                        // Proof files keep their existing Approve button.
+                        let workflowBtns = '';
+                        if (isPermit) {
+                            if (!submitted) {
+                                workflowBtns = `<button onclick="markFileSubmitted(${idx})" style="padding:0.2rem 0.55rem;background:#eff6ff;border:1px solid #93c5fd;border-radius:4px;color:#1d4ed8;font-size:0.75rem;font-weight:600;cursor:pointer;">📤 Mark Submitted</button>`;
+                            } else if (!approved) {
+                                workflowBtns = `<button onclick="approveFile(${idx})" style="padding:0.2rem 0.55rem;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;color:#16a34a;font-size:0.75rem;font-weight:600;cursor:pointer;">✅ Mark Approved</button>`;
+                            }
+                        } else if (isProof && !approved) {
+                            workflowBtns = `<button onclick="approveFile(${idx})" style="padding:0.2rem 0.55rem;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;color:#16a34a;font-size:0.75rem;font-weight:600;cursor:pointer;">✅ Approve</button>`;
+                        }
 
-                        const borderColor = approved ? '#86efac' : isGravePaper ? '#d8b4fe' : '#e5e7eb';
-                        const bgColor    = approved ? '#f0fdf4' : 'white';
+                        const borderColor = approved ? '#86efac' : (isPermit && submitted) ? '#93c5fd' : isGravePaper ? '#d8b4fe' : '#e5e7eb';
+                        const bgColor    = approved ? '#f0fdf4' : (isPermit && submitted) ? '#eff6ff' : 'white';
 
                         return `
                         <div style="border:1px solid ${borderColor};border-radius:8px;padding:0.75rem;background:${bgColor};display:flex;flex-direction:column;gap:0.3rem;">
@@ -3835,10 +3862,11 @@
                             ${typeTag}
                             <div style="font-size:0.8rem;font-weight:600;color:#111;word-break:break-all;line-height:1.3;">${file.name}</div>
                             <div style="font-size:0.72rem;color:#9ca3af;">${file.uploadedAt ? new Date(file.uploadedAt).toLocaleDateString('en-GB') : ''}</div>
+                            ${submittedBadge}
                             ${approvedBadge}
                             <div style="display:flex;gap:0.4rem;margin-top:0.3rem;flex-wrap:wrap;">
                                 ${file.viewUrl || file.driveUrl ? `<a href="${file.viewUrl || file.driveUrl}" target="_blank" style="padding:0.2rem 0.55rem;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;color:#16a34a;font-size:0.75rem;font-weight:600;text-decoration:none;">👁 View</a>` : ''}
-                                ${approveBtn}
+                                ${workflowBtns}
                                 <button onclick="deleteFile(${idx})" style="padding:0.2rem 0.55rem;background:#fff1f2;border:1px solid #fca5a5;border-radius:4px;color:#dc2626;font-size:0.75rem;font-weight:600;cursor:pointer;">🗑 Remove</button>
                             </div>
                         </div>`;
@@ -4010,13 +4038,34 @@
             renderOrderDetails();
         }
 
+        // Mark a permit-style file as Submitted (sent off to the cemetery /
+        // council). Records who submitted it and when, then re-renders so
+        // the "Mark Approved" button replaces the "Mark Submitted" one.
+        async function markFileSubmitted(idx) {
+            if (!currentOrder || !currentOrder.files) return;
+            const file = currentOrder.files[idx];
+            if (!confirm(`Mark "${file.name}" as SUBMITTED?\n\nUse this when the form/permit has been sent off (e.g. to the cemetery or council) and you're awaiting a decision.`)) return;
+            file.submitted = true;
+            file.submittedAt = new Date().toISOString();
+            file.submittedBy = (typeof getCurrentUser === 'function' ? getCurrentUser() : '') || 'User';
+            addActivityLog(`${file.type || 'File'} submitted: ${file.name}`);
+            await saveOrder(currentOrder);
+            renderOrderDetails();
+        }
+
         async function approveFile(idx) {
             if (!currentOrder || !currentOrder.files) return;
             const file = currentOrder.files[idx];
-            if (!confirm(`Mark "${file.name}" as APPROVED?\n\nThis will record the approval date and notify the stone mason by email with the proof attached.`)) return;
+            const isPermit = file.type === 'Cemetery Permit' || file.type === 'Grave Paper' || file.type === 'Signed Form';
+            const confirmMsg = isPermit
+                ? `Mark "${file.name}" as APPROVED?\n\nUse this when permission has been granted (e.g. cemetery returned the signed permit). The submitted/approved dates will be kept on the file.`
+                : `Mark "${file.name}" as APPROVED?\n\nThis will record the approval date and notify the stone mason by email with the proof attached.`;
+            if (!confirm(confirmMsg)) return;
             file.approved = true;
             file.approvedAt = new Date().toISOString();
-            addActivityLog(`Proof approved: ${file.name}`);
+            file.approvedBy = (typeof getCurrentUser === 'function' ? getCurrentUser() : '') || 'User';
+            const logLabel = isPermit ? `${file.type} approved` : 'Proof approved';
+            addActivityLog(`${logLabel}: ${file.name}`);
             await saveOrder(currentOrder);
 
             // Auto-notify mason on first internal approval of a Proof file
