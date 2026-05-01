@@ -2509,15 +2509,21 @@
                         : '';
                     const archivedDim = order.archived ? 'opacity:0.55;' : '';
 
-                    return `<li class="order-item" data-order-id="${safeId}"${notesAttr} style="position:relative;border-left:3px solid ${borderColor};margin:0;border-radius:10px;padding:0.7rem 0.85rem;${archivedDim}">
+                    // Compact card layout — collapses customer + ref +
+                    // balance into a single line under the deceased name so
+                    // ~50% more cards fit in the same vertical space.
+                    const customerRef = [order.customerName, order.orderRef]
+                        .filter(Boolean).join(' · ');
+                    return `<li class="order-item" data-order-id="${safeId}"${notesAttr} style="position:relative;border-left:3px solid ${borderColor};margin:0;border-radius:8px;padding:0.4rem 0.6rem;${archivedDim}">
                         ${archiveBtnHtml}
-                        <div class="order-item-top" style="margin-bottom:0.15rem;${showArchiveBtn?'padding-right:30px;':''}">
-                            <div class="order-name" style="font-size:0.83rem;">${order.deceasedName||'Unknown'}</div>
+                        <div class="order-item-top" style="margin-bottom:0.1rem;${showArchiveBtn?'padding-right:26px;':''}">
+                            <div class="order-name" style="font-size:0.78rem;line-height:1.2;">${order.deceasedName||'Unknown'}</div>
                             ${daysBadge}
                         </div>
-                        <div class="order-customer" style="font-size:0.72rem;margin-bottom:0.2rem;">${order.customerName||''} · ${order.orderRef||''}</div>
-                        ${createdHtml ? `<div style="margin-bottom:0.15rem;">${createdHtml}</div>` : ''}
-                        ${balHtml ? `<div>${balHtml}</div>` : ''}
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;line-height:1.2;">
+                            <span class="order-customer" style="font-size:0.68rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${customerRef}</span>
+                            ${balHtml}
+                        </div>
                     </li>`;
                 }).join('');
 
