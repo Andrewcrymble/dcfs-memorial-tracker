@@ -3721,8 +3721,12 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                     });
 
                     // ── True profit figures (excluding pass-throughs) ──
+                    // totalCost no longer includes cemeteryFee, so it's
+                    // already the mason-only cost. profitSell strips the
+                    // cemetery pass-through out of the retail figure so
+                    // we're comparing like-for-like.
                     const profitSell = t.totalSell - b.cemeteryFee;
-                    const profitCost = t.totalCost - b.cemeteryFee;
+                    const profitCost = t.totalCost;
                     const dep = parseFloat(o.depositPaid) || 0;
                     const bal = Math.max(0, t.totalSell - dep);
                     const marginPct = profitSell > 0 ? ((t.profitMargin / profitSell) * 100).toFixed(1) : '0.0';
@@ -3779,8 +3783,8 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                                     </tr>
                                     ${b.cemeteryFee > 0 ? `
                                     <tr style="background:#fefce8;border-top:1px solid #fde68a;">
-                                        <td style="padding:0.45rem 0.6rem;font-size:0.8rem;font-weight:700;color:#92400e;">TOTAL (incl. external charges)</td>
-                                        <td style="padding:0.45rem 0.6rem;text-align:right;font-size:0.8rem;font-weight:700;color:#92400e;">£${t.totalCost.toFixed(2)}</td>
+                                        <td style="padding:0.45rem 0.6rem;font-size:0.8rem;font-weight:700;color:#92400e;">CUSTOMER PAYS (incl. cemetery fee)</td>
+                                        <td style="padding:0.45rem 0.6rem;text-align:right;font-size:0.8rem;font-weight:700;color:#92400e;">£${(t.totalCost + b.cemeteryFee).toFixed(2)}</td>
                                         <td style="padding:0.45rem 0.6rem;text-align:right;font-size:0.8rem;font-weight:700;color:#92400e;">£${t.totalSell.toFixed(2)}</td>
                                         <td colspan="2" style="padding:0.45rem 0.6rem;text-align:right;font-size:0.75rem;color:#b45309;font-style:italic;">Cemetery fee forwarded</td>
                                     </tr>` : ''}
@@ -6145,14 +6149,22 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
         extraChargesBreakdown.push({ description: c.description, type: c.type, amount: amt, applyToCustomer: c.applyToCustomer !== false, applyToMason: !!c.applyToMason, sellEffect: sellAmt, costEffect: costAmt });
     });
 
+    // totalCost = what we actually pay out to suppliers/mason — pure
+    // outgoings on items we trade. Cemetery fee is a pass-through (we
+    // collect it from the customer and forward it on), so it does NOT
+    // belong in totalCost. totalSell still includes it because the
+    // customer pays it via us.
     const totalCost = headstone.cost + surround.cost + stone.cost +
-                     inscription.cost + cemeteryFee + accessoriesCost + extraCost;
+                     inscription.cost + accessoriesCost + extraCost;
 
     const totalSell = headstone.sell + surround.sell + stone.sell +
                      inscription.sell + cemeteryFee + accessoriesSell + extraSell;
 
-    const profitMargin = totalSell - totalCost;
-    const marginPercentage = totalSell > 0 ? (profitMargin / totalSell) * 100 : 0;
+    // Profit = retail on traded items minus mason cost. Subtracting
+    // cemeteryFee from totalSell (since we forward it on) gives the
+    // retail-on-trading-items figure, then we subtract totalCost.
+    const profitMargin = (totalSell - cemeteryFee) - totalCost;
+    const marginPercentage = totalSell > 0 ? (profitMargin / (totalSell - cemeteryFee || 1)) * 100 : 0;
 
     return {
         breakdown: {
