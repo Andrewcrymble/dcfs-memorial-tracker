@@ -3020,8 +3020,23 @@
 
         function kanbanHideNotesTooltip() {
             const tip = document.getElementById('kanbanNoteTooltip');
-            if (tip) tip.style.opacity = '0';
+            if (!tip) return;
+            tip.style.opacity = '0';
+            // After the fade, push it off-screen so a stranded tooltip
+            // (e.g. when the user clicked a card and selectOrder fired
+            // before mouseleave) can't be visible behind other UI.
+            setTimeout(() => {
+                if (tip.style.opacity === '0') {
+                    tip.style.left = '-9999px';
+                    tip.style.top = '-9999px';
+                }
+            }, 200);
         }
+
+        // Belt-and-braces: hide on any click anywhere and on scroll, since
+        // mouseleave doesn't always fire when the page navigates underneath.
+        document.addEventListener('click', kanbanHideNotesTooltip, true);
+        document.addEventListener('scroll', kanbanHideNotesTooltip, true);
 
         function renderPipelineChart(groups, colors, fmt) {
             const chartStatuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready'];
