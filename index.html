@@ -7377,12 +7377,11 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
         // Auto-create a 50% deposit link for an order (used by estimate PDF)
         async function autoGetDepositLink() {
             if (!currentOrder) return null;
-            // Already has a link — reuse it
-            if (currentOrder.stripePaymentUrl) return currentOrder.stripePaymentUrl;
 
-            // Recalculate from scratch so cemetery (which the price-book
-            // lookup folds in even when not stored on the order) is part
-            // of the deposit base.
+            // Always recompute the correct deposit amount FIRST so we can
+            // verify any existing link is still right — orders that had a
+            // deposit link created before cemetery fees were folded in
+            // would otherwise keep returning a stale low-value link.
             let total = parseFloat(currentOrder.totalSellPrice || 0);
             try {
                 const t = calculateOrderTotals(currentOrder);
@@ -7391,6 +7390,18 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             if (total <= 0) return null;
 
             const amount = Math.round((total / 2) * 100) / 100;
+
+            // Reuse the existing link only if its amount matches what we
+            // would charge today. If it's off by more than a penny, we've
+            // got a stale link (cemetery added, total changed, etc.) — fall
+            // through and create a fresh one.
+            if (currentOrder.stripePaymentUrl) {
+                const storedAmount = parseFloat(currentOrder.stripePaymentAmount || 0);
+                if (Math.abs(storedAmount - amount) < 0.01) {
+                    return currentOrder.stripePaymentUrl;
+                }
+                console.log('Stripe deposit link is stale (£' + storedAmount + ' vs current £' + amount + ') — regenerating');
+            }
             const ref = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
 
             try {
@@ -7601,7 +7612,13 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             // Embed payment URL and total in link so proof page never needs sheet lookup
             const pay = o.stripePaymentUrl || '';
             if (pay) url += `&pay=${encodeURIComponent(pay)}`;
-            const total = parseFloat(o.totalSellPrice || 0);
+            // Recompute the customer total fresh so cemetery fees that aren't
+            // yet stored on the order still make it into the proof link.
+            let total = parseFloat(o.totalSellPrice || 0);
+            try {
+                const t = calculateOrderTotals(o);
+                if (t && t.totalSell > total) total = t.totalSell;
+            } catch (e) { /* fall back to stored total */ }
             if (total > 0) url += `&total=${total}`;
             return url;
         }
