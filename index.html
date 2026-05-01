@@ -3309,13 +3309,15 @@
                         </div>
                     </div>
 
-                    <!-- Activity Log (full width) -->
-                    <div class="card detail-grid-wide">
-                        <div class="card-header">
+                    <!-- Activity Log (full width, collapsible) -->
+                    <div class="card detail-grid-wide" id="activityLogCard">
+                        <div class="card-header" onclick="toggleActivityLog()" style="cursor:pointer;user-select:none;" title="Click to collapse / expand">
                             <span class="card-header-icon">🕐</span>
                             <span class="card-header-title">Activity Log</span>
+                            <span style="margin-left:auto;font-size:0.72rem;color:var(--text-muted);">${(o.log || []).length} entries</span>
+                            <span id="activityLogToggle" style="margin-left:0.6rem;font-size:0.85rem;color:var(--text-muted);transition:transform 0.15s;">▾</span>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" id="activityLogBody">
                             ${renderActivityLog(o)}
                         </div>
                     </div>
@@ -3596,6 +3598,9 @@
                 </div>
             `;
             maybeRenderQR();
+            // Restore the user's collapsed/expanded preference for the
+            // Activity Log so it doesn't pop back open between orders.
+            try { applyActivityLogState(); } catch(e){}
             // Fire-and-forget: load Outlook emails for this order's customer
             // when the integration is enabled, configured, and signed in.
             if (OUTLOOK_ENABLED) {
@@ -4101,6 +4106,28 @@
         }
 
         // Render activity log
+        // Collapse/expand the Activity Log card. State is sticky per session
+        // (sessionStorage) so the user's preference survives navigating
+        // between orders without persisting forever.
+        function toggleActivityLog(forceState) {
+            const body = document.getElementById('activityLogBody');
+            const toggle = document.getElementById('activityLogToggle');
+            if (!body) return;
+            const isCollapsed = body.style.display === 'none';
+            const next = (typeof forceState === 'boolean') ? forceState : !isCollapsed;
+            body.style.display = next ? 'none' : '';
+            if (toggle) toggle.style.transform = next ? 'rotate(-90deg)' : '';
+            try { sessionStorage.setItem('dcfs_activityLogCollapsed', next ? '1' : '0'); } catch(e){}
+        }
+
+        // Apply the remembered collapse state on initial render
+        function applyActivityLogState() {
+            try {
+                const collapsed = sessionStorage.getItem('dcfs_activityLogCollapsed') === '1';
+                if (collapsed) toggleActivityLog(true);
+            } catch(e){}
+        }
+
         function renderActivityLog(order) {
             if (!order.log || order.log.length === 0) {
                 return '<p style="color: #6b7280;">No activity recorded</p>';
