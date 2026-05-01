@@ -3719,6 +3719,24 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                             masonAmt, custAmt
                         );
                     });
+                    // Cemetery fee inline — same cost & retail (pass-through),
+                    // explicitly listed here so it's never missed. If a
+                    // cemetery is selected but no fee is configured in the
+                    // price book, still show a row with £0 so the user can
+                    // see something is up.
+                    if (b.cemeteryFee > 0 || o.cemetery) {
+                        const fee = b.cemeteryFee || 0;
+                        tableRows += `<tr style="background:#fefce8;">
+                            <td style="padding:0.5rem 0.6rem;">
+                                <div style="font-size:0.82rem;font-weight:600;color:#92400e;">Cemetery / Churchyard Fee</div>
+                                <div style="font-size:0.72rem;color:#b45309;">${o.cemetery || 'Not selected'}${fee > 0 ? ' — pass-through, forwarded to cemetery' : ' — no fee configured in price book'}</div>
+                            </td>
+                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;color:#92400e;">£${fee.toFixed(2)}</td>
+                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;font-weight:600;color:#92400e;">£${fee.toFixed(2)}</td>
+                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.78rem;color:#b45309;font-style:italic;">—</td>
+                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.78rem;color:#b45309;font-style:italic;">pass-thru</td>
+                        </tr>`;
+                    }
 
                     // ── True profit figures (excluding pass-throughs) ──
                     // totalCost no longer includes cemeteryFee, so it's
@@ -3731,19 +3749,6 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                     const bal = Math.max(0, t.totalSell - dep);
                     const marginPct = profitSell > 0 ? ((t.profitMargin / profitSell) * 100).toFixed(1) : '0.0';
                     const marginCol = t.profitMargin >= 0 ? '#16a34a' : '#dc2626';
-
-                    // ── External / pass-through charges row ──
-                    const extRow = b.cemeteryFee > 0 ? `
-                        <tr style="background:#fefce8;border-top:1px solid #fde68a;">
-                            <td style="padding:0.5rem 0.6rem;">
-                                <div style="font-size:0.82rem;font-weight:600;color:#92400e;">Cemetery / Churchyard Fee</div>
-                                <div style="font-size:0.72rem;color:#b45309;">${o.cemetery || ''} — pass-through, forwarded to cemetery</div>
-                            </td>
-                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;color:#92400e;">£${b.cemeteryFee.toFixed(2)}</td>
-                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;color:#92400e;">£${b.cemeteryFee.toFixed(2)}</td>
-                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.78rem;color:#b45309;font-style:italic;">—</td>
-                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.78rem;color:#b45309;font-style:italic;">—</td>
-                        </tr>` : '';
 
                     return `
                     <div class="card detail-grid-wide" style="margin-bottom:0;">
@@ -3766,28 +3771,14 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                                 <tbody>
                                     ${tableRows || '<tr><td colspan="5" style="padding:1rem;text-align:center;color:#9ca3af;font-size:0.85rem;">No items priced yet</td></tr>'}
                                 </tbody>
-                                ${b.cemeteryFee > 0 ? `
-                                <tbody>
-                                    <tr style="background:#f3f4f6;">
-                                        <td colspan="5" style="padding:0.3rem 0.6rem;font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;">External / Pass-Through Charges</td>
-                                    </tr>
-                                    ${extRow}
-                                </tbody>` : ''}
                                 <tfoot>
                                     <tr style="background:#f9fafb;border-top:2px solid #111;">
-                                        <td style="padding:0.6rem 0.6rem;font-size:0.85rem;font-weight:700;color:#111;">YOUR PROFIT</td>
-                                        <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:#374151;">£${profitCost.toFixed(2)}</td>
-                                        <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:#111;">£${profitSell.toFixed(2)}</td>
+                                        <td style="padding:0.6rem 0.6rem;font-size:0.85rem;font-weight:700;color:#111;">TOTAL</td>
+                                        <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:#374151;">£${(t.totalCost + b.cemeteryFee).toFixed(2)}</td>
+                                        <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:#111;">£${t.totalSell.toFixed(2)}</td>
                                         <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:${marginCol};">£${t.profitMargin.toFixed(2)}</td>
                                         <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:${marginCol};">${marginPct}%</td>
                                     </tr>
-                                    ${b.cemeteryFee > 0 ? `
-                                    <tr style="background:#fefce8;border-top:1px solid #fde68a;">
-                                        <td style="padding:0.45rem 0.6rem;font-size:0.8rem;font-weight:700;color:#92400e;">CUSTOMER PAYS (incl. cemetery fee)</td>
-                                        <td style="padding:0.45rem 0.6rem;text-align:right;font-size:0.8rem;font-weight:700;color:#92400e;">£${(t.totalCost + b.cemeteryFee).toFixed(2)}</td>
-                                        <td style="padding:0.45rem 0.6rem;text-align:right;font-size:0.8rem;font-weight:700;color:#92400e;">£${t.totalSell.toFixed(2)}</td>
-                                        <td colspan="2" style="padding:0.45rem 0.6rem;text-align:right;font-size:0.75rem;color:#b45309;font-style:italic;">Cemetery fee forwarded</td>
-                                    </tr>` : ''}
                                     ${dep > 0 ? `
                                     <tr style="background:#f0fdf4;">
                                         <td colspan="2" style="padding:0.45rem 0.6rem;font-size:0.8rem;color:#374151;">Deposit Received</td>
