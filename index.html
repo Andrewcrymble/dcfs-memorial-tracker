@@ -631,6 +631,25 @@
             padding: 0.75rem 0.85rem;
             display: flex; flex-direction: column; gap: 0.65rem;
         }
+        /* Lines list scrolls internally so the Layout / Position / Effects
+           cards stay visible even when the user fills all 15 line slots. */
+        #inscDesignerModal #id_linesList {
+            max-height: 320px;
+            overflow-y: auto;
+            padding-right: 4px;  /* keep the row borders off the scrollbar */
+        }
+        #inscDesignerModal #id_linesList::-webkit-scrollbar { width: 8px; }
+        #inscDesignerModal #id_linesList::-webkit-scrollbar-thumb {
+            background: rgba(60,60,67,0.25); border-radius: 4px;
+        }
+        #inscDesignerModal #id_linesList::-webkit-scrollbar-thumb:hover {
+            background: rgba(60,60,67,0.45);
+        }
+        /* Belt-and-braces: also let the whole left column shrink below its
+           intrinsic content size so its own overflow:auto kicks in if the
+           combined cards still get too tall (e.g. on short viewports). */
+        #inscDesignerModal .modal-body { min-height: 0; }
+        #inscDesignerModal .id-controls { min-height: 0; }
         #inscDesignerModal label {
             font-size: 0.75rem; font-weight: 600; color: #3c3c43;
             display: block; margin-bottom: 0.2rem;
@@ -6749,7 +6768,7 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             y += 8;
 
             let alt = false;
-            function row(label, sub, amount) {
+            function row(label, sub, amount, amountLabel) {
                 if (y > 250) { doc.addPage(); y = 20; }
                 // Wrap each column so long values don't crash into the next.
                 // DESCRIPTION column: x=23 → ~80mm wide before the DETAIL col at 105
@@ -6768,7 +6787,11 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                     subLines.forEach((l, i) => doc.text(l, 105, y + i * 5));
                     doc.setTextColor(0, 0, 0);
                 }
-                if (amount !== null && amount !== undefined) {
+                if (amountLabel) {
+                    doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(74, 124, 47);
+                    doc.text(amountLabel, 188, y, { align: 'right' });
+                    doc.setTextColor(0, 0, 0);
+                } else if (amount !== null && amount !== undefined) {
                     doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(0, 0, 0);
                     doc.text(`£${parseFloat(amount).toFixed(2)}`, 188, y, { align: 'right' });
                 }
@@ -6797,12 +6820,26 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 if (acc) row(accName, 'Accessory', acc.cost);
             });
 
-            if (totals.breakdown.inscription.cost > 0)
-                row(currentOrder.inscriptionType === 'new' ? 'New Inscription' : 'Additional Inscription',
-                    `${totals.breakdown.inscription.letterCount} letters`,
-                    totals.breakdown.inscription.cost);
-            else if (currentOrder.inscriptionText)
-                row('New Inscription', 'Included (up to 100 letters)', null);
+            // Inscription row — always show when there's any inscription
+            // info (text, colour, or non-zero count), so the mason sees the
+            // colour even on free "first 100 letters" jobs. Detail string
+            // bundles letter count + colour so it's all in one line.
+            const inscColour = (currentOrder.inscriptionColour || '').trim();
+            const inscType   = currentOrder.inscriptionType === 'additional' ? 'Additional Inscription' : 'New Inscription';
+            const inscCount  = totals.breakdown.inscription.letterCount || 0;
+            const inscParts  = [];
+            if (inscCount > 0) inscParts.push(`${inscCount} letter${inscCount === 1 ? '' : 's'}`);
+            if (inscColour)    inscParts.push(`Colour: ${inscColour}`);
+            const inscDetail = inscParts.join(' · ');
+
+            if (totals.breakdown.inscription.cost > 0) {
+                row(inscType, inscDetail || `${inscCount} letters`, totals.breakdown.inscription.cost);
+            } else if (currentOrder.inscriptionText || inscColour || inscCount > 0) {
+                row(inscType,
+                    inscDetail || 'Up to 100 letters',
+                    null,
+                    'Included');
+            }
 
             // Extra charges (mason-facing only)
             (totals.breakdown.extraCharges || []).forEach(ec => {
@@ -6830,7 +6867,10 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             // ── Inscription text ──
             if (currentOrder.inscriptionText) {
                 if (y > 220) { doc.addPage(); y = 20; }
-                sectionBar('INSCRIPTION TEXT — COPY EXACTLY AS SHOWN', 245, 245, 245, 0, 0, 0);
+                const inscBarLabel = inscColour
+                    ? `INSCRIPTION TEXT (${inscColour.toUpperCase()}) — COPY EXACTLY AS SHOWN`
+                    : 'INSCRIPTION TEXT — COPY EXACTLY AS SHOWN';
+                sectionBar(inscBarLabel, 245, 245, 245, 0, 0, 0);
 
                 // Bordered content area
                 doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3);
