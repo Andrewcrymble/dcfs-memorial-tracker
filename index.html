@@ -5345,7 +5345,11 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             if (piCem) piCem.innerHTML = cemFee > 0
                 ? `<span class="pi-retail">Fee £${cemFee.toFixed(2)}</span>`
                 : '';
-            totalCost += cemFee; totalSell += cemFee;
+            // Cemetery is a pass-through (we collect it from the customer
+            // and forward it to the council), so it's added to totalSell
+            // but NOT totalCost. Matches calculateOrderTotals (commit
+            // 5297f79); the live form bar previously double-counted it.
+            totalSell += cemFee;
 
             // — Inscription lines — (display only, no pricing — letter count drives cost)
             const inscLines = parseInt(val('f_inscLines')) || 0;
@@ -5405,7 +5409,10 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             });
 
             // — Update totals bar —
-            const profit = totalSell - totalCost;
+            // Profit = retail on traded items minus mason cost. Subtract
+            // the cemetery pass-through from totalSell first so we're
+            // comparing like-for-like (cemetery isn't in totalCost).
+            const profit = (totalSell - cemFee) - totalCost;
             if (g('lt_cost')) g('lt_cost').textContent = '£' + totalCost.toFixed(2);
             if (g('lt_sell')) g('lt_sell').textContent = '£' + totalSell.toFixed(2);
             if (g('lt_profit')) {
