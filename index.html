@@ -6813,7 +6813,11 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             });
 
             // ── Total box ──
-            const masonTotal = totals.totalCost - (totals.breakdown.cemeteryFee || 0);
+            // totalCost already excludes the cemetery pass-through (since
+            // commit 5297f79), so it IS the mason total — no further
+            // subtraction needed. The old code here double-removed cemetery,
+            // making the job card under-bill the mason by £cemFee.
+            const masonTotal = totals.totalCost;
             y += 2;
             doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.4); doc.line(20, y, 190, y); y += 2;
             doc.setFillColor(30, 30, 30); doc.rect(20, y, 170, 13, 'F');
