@@ -824,14 +824,16 @@ function drawCanvas(p) {
     // that scale. Match it here so the proof matches the designer.
     const canvScale  = canvas.width / 560;
     const lineSpacing = parseFloat(design.lsp) || 1.7;
-    const posX = (parseFloat(design.posX) || 50) / 100;
-    const posY = (parseFloat(design.posY) || 35) / 100;
+    // Legacy block-flow fallback: used only for lines that don't carry
+    // their own posX/posY (older designs saved before per-line positions).
+    const blockX = (parseFloat(design.posX) || 50) / 100;
+    const blockY = (parseFloat(design.posY) || 35) / 100;
     const maxW = (parseFloat(design.maxW) || 52) / 100;
     const shadow = parseFloat(design.shadow) || 0;
     const opacity = parseFloat(design.opacity) || 0.95;
 
-    const cx = canvas.width * posX;
-    let y    = canvas.height * posY;
+    const blockCx = canvas.width * blockX;
+    let flowY    = canvas.height * blockY;
     const maxTextW = canvas.width * maxW;
 
     ctx.save();
@@ -848,10 +850,15 @@ function drawCanvas(p) {
     designLines.forEach(line => {
       const sz = Math.round((parseFloat(line.size) || 22) * canvScale);
       const rowH = sz * lineSpacing;
+      // Prefer per-line position when present; otherwise advance the
+      // block-flow cursor (legacy designs).
+      const hasPerLine = (typeof line.posX === 'number' && typeof line.posY === 'number');
+      const cxLine   = hasPerLine ? canvas.width  * (line.posX / 100) : blockCx;
+      const topYLine = hasPerLine ? canvas.height * (line.posY / 100) : flowY;
       ctx.fillStyle = line.colour || colourToHex(p.inscriptionColour);
       ctx.font = `${line.style || 'normal'} ${sz}px ${line.font || "'Times New Roman', serif"}`;
-      drawSpaced(ctx, (line.text || '').trim(), cx, y + rowH / 2, maxTextW, (parseFloat(line.ksp) || 0) * canvScale);
-      y += rowH;
+      drawSpaced(ctx, (line.text || '').trim(), cxLine, topYLine + rowH / 2, maxTextW, (parseFloat(line.ksp) || 0) * canvScale);
+      if (!hasPerLine) flowY += rowH;
     });
     ctx.restore();
     return;

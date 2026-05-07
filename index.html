@@ -672,8 +672,10 @@
             max-width: 100%; max-height: calc(92vh - 180px);
             border-radius: 8px;
             box-shadow: 0 4px 24px rgba(0,0,0,0.15);
-            cursor: crosshair;
+            cursor: default;
             object-fit: contain;
+            touch-action: none;  /* let pointer events handle drag, no page scroll */
+            user-select: none;
         }
         #inscDesignerModal .modal-footer {
             padding: 0.85rem 1.25rem;
@@ -7780,17 +7782,36 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             { v: "Arial, sans-serif",             label: "Arial" }
         ];
 
-        const ID_DEFAULT_LINE = () => ({
+        const ID_MAX_LINES = 15;
+
+        const ID_DEFAULT_LINE = (overrides) => Object.assign({
             text: '',
             font: "'Times New Roman', serif",
             style: 'normal',
             size: 22,
             ksp: 2,
-            colour: _idColour || '#c8a84b'
-        });
+            colour: _idColour || '#c8a84b',
+            posX: 50,   // horizontal centre, % of canvas width
+            posY: 35    // top edge, % of canvas height
+        }, overrides || {});
+
+        // Active drag state — { idx, offsetX, offsetY } in canvas pixels.
+        // Cleared on mouseup / mouseleave.
+        let _idDrag = null;
 
         function idAddLine() {
-            _idLines.push(ID_DEFAULT_LINE());
+            if (_idLines.length >= ID_MAX_LINES) return;
+            const last = _idLines[_idLines.length - 1];
+            const lsp  = parseFloat((document.getElementById('id_lsp') || {}).value) || 1.7;
+            const canvas = document.getElementById('id_canvas');
+            const canvH  = (canvas && canvas.height) || 700;
+            let posX = 50, posY = 35;
+            if (last) {
+                const stepPct = ((last.size || 22) * lsp / canvH) * 100;
+                posX = (typeof last.posX === 'number') ? last.posX : 50;
+                posY = Math.min(95, ((typeof last.posY === 'number') ? last.posY : 35) + stepPct);
+            }
+            _idLines.push(ID_DEFAULT_LINE({ posX, posY }));
             idRenderLinesList();
             idRender();
         }
@@ -7825,6 +7846,22 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
         function idRenderLinesList() {
             const host = document.getElementById('id_linesList');
             if (!host) return;
+
+            // Drive the line-count label and the +Add Line button state from
+            // the same source so they never disagree.
+            const countEl = document.getElementById('id_linesCount');
+            if (countEl) {
+                countEl.textContent = `— ${_idLines.length} / ${ID_MAX_LINES} — each line styled independently & draggable on the stone`;
+            }
+            const addBtn = document.getElementById('id_addLineBtn');
+            if (addBtn) {
+                const atCap = _idLines.length >= ID_MAX_LINES;
+                addBtn.disabled = atCap;
+                addBtn.style.opacity     = atCap ? '0.45' : '1';
+                addBtn.style.cursor      = atCap ? 'not-allowed' : 'pointer';
+                addBtn.title             = atCap ? `Maximum of ${ID_MAX_LINES} lines reached` : '';
+            }
+
             const fontOpts = (selected) => ID_FONT_OPTIONS.map(o =>
                 `<option value="${o.v.replace(/"/g,'&quot;')}" ${o.v === selected ? 'selected' : ''}>${o.label}</option>`
             ).join('');
@@ -7895,10 +7932,12 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                   <div class="id-controls">
 
                     <div class="id-card">
-                      <div class="id-card-header">📝 Inscription Lines <span style="font-size:0.75rem;font-weight:normal;color:#6b7280;margin-left:6px;">— each line styled independently</span></div>
+                      <div class="id-card-header">📝 Inscription Lines
+                        <span id="id_linesCount" style="font-size:0.75rem;font-weight:normal;color:#6b7280;margin-left:6px;">— 0 / 15 — each line styled independently &amp; draggable on the stone</span>
+                      </div>
                       <div class="id-card-body">
                         <div id="id_linesList"></div>
-                        <button type="button" onclick="idAddLine()" style="margin-top:8px;padding:6px 12px;background:#f0fdf4;border:1px solid #86efac;color:#15803d;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:pointer;">+ Add Line</button>
+                        <button type="button" id="id_addLineBtn" onclick="idAddLine()" style="margin-top:8px;padding:6px 12px;background:#f0fdf4;border:1px solid #86efac;color:#15803d;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:pointer;">+ Add Line</button>
                       </div>
                     </div>
 
@@ -7919,27 +7958,13 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                       <div class="id-card-header">📐 Position</div>
                       <div class="id-card-body">
                         <div>
-                          <label>Vertical Position (% from top)</label>
-                          <div class="slider-row">
-                            <input type="range" id="id_posY" min="10" max="90" value="35" oninput="idSv('id_posYV',this.value,'%');idRender()">
-                            <span class="slider-val" id="id_posYV">35%</span>
-                          </div>
-                        </div>
-                        <div>
-                          <label>Horizontal Centre (%)</label>
-                          <div class="slider-row">
-                            <input type="range" id="id_posX" min="20" max="80" value="50" oninput="idSv('id_posXV',this.value,'%');idRender()">
-                            <span class="slider-val" id="id_posXV">50%</span>
-                          </div>
-                        </div>
-                        <div>
                           <label>Max Text Width (%)</label>
                           <div class="slider-row">
                             <input type="range" id="id_maxW" min="20" max="90" value="52" oninput="idSv('id_maxWV',this.value,'%');idRender()">
                             <span class="slider-val" id="id_maxWV">52%</span>
                           </div>
                         </div>
-                        <p style="font-size:0.7rem;color:#8e8e93;">💡 Click on the canvas to reposition</p>
+                        <p style="font-size:0.7rem;color:#8e8e93;margin-top:6px;">💡 Drag any line on the stone to position it. Each line moves independently.</p>
                       </div>
                     </div>
 
@@ -7995,13 +8020,14 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             // Load stone image
             _idImage = null;
             _idAutoSaveArmed = false;
+            _idDrag = null;
             const img = new Image();
             img.onload = function() {
                 _idImage = img;
                 idSetupCanvas();
                 idApplyStoredDesign();
                 idRender();
-                document.getElementById('id_hint').textContent = '💡 Click canvas to reposition text · Changes auto-save';
+                document.getElementById('id_hint').textContent = '💡 Drag any line on the stone to position it · Changes auto-save';
                 // Arm auto-save after the initial render+layout settles so
                 // we only write back genuine user edits.
                 setTimeout(() => { _idAutoSaveArmed = true; }, 400);
@@ -8034,11 +8060,13 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 const el = document.getElementById(id);
                 return el ? el.value : fallback;
             };
+            // Strip underscore-prefixed transient fields (e.g. _bbox) before
+            // serialising — they're recomputed every render.
+            const cleanLine = (l) =>
+                Object.fromEntries(Object.entries(l).filter(([k]) => k[0] !== '_'));
             const design = {
-                lines:   _idLines.map(l => Object.assign({}, l)),
+                lines:   _idLines.map(cleanLine),
                 lsp:     parseFloat(get('id_lsp', 1.7)),
-                posX:    parseInt(get('id_posX', 50)),
-                posY:    parseInt(get('id_posY', 35)),
                 maxW:    parseInt(get('id_maxW', 52)),
                 shadow:  parseFloat(get('id_shad', 3)),
                 opacity: parseFloat(get('id_opac', 0.95))
@@ -8129,7 +8157,9 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
 
         // Apply persisted design settings to the open designer's controls.
         // Migrates older designs (text + global font/size/colour) into the
-        // new per-line model on first open.
+        // new per-line model on first open. Then computes per-line posX/posY
+        // for any line missing them, reproducing the legacy block flow so the
+        // existing layout looks identical on first open.
         function idApplyStoredDesign() {
             const d = (currentOrder && currentOrder.inscriptionDesign) || null;
             const formText = ((document.getElementById('f_inscText') || {}).value || '').trim();
@@ -8140,7 +8170,7 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             } else if (d && typeof d === 'object' && (d.text || d.font || d.size)) {
                 // Legacy single-style design — split text into lines, apply globals to each
                 const txt = (d.text || formText || '').split('\n');
-                _idLines = (txt.length ? txt : ['']).map(t => ({
+                _idLines = (txt.length ? txt : ['']).map(t => ID_DEFAULT_LINE({
                     text: t,
                     font: d.font || "'Times New Roman', serif",
                     style: d.style || 'normal',
@@ -8149,9 +8179,15 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                     colour: d.colour || _idColour || '#c8a84b'
                 }));
             } else if (formText) {
-                _idLines = formText.split('\n').map(t => Object.assign(ID_DEFAULT_LINE(), { text: t }));
+                _idLines = formText.split('\n').map(t => ID_DEFAULT_LINE({ text: t }));
             } else {
                 _idLines = [ID_DEFAULT_LINE()];
+            }
+
+            // Hard-cap to ID_MAX_LINES — defensive against an old design that
+            // somehow stored more lines than the current cap allows.
+            if (_idLines.length > ID_MAX_LINES) {
+                _idLines = _idLines.slice(0, ID_MAX_LINES);
             }
 
             // 2. Apply global controls
@@ -8167,12 +8203,27 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             };
             if (d) {
                 setVal('id_lsp',  d.lsp,    '×');
-                setVal('id_posX', d.posX,   '%');
-                setVal('id_posY', d.posY,   '%');
                 setVal('id_maxW', d.maxW,   '%');
                 setVal('id_shad', d.shadow, 'px');
                 setVal('id_opac', d.opacity);
             }
+
+            // 3. Migrate per-line positions: any line missing posX/posY gets
+            //    placed using the legacy block-flow math so existing orders
+            //    open looking identical to before.
+            const canvas = document.getElementById('id_canvas');
+            const canvH  = (canvas && canvas.height) || 700;
+            const lspVal = parseFloat((document.getElementById('id_lsp') || {}).value) || 1.7;
+            const blockX = (d && typeof d.posX === 'number') ? d.posX : 50;
+            const blockY = (d && typeof d.posY === 'number') ? d.posY : 35;
+            let yPct = blockY;
+            _idLines.forEach(line => {
+                if (typeof line.posX !== 'number') line.posX = blockX;
+                if (typeof line.posY !== 'number') {
+                    line.posY = yPct;
+                }
+                yPct = Math.min(95, line.posY + ((line.size || 22) * lspVal / canvH) * 100);
+            });
 
             idRenderLinesList();
         }
@@ -8202,20 +8253,76 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             canvas.width  = _idImage.width  * scale;
             canvas.height = _idImage.height * scale;
 
-            canvas.addEventListener('click', function(e) {
+            const toCanvas = (clientX, clientY) => {
                 const rect = canvas.getBoundingClientRect();
-                const sx = canvas.width  / rect.width;
-                const sy = canvas.height / rect.height;
-                const cx = (e.clientX - rect.left) * sx;
-                const cy = (e.clientY - rect.top)  * sy;
-                const px = Math.round((cx / canvas.width)  * 100);
-                const py = Math.round((cy / canvas.height) * 100);
-                const pxEl = document.getElementById('id_posX');
-                const pyEl = document.getElementById('id_posY');
-                if (pxEl) { pxEl.value = px; document.getElementById('id_posXV').textContent = px + '%'; }
-                if (pyEl) { pyEl.value = py; document.getElementById('id_posYV').textContent = py + '%'; }
+                return {
+                    x: (clientX - rect.left) * (canvas.width  / rect.width),
+                    y: (clientY - rect.top)  * (canvas.height / rect.height)
+                };
+            };
+
+            const startDrag = (x, y) => {
+                const idx = idHitTest(x, y);
+                if (idx < 0) return false;
+                const line = _idLines[idx];
+                const lineCx   = (line.posX / 100) * canvas.width;
+                const lineTopY = (line.posY / 100) * canvas.height;
+                _idDrag = { idx, offsetX: x - lineCx, offsetY: y - lineTopY };
+                canvas.style.cursor = 'grabbing';
                 idRender();
+                return true;
+            };
+
+            const moveDrag = (x, y) => {
+                if (!_idDrag) return;
+                const line = _idLines[_idDrag.idx];
+                if (!line) return;
+                const newCx   = x - _idDrag.offsetX;
+                const newTopY = y - _idDrag.offsetY;
+                line.posX = Math.max(0, Math.min(100, (newCx   / canvas.width)  * 100));
+                line.posY = Math.max(0, Math.min(100, (newTopY / canvas.height) * 100));
+                idRender();
+            };
+
+            const endDrag = () => {
+                if (!_idDrag) return;
+                _idDrag = null;
+                canvas.style.cursor = 'default';
+                idRender();  // final render also schedules auto-save
+            };
+
+            canvas.addEventListener('pointerdown', (e) => {
+                const { x, y } = toCanvas(e.clientX, e.clientY);
+                if (startDrag(x, y)) {
+                    try { canvas.setPointerCapture(e.pointerId); } catch(_) {}
+                    e.preventDefault();
+                }
             });
+            canvas.addEventListener('pointermove', (e) => {
+                const { x, y } = toCanvas(e.clientX, e.clientY);
+                if (_idDrag) {
+                    moveDrag(x, y);
+                    e.preventDefault();
+                } else {
+                    canvas.style.cursor = idHitTest(x, y) >= 0 ? 'grab' : 'default';
+                }
+            });
+            canvas.addEventListener('pointerup',     endDrag);
+            canvas.addEventListener('pointercancel', endDrag);
+            canvas.addEventListener('pointerleave', () => {
+                if (!_idDrag) canvas.style.cursor = 'default';
+            });
+        }
+
+        // Hit-test: returns index of topmost (last-drawn) line whose bbox
+        // contains (x, y), or -1 if no hit. Bboxes are populated by idRender.
+        function idHitTest(x, y) {
+            for (let i = _idLines.length - 1; i >= 0; i--) {
+                const b = _idLines[i] && _idLines[i]._bbox;
+                if (!b) continue;
+                if (x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1) return i;
+            }
+            return -1;
         }
 
         function idScheduleAutoSave() {
@@ -8242,20 +8349,16 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             idScheduleAutoSave();
 
             const lineSpacing = parseFloat((document.getElementById('id_lsp')  || {}).value || 1.7);
-            const posXpct   = parseInt((document.getElementById('id_posX') || {}).value || 50) / 100;
-            const posYpct   = parseInt((document.getElementById('id_posY') || {}).value || 35) / 100;
             const maxWpct   = parseInt((document.getElementById('id_maxW') || {}).value || 52) / 100;
             const shadowBlur = parseFloat((document.getElementById('id_shad') || {}).value || 3);
             const opacity   = parseFloat((document.getElementById('id_opac') || {}).value || 0.95);
 
             const canvScale  = canvas.width / 560;
-            const cx = canvas.width  * posXpct;
-            const startY = canvas.height * posYpct;
             const maxW = canvas.width * maxWpct;
 
-            // Each line gets its own font/size/style/colour/ksp; line spacing
-            // is global and pins from the largest size on each row so big lines
-            // don't crash into smaller ones above.
+            // Each line uses its own (posX, posY) — drag-and-drop on the
+            // canvas updates those values directly. textBaseline is 'middle'
+            // so the actual draw y is the line's top + rowH/2.
             ctx.save();
             ctx.globalAlpha  = opacity;
             ctx.textAlign    = 'center';
@@ -8267,17 +8370,46 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 ctx.shadowOffsetY = 1 * canvScale;
             }
 
-            let y = startY;
-            (_idLines.length ? _idLines : [ID_DEFAULT_LINE()]).forEach((line) => {
+            const lines = _idLines.length ? _idLines : [ID_DEFAULT_LINE()];
+            lines.forEach((line) => {
                 const scaledSize = Math.round((line.size || 22) * canvScale);
                 const rowH = scaledSize * lineSpacing;
+                const lineCx   = ((typeof line.posX === 'number' ? line.posX : 50) / 100) * canvas.width;
+                const lineTopY = ((typeof line.posY === 'number' ? line.posY : 35) / 100) * canvas.height;
                 ctx.fillStyle = line.colour || _idColour || '#c8a84b';
                 ctx.font = `${line.style || 'normal'} ${scaledSize}px ${line.font || "'Times New Roman', serif"}`;
-                idDrawTextSpaced(ctx, (line.text || '').trim(), cx, y + rowH / 2, maxW, (line.ksp || 0) * canvScale);
-                y += rowH;
+                const trimmed = (line.text || '').trim();
+                idDrawTextSpaced(ctx, trimmed, lineCx, lineTopY + rowH / 2, maxW, (line.ksp || 0) * canvScale);
+
+                // Hit-test bbox: hugs the visible text width capped at maxW.
+                // Empty lines still get a minimum grabbable area so the user
+                // can drag a line they haven't typed into yet.
+                const widthEst = trimmed
+                    ? ctx.measureText(trimmed).width + Math.max(0, trimmed.length - 1) * (line.ksp || 0) * canvScale
+                    : 0;
+                const visibleW = trimmed ? Math.min(widthEst, maxW) : Math.max(80, scaledSize * 2);
+                const halfW = visibleW / 2;
+                const padY  = Math.max(4, scaledSize * 0.15);
+                line._bbox = {
+                    x0: lineCx - halfW,
+                    y0: lineTopY - padY,
+                    x1: lineCx + halfW,
+                    y1: lineTopY + rowH + padY
+                };
             });
 
             ctx.restore();
+
+            // Drag affordance — dashed outline around the line being dragged
+            if (_idDrag && lines[_idDrag.idx] && lines[_idDrag.idx]._bbox) {
+                const b = lines[_idDrag.idx]._bbox;
+                ctx.save();
+                ctx.strokeStyle = 'rgba(74, 124, 47, 0.9)';
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([4, 4]);
+                ctx.strokeRect(b.x0 - 4, b.y0 - 4, (b.x1 - b.x0) + 8, (b.y1 - b.y0) + 8);
+                ctx.restore();
+            }
         }
 
         function idDrawTextSpaced(ctx, text, cx, y, maxWidth, spacing) {
@@ -8347,16 +8479,18 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 ctx.drawImage(stone, 0, 0, canvas.width, canvas.height);
 
                 const lineSpacing = parseFloat(design.lsp) || 1.7;
-                const posX = (parseFloat(design.posX) || 50) / 100;
-                const posY = (parseFloat(design.posY) || 35) / 100;
+                // Legacy block-flow fallback for older designs that don't
+                // carry per-line posX/posY.
+                const blockX = (parseFloat(design.posX) || 50) / 100;
+                const blockY = (parseFloat(design.posY) || 35) / 100;
                 const maxW = (parseFloat(design.maxW) || 52) / 100;
                 const shadow = parseFloat(design.shadow) || 0;
                 const opacity = parseFloat(design.opacity) || 0.95;
 
                 // Match the designer's coordinate system (canvas was 560 wide there)
                 const canvScale = canvas.width / 560;
-                const cx = canvas.width * posX;
-                const startY = canvas.height * posY;
+                const blockCx   = canvas.width * blockX;
+                let flowY      = canvas.height * blockY;
                 const maxWidth = canvas.width * maxW;
 
                 ctx.save();
@@ -8370,14 +8504,16 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                     ctx.shadowOffsetY = canvScale;
                 }
 
-                let y = startY;
                 (design.lines || []).forEach(line => {
                     const sz = Math.round((parseFloat(line.size) || 22) * canvScale);
                     const rowH = sz * lineSpacing;
+                    const hasPerLine = (typeof line.posX === 'number' && typeof line.posY === 'number');
+                    const cxLine   = hasPerLine ? canvas.width  * (line.posX / 100) : blockCx;
+                    const topYLine = hasPerLine ? canvas.height * (line.posY / 100) : flowY;
                     ctx.fillStyle = line.colour || '#c8a84b';
                     ctx.font = `${line.style || 'normal'} ${sz}px ${line.font || "'Times New Roman', serif"}`;
-                    idDrawTextSpaced(ctx, (line.text || '').trim(), cx, y + rowH / 2, maxWidth, (parseFloat(line.ksp) || 0) * canvScale);
-                    y += rowH;
+                    idDrawTextSpaced(ctx, (line.text || '').trim(), cxLine, topYLine + rowH / 2, maxWidth, (parseFloat(line.ksp) || 0) * canvScale);
+                    if (!hasPerLine) flowY += rowH;
                 });
                 ctx.restore();
 
@@ -8391,16 +8527,24 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
         function idReset() {
             const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
             set('id_lsp', 1.7);
-            set('id_posX', 50); set('id_posY', 35); set('id_maxW', 52);
+            set('id_maxW', 52);
             set('id_shad', 3);  set('id_opac', 0.95);
             idSv('id_lspV','1.70','×');
-            idSv('id_posXV','50','%'); idSv('id_posYV','35','%'); idSv('id_maxWV','52','%');
+            idSv('id_maxWV','52','%');
             idSv('id_shadV','3','px'); idSv('id_opacV','95','%');
             _idColour = '#c8a84b';
-            // Reset every line back to defaults but keep the user's text
-            _idLines = (_idLines.length ? _idLines : [ID_DEFAULT_LINE()]).map(l =>
-                Object.assign(ID_DEFAULT_LINE(), { text: l.text || '' })
-            );
+            // Reset every line back to defaults (keep text), then re-stack
+            // them vertically from posY=35 so they don't all overlap at the
+            // default position.
+            const canvas = document.getElementById('id_canvas');
+            const canvH  = (canvas && canvas.height) || 700;
+            const lspVal = 1.7;
+            let yPct = 35;
+            _idLines = (_idLines.length ? _idLines : [ID_DEFAULT_LINE()]).map(l => {
+                const fresh = ID_DEFAULT_LINE({ text: l.text || '', posX: 50, posY: yPct });
+                yPct = Math.min(95, yPct + (fresh.size * lspVal / canvH) * 100);
+                return fresh;
+            });
             idRenderLinesList();
             idRender();
         }
