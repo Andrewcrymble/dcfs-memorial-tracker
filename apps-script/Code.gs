@@ -175,6 +175,7 @@ function doPost(e) {
     if (action === "storeEstimatePdf")    return storeEstimatePdf(body.orderId, body.ref, body.pdfBase64);
     if (action === "notifyMason")         return notifyMason(body.orderId, body.triggeredBy, !!body.force);
     if (action === "submitEstimateChanges") return submitEstimateChanges(body.orderId, body.changes);
+    if (action === "getProofImage")        return getProofImage(body.orderId, body.fileId);
     return respond(false, "Unknown action");
   } catch (err) {
     return respond(false, err.toString());
@@ -1088,6 +1089,54 @@ function submitProofResponse(orderId, approved, message) {
       return respond(true, approved ? 'Proof approved' : 'Changes requested recorded');
     }
     return respond(false, 'Order not found');
+  } catch (err) {
+    return respond(false, err.toString());
+  }
+}
+
+// ============================================================
+// PROOF IMAGE FETCH (server-side, no CORS)
+// Returns the order's approved Proof file as a base64 PNG/JPEG so the
+// frontend can embed it on the Mason Job Card. Handles both image
+// proofs (returned as the original blob) and PDF proofs (returned as
+// the Drive-rendered first-page thumbnail).
+// ============================================================
+function getProofImage(orderId, fileId) {
+  try {
+    // Resolve fileId from the order if not provided directly
+    if (!fileId && orderId) {
+      const sheet   = getOrCreateSheet();
+      const data    = sheet.getDataRange().getValues();
+      const headers = data[0];
+      const filesIdx = headers.indexOf('Files');
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) !== String(orderId)) continue;
+        if (filesIdx >= 0) {
+          try {
+            const files = JSON.parse(String(data[i][filesIdx] || '[]'));
+            const pf = (files || []).find(f => f && f.type === 'Proof');
+            if (pf && pf.fileId) fileId = pf.fileId;
+          } catch (e) {}
+        }
+        break;
+      }
+    }
+    if (!fileId) return respond(false, 'No proof file fileId found');
+
+    const file = DriveApp.getFileById(fileId);
+    const mime = file.getMimeType() || '';
+    let blob;
+    if (mime.indexOf('image/') === 0) {
+      blob = file.getBlob();
+    } else {
+      // PDF or other — Drive renders first-page thumbnail as PNG
+      blob = file.getThumbnail();
+    }
+    if (!blob) return respond(false, 'Could not generate thumbnail for ' + mime);
+
+    const outMime = blob.getContentType() || 'image/png';
+    const base64  = Utilities.base64Encode(blob.getBytes());
+    return respond(true, 'OK', { dataUrl: 'data:' + outMime + ';base64,' + base64, mime: outMime });
   } catch (err) {
     return respond(false, err.toString());
   }
