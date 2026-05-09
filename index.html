@@ -6688,7 +6688,36 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
         // MASON JOB CARD PDF GENERATOR
         // ============================================================
 
-        function generateMasonJobCard() {
+        // Fetch a Drive file as a base64 image via the thumbnail endpoint.
+        // Works for both image proofs and PDF proofs (Drive renders the
+        // first page as a thumbnail). Returns null if the fetch fails so
+        // the job card can fall back gracefully.
+        async function fetchDriveThumbAsDataUrl(fileId, maxWidth = 1600) {
+            try {
+                const url = `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w${maxWidth}`;
+                const resp = await fetch(url);
+                if (!resp.ok) return null;
+                const blob = await resp.blob();
+                const dataUrl = await new Promise((resolve, reject) => {
+                    const r = new FileReader();
+                    r.onload = () => resolve(r.result);
+                    r.onerror = reject;
+                    r.readAsDataURL(blob);
+                });
+                const dims = await new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+                    img.onerror = reject;
+                    img.src = dataUrl;
+                });
+                return { dataUrl, w: dims.w, h: dims.h };
+            } catch (e) {
+                console.warn('fetchDriveThumbAsDataUrl failed:', e);
+                return null;
+            }
+        }
+
+        async function generateMasonJobCard() {
             if (!currentOrder) { alert('Please select an order first'); return; }
             const totals = calculateOrderTotals(currentOrder);
             const { jsPDF } = window.jspdf;
@@ -6749,6 +6778,40 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 }
                 doc.setTextColor(0, 0, 0);
                 y += 16;
+            }
+
+            // ── Embed approved proof image (works for image + PDF proofs
+            //    via Drive's thumbnail endpoint) with a diagonal APPROVED
+            //    stamp over it. Silently skips if the fetch fails or no
+            //    fileId is available — banner above still flags status.
+            if (proofFile && proofFile.approved && proofFile.fileId) {
+                const thumb = await fetchDriveThumbAsDataUrl(proofFile.fileId, 1600);
+                if (thumb && thumb.w && thumb.h) {
+                    const maxW = 100, maxH = 75;
+                    const ratio = Math.min(maxW / thumb.w, maxH / thumb.h);
+                    const drawW = thumb.w * ratio;
+                    const drawH = thumb.h * ratio;
+                    const drawX = (210 - drawW) / 2;
+                    doc.addImage(thumb.dataUrl, 'PNG', drawX, y, drawW, drawH);
+
+                    // Thin green frame around the image
+                    doc.setDrawColor(22, 163, 74); doc.setLineWidth(0.5);
+                    doc.rect(drawX, y, drawW, drawH);
+
+                    // Diagonal APPROVED stamp (semi-transparent green)
+                    if (doc.GState && doc.setGState) {
+                        try { doc.setGState(new doc.GState({ opacity: 0.45 })); } catch(e) {}
+                    }
+                    doc.setFontSize(34); doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(22, 163, 74);
+                    doc.text('APPROVED', drawX + drawW / 2, y + drawH / 2 + 4,
+                             { align: 'center', angle: -18 });
+                    if (doc.GState && doc.setGState) {
+                        try { doc.setGState(new doc.GState({ opacity: 1 })); } catch(e) {}
+                    }
+                    doc.setTextColor(0, 0, 0); doc.setLineWidth(0.2);
+                    y += drawH + 6;
+                }
             }
 
             // ── Install date strip (only if set — Cemetery and Grave No now
