@@ -2564,10 +2564,23 @@
                     // ~50% more cards fit in the same vertical space.
                     const customerRef = [order.customerName, order.orderRef]
                         .filter(Boolean).join(' · ');
-                    return `<li class="order-item" data-order-id="${safeId}"${notesAttr} style="position:relative;border-left:3px solid ${borderColor};margin:0;border-radius:8px;padding:0.4rem 0.6rem;${archivedDim}">
+
+                    // Red flag for jobs with an unresolved proof change request
+                    const flaggedChanges = hasOpenProofChangeRequest(order);
+                    const cardBorder    = flaggedChanges ? '#dc2626' : borderColor;
+                    const cardBorderW   = flaggedChanges ? '4px' : '3px';
+                    const cardBg        = flaggedChanges ? 'background:#fef2f2;' : '';
+                    const changesBadge  = flaggedChanges
+                        ? `<span title="Customer requested changes — see Order Notes" style="background:#dc2626;color:white;font-size:0.6rem;font-weight:800;padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.05em;">⚠ Changes</span>`
+                        : '';
+
+                    return `<li class="order-item" data-order-id="${safeId}"${notesAttr} style="position:relative;border-left:${cardBorderW} solid ${cardBorder};${cardBg}margin:0;border-radius:8px;padding:0.4rem 0.6rem;${archivedDim}">
                         ${archiveBtnHtml}
                         <div class="order-item-top" style="margin-bottom:0.1rem;${showArchiveBtn?'padding-right:26px;':''}">
-                            <div class="order-name" style="font-size:0.78rem;line-height:1.2;">${order.deceasedName||'Unknown'}</div>
+                            <div class="order-name" style="font-size:0.78rem;line-height:1.2;display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
+                                <span>${order.deceasedName||'Unknown'}</span>
+                                ${changesBadge}
+                            </div>
                             ${daysBadge}
                         </div>
                         <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;line-height:1.2;">
@@ -2615,6 +2628,37 @@
             if (OUTLOOK_ENABLED) {
                 try { renderDashboardInbox(); } catch(e) { console.warn('Inbox render error:', e); }
             }
+        }
+
+        // True when the order has an unresolved proof CHANGES REQUESTED
+        // entry — used by the kanban to flag jobs in red and by the
+        // Change Requests panel. Mirrors the resolution rules below.
+        function hasOpenProofChangeRequest(order) {
+            if (!order || order.archived) return false;
+            const log = (order.log || []).slice().sort((a, b) => {
+                const tA = new Date(a.ts).getTime(); const tB = new Date(b.ts).getTime();
+                return (isNaN(tA) ? 0 : tA) - (isNaN(tB) ? 0 : tB);
+            });
+            for (let i = 0; i < log.length; i++) {
+                const t = String((log[i] || {}).text || '');
+                const isEstimateReq = /ESTIMATE CHANGES REQUESTED/i.test(t);
+                const isProofReq    = /CHANGES REQUESTED/i.test(t) && !isEstimateReq;
+                if (!isProofReq) continue;
+                let resolved = false;
+                for (let j = i + 1; j < log.length; j++) {
+                    const lt = String((log[j] || {}).text || '');
+                    if (/Marked change request resolved/i.test(lt)
+                        || /Status changed/i.test(lt)
+                        || /Proof approved/i.test(lt)
+                        || /PROOF APPROVED/.test(lt)
+                        || /Stripe payment received/i.test(lt)) {
+                        resolved = true;
+                        break;
+                    }
+                }
+                if (!resolved) return true;
+            }
+            return false;
         }
 
         // Change Requests panel — pulls every "CHANGES REQUESTED" entry from

@@ -1050,6 +1050,27 @@ function submitProofResponse(orderId, approved, message) {
         sheet.getRange(rowNum, logCol + 1).setValue(existing ? existing + ' | ' + entry : entry);
       }
 
+      // On changes requested, also append a Note Entry so the request shows
+      // in the order's Notes section and the kanban hover tooltip.
+      if (!approved) {
+        const noteCol = headers.indexOf('Note Entries');
+        if (noteCol >= 0) {
+          let notes = [];
+          try {
+            const raw = String(data[i][noteCol] || '[]');
+            notes = JSON.parse(raw);
+            if (!Array.isArray(notes)) notes = [];
+          } catch (e) { notes = []; }
+          notes.push({
+            id:     String(Date.now()),
+            ts:     new Date().toISOString(),
+            author: 'Customer',
+            text:   '\u26a0\ufe0f Proof changes requested: ' + (message || 'No details given')
+          });
+          sheet.getRange(rowNum, noteCol + 1).setValue(JSON.stringify(notes));
+        }
+      }
+
       // Update Last Updated
       const luCol = headers.indexOf('Last Updated');
       if (luCol >= 0) sheet.getRange(rowNum, luCol + 1)
