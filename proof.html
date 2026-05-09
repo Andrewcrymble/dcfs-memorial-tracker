@@ -728,8 +728,28 @@ function renderProof(p) {
   document.getElementById('loadingView').style.display = 'none';
   document.getElementById('mainView').style.display   = 'flex';
 
-  // Load stone image and draw canvas
-  loadStoneCanvas(p);
+  // If an uploaded Proof file is present, show it instead of the canvas
+  if (p.proofFileUrl) {
+    showUploadedProof(p.proofFileUrl);
+  } else {
+    loadStoneCanvas(p);
+  }
+}
+
+// ── UPLOADED PROOF FILE (overrides canvas) ──
+// Drive view URLs (.../file/d/{id}/view) are rewritten to the embeddable
+// preview URL (.../file/d/{id}/preview) so both PDFs and images render
+// inline in the iframe.
+function showUploadedProof(viewUrl) {
+  const m = viewUrl.match(/\/file\/d\/([^/]+)/);
+  const embedUrl = m ? ('https://drive.google.com/file/d/' + m[1] + '/preview') : viewUrl;
+
+  const wrap = document.getElementById('canvasWrap');
+  if (!wrap) return;
+  wrap.innerHTML =
+    '<iframe src="' + embedUrl + '" ' +
+    'style="width:100%;height:520px;border:0;border-radius:8px;background:#000;" ' +
+    'allow="autoplay" allowfullscreen></iframe>';
 }
 
 // Stone-type → image filename mapping. Mirrors STONE_IMAGES in

@@ -977,12 +977,21 @@ function getProofData(orderId, callback) {
       const stripeLinkRaw = get(row, 'Stripe Link ID') || '';
       const stripePayUrl  = stripeLinkRaw.startsWith('http') ? stripeLinkRaw : '';
 
-      // Get estimate PDF URL from Files field
+      // Get estimate PDF URL and uploaded proof file URL from Files field.
+      // An uploaded "Proof" file (if present) overrides the canvas-rendered
+      // design proof on the customer page.
       let estimatePdfUrl = '';
+      let proofFileUrl   = '';
+      let proofFileName  = '';
       try {
         const files = JSON.parse(get(row, 'Files') || '[]');
-        const estFile = files.find(f => f.type === 'Estimate PDF');
+        const estFile   = files.find(f => f.type === 'Estimate PDF');
         if (estFile) estimatePdfUrl = estFile.viewUrl || estFile.downloadUrl || '';
+        const proofFile = files.find(f => f.type === 'Proof');
+        if (proofFile) {
+          proofFileUrl  = proofFile.viewUrl || proofFile.driveUrl || proofFile.downloadUrl || '';
+          proofFileName = proofFile.name || '';
+        }
       } catch(e) {}
 
       const proof = {
@@ -1005,7 +1014,9 @@ function getProofData(orderId, callback) {
         depositAmount:     depositAmt,
         stripePaymentUrl:  stripePayUrl,
         balanceDue:        Math.max(0, totalSell - depositPaid),
-        estimatePdfUrl:    estimatePdfUrl
+        estimatePdfUrl:    estimatePdfUrl,
+        proofFileUrl:      proofFileUrl,
+        proofFileName:     proofFileName
       };
       return send({ success: true, proof });
     }
