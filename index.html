@@ -2181,7 +2181,8 @@
 
                     document.head.appendChild(script);
 
-                    // Timeout after 15s — show error with retry
+                    // Timeout after 90s — Apps Script can be slow with large
+                    // sheets. Raised from 15s while the script is optimised.
                     setTimeout(() => {
                         if (script.parentNode) script.parentNode.removeChild(script);
                         if (window[callbackName]) {
@@ -2195,7 +2196,7 @@
                                 </li>`;
                             reject('timeout');
                         }
-                    }, 15000);
+                    }, 90000);
 
                 } catch (error) {
                     console.error('Error loading orders:', error);
