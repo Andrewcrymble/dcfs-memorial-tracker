@@ -4021,7 +4021,16 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 html += `<div class="price-line"><span class="price-line-label">${inscType}</span><span class="price-line-amount">£${inscPrice.toFixed(2)}</span></div>`;
             }
 
-            const cemFee = parseFloat(order.cemeteryFee) || 0;
+            // Cemetery fee: live price-book lookup so changes propagate
+            // to existing orders. Fall back to the stored value when the
+            // order's cemetery isn't in the book.
+            const storedCemFee = parseFloat(order.cemeteryFee) || 0;
+            let cemFee = 0;
+            if (order.cemetery && priceBook && priceBook.Cemetery_Fees) {
+                const cem = priceBook.Cemetery_Fees.find(c => c.location === order.cemetery);
+                if (cem) cemFee = parseFloat(cem.fee || cem.Fee) || 0;
+            }
+            if (!cemFee) cemFee = storedCemFee;
             if (cemFee > 0) {
                 html += `<div class="price-line"><span class="price-line-label">Cemetery Fee (${order.cemetery || ''})</span><span class="price-line-amount">£${cemFee.toFixed(2)}</span></div>`;
             }
@@ -4040,7 +4049,9 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 });
             }
 
-            const displayTotal = parseFloat(order.totalSellPrice || order.totalPrice) || total;
+            // Apply live-cemetery-fee delta so the total matches the line above
+            const storedTotal = parseFloat(order.totalSellPrice || order.totalPrice) || total;
+            const displayTotal = storedTotal - storedCemFee + cemFee;
             html += `<div class="price-total-line"><span class="label">Total</span><span class="amount">£${displayTotal.toFixed(2)}</span></div>`;
 
             const deposit = parseFloat(order.depositPaid) || 0;
