@@ -689,8 +689,11 @@ function renderProof(p) {
     statusEl.textContent = '⏳ Awaiting Your Approval';
   }
 
-  // Payment card — use URL params as fallback if sheet fields are empty
-  const totalSell  = p.totalSellPrice  || window._totalParam  || 0;
+  // Payment card — the URL ?total= is computed live from the price book
+  // by getProofUrl in the main app, so it's always the freshest figure.
+  // Prefer it over the stored sheet snapshot; only fall back when the
+  // proof link was shared without a total param.
+  const totalSell  = window._totalParam || parseFloat(p.totalSellPrice) || 0;
   const stripeUrl  = p.stripePaymentUrl || window._payUrlParam || '';
   const depositAmt = p.depositAmount   || (totalSell > 0 ? Math.round(totalSell / 2 * 100) / 100 : 0);
 
