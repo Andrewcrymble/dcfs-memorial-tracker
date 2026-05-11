@@ -3987,54 +3987,62 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             return colour;
         }
 
-        // Render price breakdown — supports both old and new Apps Script field names
+        // Render price breakdown — every line follows the live price book.
+        // Each line prefers the value computed from the current price book;
+        // if that's 0 (item removed from the book, or price book not yet
+        // loaded), it falls back to the value stored on the order so the
+        // panel never goes blank.
         function renderPriceBreakdown(order, total) {
             let html = '';
 
-            // Headstone: new field = hsSellPrice, old field = sellPrice
-            const hsPrice = parseFloat(order.hsSellPrice || order.sellPrice) || 0;
+            // Live totals from the current price book. Wrapped in try/catch
+            // because priceBook may not be loaded on the very first render.
+            let live = null;
+            try { live = calculateOrderTotals(order); } catch (e) { live = null; }
+            const lb = live?.breakdown || {};
+
+            // Headstone
+            const hsPrice = (lb.headstone?.sell || 0) || parseFloat(order.hsSellPrice || order.sellPrice) || 0;
             if (hsPrice > 0) {
                 const hsLabel = (order.hsType && order.hsSize) ? `${order.hsType} ${order.hsSize}` : 'Headstone';
                 html += `<div class="price-line"><span class="price-line-label">Headstone (${hsLabel})</span><span class="price-line-amount">£${hsPrice.toFixed(2)}</span></div>`;
             }
 
-            const surroundPrice = parseFloat(order.surroundSellPrice) || 0;
+            // Surround
+            const surroundPrice = (lb.surround?.sell || 0) || parseFloat(order.surroundSellPrice) || 0;
             if (surroundPrice > 0) {
                 const graniteNote = order.surroundGranite ? ' + Granite' : '';
                 html += `<div class="price-line"><span class="price-line-label">Surround (${order.surroundType || ''}${graniteNote})</span><span class="price-line-amount">£${surroundPrice.toFixed(2)}</span></div>`;
             }
 
-            const stonePrice = parseFloat(order.stoneSellPrice) || 0;
+            // Stone / chippings
+            const stonePrice = (lb.stone?.sell || 0) || parseFloat(order.stoneSellPrice) || 0;
             if (stonePrice > 0) {
                 html += `<div class="price-line"><span class="price-line-label">Stone / Chippings (${order.stoneType || ''})</span><span class="price-line-amount">£${stonePrice.toFixed(2)}</span></div>`;
             }
 
-            const accPrice = parseFloat(order.accessoriesSellPrice) || 0;
+            // Accessories
+            const accPrice = (lb.accessories?.sell || 0) || parseFloat(order.accessoriesSellPrice) || 0;
             if (accPrice > 0) {
                 const accLabel = (order.accessories || []).join(', ') || 'Accessories';
                 html += `<div class="price-line"><span class="price-line-label">${accLabel}</span><span class="price-line-amount">£${accPrice.toFixed(2)}</span></div>`;
             }
 
-            const inscPrice = parseFloat(order.inscriptionSellPrice || order.inscriptionCharge) || 0;
+            // Inscription
+            const inscPrice = (lb.inscription?.sell || 0) || parseFloat(order.inscriptionSellPrice || order.inscriptionCharge) || 0;
             if (inscPrice > 0) {
                 const inscType = order.inscriptionType === 'additional' ? 'Additional Inscription' : 'New Inscription';
                 html += `<div class="price-line"><span class="price-line-label">${inscType}</span><span class="price-line-amount">£${inscPrice.toFixed(2)}</span></div>`;
             }
 
-            // Cemetery fee: live price-book lookup so changes propagate
-            // to existing orders. Fall back to the stored value when the
-            // order's cemetery isn't in the book.
-            const storedCemFee = parseFloat(order.cemeteryFee) || 0;
-            let cemFee = 0;
-            if (order.cemetery && priceBook && priceBook.Cemetery_Fees) {
-                const cem = priceBook.Cemetery_Fees.find(c => c.location === order.cemetery);
-                if (cem) cemFee = parseFloat(cem.fee || cem.Fee) || 0;
-            }
-            if (!cemFee) cemFee = storedCemFee;
+            // Cemetery fee (already a live lookup inside calculateOrderTotals)
+            const cemFee = lb.cemeteryFee || parseFloat(order.cemeteryFee) || 0;
             if (cemFee > 0) {
                 html += `<div class="price-line"><span class="price-line-label">Cemetery Fee (${order.cemetery || ''})</span><span class="price-line-amount">£${cemFee.toFixed(2)}</span></div>`;
             }
 
+            // Additional services — not included in calculateOrderTotals, so
+            // still sourced from the stored value.
             const servicesPrice = parseFloat(order.servicesSellPrice) || 0;
             if (servicesPrice > 0) {
                 html += `<div class="price-line"><span class="price-line-label">Additional Services</span><span class="price-line-amount">£${servicesPrice.toFixed(2)}</span></div>`;
@@ -4049,9 +4057,14 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 });
             }
 
-            // Apply live-cemetery-fee delta so the total matches the line above
-            const storedTotal = parseFloat(order.totalSellPrice || order.totalPrice) || total;
-            const displayTotal = storedTotal - storedCemFee + cemFee;
+            // Total: sum live where available + services (stored). Falls back
+            // to the stored total if the live calc didn't run.
+            let displayTotal;
+            if (live) {
+                displayTotal = live.totalSell + servicesPrice;
+            } else {
+                displayTotal = parseFloat(order.totalSellPrice || order.totalPrice) || total;
+            }
             html += `<div class="price-total-line"><span class="label">Total</span><span class="amount">£${displayTotal.toFixed(2)}</span></div>`;
 
             const deposit = parseFloat(order.depositPaid) || 0;
