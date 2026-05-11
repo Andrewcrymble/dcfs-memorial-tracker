@@ -3460,9 +3460,15 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
 
             console.log('Rendering details for order:', currentOrder);
 
-            // Use stored total — support both old and new field names from Apps Script
+            // Prefer the live total computed from the current price book so
+            // price changes propagate without re-saving. Fall back to the
+            // stored snapshot if the live calc is unavailable (e.g. price
+            // book not yet loaded).
             const storedTotal = parseFloat(currentOrder.totalSellPrice || currentOrder.totalPrice) || 0;
-            const total = storedTotal > 0 ? storedTotal : calculateTotal(currentOrder);
+            const servicesPrice = parseFloat(currentOrder.servicesSellPrice) || 0;
+            let liveTotal = 0;
+            try { liveTotal = calculateOrderTotals(currentOrder).totalSell + servicesPrice; } catch (e) { liveTotal = 0; }
+            const total = liveTotal > 0 ? liveTotal : (storedTotal > 0 ? storedTotal : calculateTotal(currentOrder));
 
             const contentArea = document.getElementById('contentArea');
 
