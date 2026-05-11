@@ -1761,9 +1761,8 @@
                 const s = o.status || 'Enquiry';
                 if (counts[s] !== undefined) counts[s]++;
                 total++;
-                const val = parseFloat(o.totalSellPrice) || 0;
-                const paid = parseFloat(o.depositPaid) || 0;
-                const bal = Math.max(0, val - paid);
+                const val = getOrderTotal(o);
+                const bal = getOrderBalance(o);
                 if (activeStatuses.has(s)) {
                     totalVal += val;
                     outstanding += bal;
@@ -1863,16 +1862,9 @@
                     return;
                 }
 
-                // Recalc the customer total fresh — calculateOrderTotals
-                // pulls the cemetery fee from the price book even when the
-                // order's saved totalSellPrice predates the cemetery being
-                // selected. This makes the 50% deposit reflect the true
-                // amount the customer pays.
-                let total = parseFloat(currentOrder.totalSellPrice) || 0;
-                try {
-                    const t = calculateOrderTotals(currentOrder);
-                    if (t && t.totalSell > total) total = t.totalSell;
-                } catch (e) { console.warn('Recalc total for WhatsApp deposit failed:', e); }
+                // Live total so the WhatsApp deposit message reflects any
+                // current price-book changes.
+                const total = getOrderTotal(currentOrder);
                 const refDisplay = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
 
                 // 3. Upload to Drive via storeEstimatePdf — using text/plain
@@ -2329,8 +2321,8 @@
                 const safeOrderId = String(order.orderId || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 const status = order.status || order.Status || 'Enquiry';
 
-                // Payment info
-                const total    = parseFloat(order.totalSellPrice) || 0;
+                // Payment info — live total from current price book
+                const total    = getOrderTotal(order);
                 const paid     = parseFloat(order.depositPaid)    || 0;
                 const balance  = Math.max(0, total - paid);
                 const fmt      = n => '£' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -2465,7 +2457,7 @@
             // Render each column
             statuses.forEach(status => {
                 const orders = groups[status] || [];
-                const total = orders.reduce((sum,o) => sum + (parseFloat(o.totalSellPrice)||0), 0);
+                const total = orders.reduce((sum,o) => sum + getOrderTotal(o), 0);
 
                 // Installed and Completed have no kanban-cards column — only
                 // summary bars at the bottom of the board. Handle them first
@@ -2498,7 +2490,7 @@
 
                 listEl.innerHTML = orders.map(order => {
                     const safeId = String(order.orderId||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
-                    const orderTotal = parseFloat(order.totalSellPrice)||0;
+                    const orderTotal = getOrderTotal(order);
                     const paid  = parseFloat(order.depositPaid)||0;
                     const bal   = Math.max(0, orderTotal - paid);
 
@@ -3008,9 +3000,9 @@
 
             const totalCount = Object.values(groups).reduce((a, g) => a + g.length, 0);
             const totalValue = Object.values(groups).reduce((a, g) =>
-                a + g.reduce((s, o) => s + (parseFloat(o.totalSellPrice) || 0), 0), 0);
+                a + g.reduce((s, o) => s + getOrderTotal(o), 0), 0);
             const totalOutstanding = Object.values(groups).reduce((a, g) =>
-                a + g.reduce((s, o) => s + Math.max(0, (parseFloat(o.totalSellPrice)||0) - (parseFloat(o.depositPaid)||0)), 0), 0);
+                a + g.reduce((s, o) => s + getOrderBalance(o), 0), 0);
 
             const sections = statuses.map(status => {
                 const orders = groups[status];
@@ -3022,9 +3014,9 @@
                     return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
                 });
 
-                const sectionValue = orders.reduce((s, o) => s + (parseFloat(o.totalSellPrice) || 0), 0);
+                const sectionValue = orders.reduce((s, o) => s + getOrderTotal(o), 0);
                 const rows = orders.map(o => {
-                    const total = parseFloat(o.totalSellPrice) || 0;
+                    const total = getOrderTotal(o);
                     const paid  = parseFloat(o.depositPaid) || 0;
                     const balance = Math.max(0, total - paid);
                     // Latest note: prefer timestamped noteEntries, fall back to legacy notes
@@ -3313,7 +3305,7 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
 
         function renderPipelineChart(groups, colors, fmt) {
             const chartStatuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready'];
-            const values = chartStatuses.map(s => groups[s].reduce((sum,o)=>sum+(parseFloat(o.totalSellPrice)||0),0));
+            const values = chartStatuses.map(s => groups[s].reduce((sum,o)=>sum+getOrderTotal(o),0));
             const counts = chartStatuses.map(s => groups[s].length);
             const chartColors = chartStatuses.map(s => colors[s]);
 
@@ -3460,15 +3452,9 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
 
             console.log('Rendering details for order:', currentOrder);
 
-            // Prefer the live total computed from the current price book so
-            // price changes propagate without re-saving. Fall back to the
-            // stored snapshot if the live calc is unavailable (e.g. price
-            // book not yet loaded).
-            const storedTotal = parseFloat(currentOrder.totalSellPrice || currentOrder.totalPrice) || 0;
-            const servicesPrice = parseFloat(currentOrder.servicesSellPrice) || 0;
-            let liveTotal = 0;
-            try { liveTotal = calculateOrderTotals(currentOrder).totalSell + servicesPrice; } catch (e) { liveTotal = 0; }
-            const total = liveTotal > 0 ? liveTotal : (storedTotal > 0 ? storedTotal : calculateTotal(currentOrder));
+            // Live total from current price book (helper handles fallback
+            // to the stored snapshot when the price book isn't loaded).
+            const total = getOrderTotal(currentOrder) || calculateTotal(currentOrder);
 
             const contentArea = document.getElementById('contentArea');
 
@@ -4063,14 +4049,8 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 });
             }
 
-            // Total: sum live where available + services (stored). Falls back
-            // to the stored total if the live calc didn't run.
-            let displayTotal;
-            if (live) {
-                displayTotal = live.totalSell + servicesPrice;
-            } else {
-                displayTotal = parseFloat(order.totalSellPrice || order.totalPrice) || total;
-            }
+            // Total — live price-book total (helper handles fallback)
+            const displayTotal = getOrderTotal(order) || total;
             html += `<div class="price-total-line"><span class="label">Total</span><span class="amount">£${displayTotal.toFixed(2)}</span></div>`;
 
             const deposit = parseFloat(order.depositPaid) || 0;
@@ -6286,6 +6266,33 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
     };
 }
 
+        // Live customer total for an order. Computes from the current
+        // price book (so price changes propagate without re-saving each
+        // order), then adds Additional Services which aren't part of
+        // calculateOrderTotals. Falls back to the stored totalSellPrice
+        // when the live calc can't run (price book not yet loaded, item
+        // removed from the book, etc.) so the UI never shows £0 by
+        // mistake.
+        function getOrderTotal(order) {
+            if (!order) return 0;
+            const services = parseFloat(order.servicesSellPrice) || 0;
+            try {
+                const t = calculateOrderTotals(order);
+                if (t && Number.isFinite(t.totalSell) && t.totalSell > 0) {
+                    return t.totalSell + services;
+                }
+            } catch (e) { /* fall through */ }
+            return parseFloat(order.totalSellPrice || order.totalPrice) || 0;
+        }
+
+        // Outstanding balance using the live total. Used by sidebars,
+        // kanban cards, payment modals — anywhere we display "what's
+        // still owed". Always derives from the live total so cemetery /
+        // headstone / etc. price changes are reflected.
+        function getOrderBalance(order) {
+            return Math.max(0, getOrderTotal(order) - (parseFloat(order?.depositPaid) || 0));
+        }
+
         async function generateEstimate() {
             if (!currentOrder) { alert('Please select an order first'); return; }
             const totals = calculateOrderTotals(currentOrder);
@@ -6390,7 +6397,7 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
 
             // Payment QR — auto-create 50% deposit link
             const depositUrl = await autoGetDepositLink();
-            const depositAmt = currentOrder.stripePaymentAmount || (parseFloat(currentOrder.totalSellPrice||0)/2);
+            const depositAmt = currentOrder.stripePaymentAmount || (getOrderTotal(currentOrder)/2);
             const depositLbl = currentOrder.stripePaymentLabel || '50% Deposit';
             if (depositUrl) {
                 y = await addPdfPaymentQR(doc, y, depositUrl, depositLbl, depositAmt);
@@ -6683,7 +6690,7 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
 
             // Payment QR code — auto-create 50% deposit link if one doesn't exist yet
             const invDepositUrl = await autoGetDepositLink();
-            const invDepositAmt = currentOrder.stripePaymentAmount || (parseFloat(currentOrder.totalSellPrice||0)/2);
+            const invDepositAmt = currentOrder.stripePaymentAmount || (getOrderTotal(currentOrder)/2);
             const invDepositLbl = currentOrder.stripePaymentLabel || '50% Deposit';
             if (invDepositUrl) {
                 y = await addPdfPaymentQR(doc, y, invDepositUrl, invDepositLbl, invDepositAmt);
@@ -7266,18 +7273,18 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
         // ── RECORD PAYMENT MANUALLY ──────────────────────────────
         function recordPaymentManual() {
             if (!currentOrder) return;
-            const total   = parseFloat(currentOrder.totalSellPrice) || 0;
+            const total   = getOrderTotal(currentOrder);
             const deposit = parseFloat(currentOrder.depositPaid)    || 0;
             const balance = Math.max(0, total - deposit);
             const ref     = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
             const custName = currentOrder.customerName || currentOrder.customer || '';
             const decName  = currentOrder.deceasedName || currentOrder.deceased || '';
 
-            // ── Account-wide totals ──
+            // ── Account-wide totals (live price-book figures) ──
             let acctTotalSell = 0, acctTotalPaid = 0, acctTotalOutstanding = 0;
             let openOrders = 0;
             (allOrders || []).forEach(o => {
-                const oTotal = parseFloat(o.totalSellPrice) || 0;
+                const oTotal = getOrderTotal(o);
                 const oPaid  = parseFloat(o.depositPaid)    || 0;
                 const oBal   = Math.max(0, oTotal - oPaid);
                 acctTotalSell        += oTotal;
@@ -7421,10 +7428,10 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
 
             document.getElementById('recordPayModal').remove();
 
-            // Update order
+            // Update order — use live total so balance reflects current pricing
             const prevDeposit = parseFloat(currentOrder.depositPaid) || 0;
             const newDeposit  = prevDeposit + amt;
-            const total       = parseFloat(currentOrder.totalSellPrice) || 0;
+            const total       = getOrderTotal(currentOrder);
             const newBalance  = Math.max(0, total - newDeposit);
 
             currentOrder.depositPaid        = newDeposit;
@@ -7463,15 +7470,8 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
         function createPaymentLink() {
             if (!currentOrder) return;
 
-            // Recompute the customer total fresh — calculateOrderTotals
-            // pulls cemetery from the price book if not stored on the order,
-            // so the deposit reflects the real customer-pays figure even
-            // when the order's saved totalSellPrice is stale.
-            let total = parseFloat(currentOrder.totalSellPrice || 0);
-            try {
-                const t = calculateOrderTotals(currentOrder);
-                if (t && t.totalSell > total) total = t.totalSell;
-            } catch (e) { console.warn('Recalc total for payment link failed:', e); }
+            // Live total so the deposit reflects the current price book.
+            const total = getOrderTotal(currentOrder);
             const deposit = parseFloat(currentOrder.depositPaid || 0);
             const balance = Math.max(0, total - deposit);
 
@@ -7569,13 +7569,9 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
 
             // Always recompute the correct deposit amount FIRST so we can
             // verify any existing link is still right — orders that had a
-            // deposit link created before cemetery fees were folded in
-            // would otherwise keep returning a stale low-value link.
-            let total = parseFloat(currentOrder.totalSellPrice || 0);
-            try {
-                const t = calculateOrderTotals(currentOrder);
-                if (t && t.totalSell > total) total = t.totalSell;
-            } catch (e) { console.warn('Recalc total for deposit link failed:', e); }
+            // deposit link created before a price change would otherwise
+            // keep returning a stale link.
+            const total = getOrderTotal(currentOrder);
             if (total <= 0) return null;
 
             const amount = Math.round((total / 2) * 100) / 100;
@@ -7654,7 +7650,7 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                         deceasedName: currentOrder.deceasedName,
                         amountPence: Math.round(amount * 100),
                         paymentType: opt,
-                        totalSellPrice: parseFloat(currentOrder.totalSellPrice) || 0,
+                        totalSellPrice: getOrderTotal(currentOrder),
                         previousDeposit: parseFloat(currentOrder.depositPaid) || 0,
                         description: `${label} — ${currentOrder.deceasedName || 'Memorial'} (Ref: ${ref})`
                     })
@@ -7801,13 +7797,8 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             // Embed payment URL and total in link so proof page never needs sheet lookup
             const pay = o.stripePaymentUrl || '';
             if (pay) url += `&pay=${encodeURIComponent(pay)}`;
-            // Recompute the customer total fresh so cemetery fees that aren't
-            // yet stored on the order still make it into the proof link.
-            let total = parseFloat(o.totalSellPrice || 0);
-            try {
-                const t = calculateOrderTotals(o);
-                if (t && t.totalSell > total) total = t.totalSell;
-            } catch (e) { /* fall back to stored total */ }
+            // Live total so the proof page reflects any price-book changes.
+            const total = getOrderTotal(o);
             if (total > 0) url += `&total=${total}`;
             return url;
         }
