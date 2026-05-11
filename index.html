@@ -6184,16 +6184,16 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
     const stone = calculateStonePricing(order);
     const inscription = calculateInscriptionPricing(order);
     
-    // Cemetery fee (pass-through, no margin). Prefer the stored value
-    // on the order, but if it's 0/missing AND a cemetery is selected,
-    // look it up from the price book so older orders (or orders where
-    // the cemetery field was set without ever being re-saved) still
-    // include the fee in the breakdown and on the estimate.
-    let cemeteryFee = parseFloat(order.cemeteryFee) || 0;
-    if (!cemeteryFee && order.cemetery && priceBook && priceBook.Cemetery_Fees) {
+    // Cemetery fee (pass-through, no margin). Always prefer the live
+    // price book so fee changes propagate to existing orders. Fall back
+    // to the value stored on the order only when the cemetery isn't in
+    // the book (e.g. legacy cemetery names that were removed).
+    let cemeteryFee = 0;
+    if (order.cemetery && priceBook && priceBook.Cemetery_Fees) {
         const cem = priceBook.Cemetery_Fees.find(c => c.location === order.cemetery);
         if (cem) cemeteryFee = parseFloat(cem.fee || cem.Fee) || 0;
     }
+    if (!cemeteryFee) cemeteryFee = parseFloat(order.cemeteryFee) || 0;
     
     // Accessories (if present)
     let accessoriesCost = 0;
