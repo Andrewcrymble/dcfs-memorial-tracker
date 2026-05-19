@@ -22,6 +22,27 @@
         var SESSION_KEY = 'dcfs_session_user'; // sessionStorage — clears when window closes
         var selectedUser = '';
 
+        // SSO handoff from plans.crymbleandsons.com — if the planner sent
+        // us a ?ssoUser=<name> param we treat that as a successful login,
+        // skip the password screen, and strip the param so it can't be
+        // bookmarked or shared. This is a convenience hand-off, not
+        // hardened security (the tracker password is hard-coded above
+        // and the data behind the Apps Script is similarly reachable).
+        try {
+            var ssoMatch = (window.location.search || '').match(/[?&]ssoUser=([^&]+)/);
+            if (ssoMatch) {
+                var ssoName = decodeURIComponent(ssoMatch[1]);
+                if (ssoName) {
+                    sessionStorage.setItem(SESSION_KEY, ssoName);
+                    var cleanedSearch = window.location.search
+                        .replace(/[?&]ssoUser=[^&]*/, '')
+                        .replace(/^&/, '?');
+                    if (cleanedSearch === '?') cleanedSearch = '';
+                    history.replaceState({}, '', window.location.pathname + cleanedSearch + window.location.hash);
+                }
+            }
+        } catch (e) {}
+
         function getSessionUser() {
             try { return sessionStorage.getItem(SESSION_KEY) || ''; } catch(e){ return ''; }
         }
