@@ -3338,6 +3338,7 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
 </head>
 <body>
 <button class="print-btn" onclick="window.print()">🖨️ Print</button>
+<button class="print-btn" style="right:130px;background:#25d366;" onclick="if(window.opener&&window.opener.sendMasonReportToMason){this.disabled=true;this.textContent='⏳ Sending…';window.opener.sendMasonReportToMason();setTimeout(()=>{this.textContent='✓ Sent to Mason';},1200);}else{alert('Open this report from the tracker to enable sending.');}">💬 Send to Mason</button>
 
 <div class="top">
   <h1>DAVID CRYMBLE &amp; SONS<small>FUNERAL DIRECTORS &amp; MEMORIAL MASONS</small></h1>
@@ -3368,6 +3369,148 @@ ${sections || '<p style="color:#888;">No active mason jobs to report.</p>'}
             win.document.open();
             win.document.write(html);
             win.document.close();
+        }
+
+        // Collect the mason's active jobs as flat rows for the PDF/report.
+        function gatherMasonJobs() {
+            const statuses = ['Confirmed','In Design','Production','Ready'];
+            const masonCost = o => {
+                try { const t = calculateOrderTotals(o); if (t && Number.isFinite(t.totalCost) && t.totalCost > 0) return t.totalCost; } catch(e){}
+                return parseFloat(o.totalCostPrice) || 0;
+            };
+            const fmtDate = d => {
+                const dt = new Date(d);
+                if (!d || isNaN(dt.getTime())) return '—';
+                return dt.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+            };
+            const out = [];
+            statuses.forEach(status => {
+                const jobs = (allOrders || []).filter(o => !o.archived && o.status === status);
+                jobs.sort((a, b) => (new Date(a.installDate || '2999') - new Date(b.installDate || '2999')));
+                jobs.forEach(o => out.push({
+                    status,
+                    deceased: o.deceasedName || '—',
+                    ref: o.orderRef || '',
+                    headstone: [o.hsType, o.hsSize, colourDisplayName(o.hsColour, true) || o.hsColour, o.hsFinish].filter(Boolean).join(' · ') || '—',
+                    surroundStone: [o.surroundType ? (o.surroundType + (o.surroundGranite ? ' (granite)' : '')) : '', o.stoneType || ''].filter(Boolean).join(' · ') || '—',
+                    inscription: (o.inscriptionType === 'additional' ? 'Additional' : 'New') + (o.inscriptionLines ? ' · ' + o.inscriptionLines + ' lines' : ''),
+                    cemetery: [o.cemetery, o.graveNumber ? ('Grave ' + o.graveNumber) : ''].filter(Boolean).join(' · ') || '—',
+                    install: fmtDate(o.installDate),
+                    cost: masonCost(o),
+                    notes: [o.masonNotes || '', ...((o.masonNoteEntries || []).map(n => (n && n.text) ? n.text : ''))].filter(Boolean).join(' · ')
+                }));
+            });
+            return out;
+        }
+
+        // Build the Mason Job Report as a landscape PDF (jsPDF) and return the doc.
+        function buildMasonReportPdf() {
+            const rows = gatherMasonJobs();
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'landscape' });
+            const fmtMoney = n => '£' + (n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+            const today = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+
+            // Header
+            doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0,0,0);
+            doc.text('DAVID CRYMBLE & SONS', 148.5, 16, { align: 'center' });
+            doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(90,90,90);
+            doc.text('FUNERAL DIRECTORS & MEMORIAL MASONS', 148.5, 21, { align: 'center' });
+            doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(22,101,52);
+            doc.text('MASON JOB REPORT', 148.5, 30, { align: 'center' });
+            doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(120,120,120);
+            doc.text(`Generated ${today}  ·  Active jobs (Confirmed → Being Installed)`, 148.5, 35, { align: 'center' });
+            doc.setTextColor(180,83,9); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
+            doc.text('CONFIDENTIAL — Mason cost prices. Not for the customer.', 148.5, 40, { align: 'center' });
+            doc.setTextColor(0,0,0);
+
+            // Columns: [key, header, x, width, align]
+            const cols = [
+                ['deceased',      'Memorial For',     12, 34, 'left'],
+                ['ref',           'Ref',              46, 20, 'left'],
+                ['headstone',     'Headstone',        66, 46, 'left'],
+                ['surroundStone', 'Surround / Stone', 112, 36, 'left'],
+                ['inscription',   'Inscription',      148, 24, 'left'],
+                ['cemetery',      'Cemetery / Grave', 172, 32, 'left'],
+                ['install',       'Install',          204, 22, 'left'],
+                ['cost',          'Mason Cost',       226, 22, 'right'],
+                ['notes',         'Mason Notes',      250, 35, 'left'],
+            ];
+            const lineH = 4.0;
+
+            function drawHeaderRow(y) {
+                doc.setFillColor(22,101,52); doc.rect(12, y, 273, 7, 'F');
+                doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+                cols.forEach(c => doc.text(c[1], c[4] === 'right' ? c[2] + c[3] : c[2], y + 4.8, { align: c[4] }));
+                doc.setTextColor(0,0,0); doc.setFont('helvetica','normal');
+                return y + 7;
+            }
+
+            let y = 46;
+            if (!rows.length) {
+                doc.setFontSize(11); doc.text('No active mason jobs to report.', 148.5, 70, { align: 'center' });
+                dcsPdfFooter(doc);
+                return doc;
+            }
+            y = drawHeaderRow(y);
+
+            doc.setFontSize(7.5);
+            rows.forEach((r, i) => {
+                // wrap each cell, compute row height
+                const cells = cols.map(c => {
+                    const raw = c[0] === 'cost' ? fmtMoney(r.cost) : String(r[c[0]] || '');
+                    return doc.splitTextToSize(raw, c[3] - 2);
+                });
+                const rowH = Math.max(...cells.map(l => l.length)) * lineH + 3;
+                if (y + rowH > 198) { doc.addPage(); y = 16; y = drawHeaderRow(y); doc.setFontSize(7.5); }
+                if (i % 2 === 1) { doc.setFillColor(248,250,249); doc.rect(12, y, 273, rowH, 'F'); }
+                cols.forEach((c, ci) => {
+                    const align = c[4];
+                    const x = align === 'right' ? c[2] + c[3] : c[2];
+                    doc.text(cells[ci], x, y + 4, { align });
+                });
+                doc.setDrawColor(230,230,230); doc.setLineWidth(0.1); doc.line(12, y + rowH, 285, y + rowH);
+                y += rowH;
+            });
+
+            // Total
+            const total = rows.reduce((s, r) => s + (r.cost || 0), 0);
+            y += 2;
+            doc.setFont('helvetica','bold'); doc.setFontSize(8);
+            doc.text(`${rows.length} job${rows.length === 1 ? '' : 's'}`, 12, y + 3);
+            doc.text('Total Mason Cost: ' + fmtMoney(total), 248, y + 3, { align: 'right' });
+
+            dcsPdfFooter(doc);
+            return doc;
+        }
+
+        // Build the mason report PDF and send it to the mason's WhatsApp group
+        // via BeepMate's direct file POST (multipart) — no Drive needed.
+        async function sendMasonReportToMason() {
+            try {
+                const rows = gatherMasonJobs();
+                if (!rows.length) { alert('No active mason jobs to send.'); return; }
+                showToast('💬 Sending mason report…', 'info');
+
+                const doc = buildMasonReportPdf();
+                const filename = `MasonReport_${new Date().toISOString().slice(0,10)}.pdf`;
+                const blob = doc.output('blob');
+
+                // Text caption first (so the group sees context), then the PDF file.
+                const today = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+                await sendToWhatsApp(`🔨 *MASON JOB REPORT* — ${today}\n${rows.length} active job${rows.length === 1 ? '' : 's'}. PDF attached.`, BEEPMATE_CONFIG.masonId);
+
+                const fd = new FormData();
+                fd.append('file', blob, filename);
+                fd.append('key', BEEPMATE_CONFIG.apiKey);
+                fd.append('id', BEEPMATE_CONFIG.masonId);
+                await fetch(BEEPMATE_CONFIG.baseUrl, { method: 'POST', mode: 'no-cors', body: fd });
+
+                showToast('💬 Mason report sent to the mason on WhatsApp', 'success');
+            } catch (err) {
+                console.error('sendMasonReportToMason failed:', err);
+                showToast('⚠ Could not send the mason report', 'warn', 5000);
+            }
         }
 
         // Recent Activity feed on the main dashboard — pulls every log
