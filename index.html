@@ -554,11 +554,21 @@
 
         /* Right-click status menu (board + list cards) */
         .status-ctx-menu {
-            position: fixed; z-index: 9999; min-width: 190px;
+            position: fixed; z-index: 9999; min-width: 210px;
             background: #fff; border: 1px solid rgba(0,0,0,0.12);
             border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,0.18);
-            padding: 0.3rem;
+            padding: 0.3rem; max-height: 80vh; overflow-y: auto;
         }
+        .status-ctx-sub {
+            font-size: 0.62rem; font-weight: 700; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.06em;
+            padding: 0.3rem 0.55rem 0.15rem;
+        }
+        .status-ctx-divider { height: 1px; background: rgba(0,0,0,0.08); margin: 0.3rem 0.2rem; }
+        .status-ctx-ico { width: 1.1rem; text-align: center; flex-shrink: 0; }
+        .status-ctx-item.danger { color: #dc2626; }
+        .status-ctx-item[disabled] { opacity: 0.4; cursor: not-allowed; }
+        .status-ctx-item[disabled]:hover { background: none; }
         .status-ctx-head {
             font-size: 0.7rem; font-weight: 700; color: var(--text-muted);
             text-transform: uppercase; letter-spacing: 0.04em;
@@ -3824,6 +3834,21 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             'Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e','Completed':'#1e40af','Query':'#db2777'
         };
 
+        // Order actions offered in the right-click menu — the same buttons that
+        // sit in the order detail action bar. Each runs against the right-clicked
+        // order. `needsPhone` items are disabled when the order has no phone.
+        const ORDER_ACTIONS = [
+            { fn:'editOrder',                      icon:'✏️', label:'Edit Order' },
+            { fn:'generateEstimate',               icon:'📄', label:'Estimate' },
+            { fn:'generateMasonJobCard',           icon:'🔨', label:'Job Card' },
+            { fn:'generateInvoice',                icon:'🧾', label:'Invoice' },
+            { fn:'shareProofLink',                 icon:'🔗', label:'Share Proof' },
+            { fn:'sendEstimateToCustomerWhatsApp', icon:'💬', label:'WhatsApp Estimate', needsPhone:true },
+            { fn:'createPaymentLink',              icon:'💳', label:'Payment Link' },
+            { fn:'recordPaymentManual',            icon:'💰', label:'Record Payment' },
+            { fn:'deleteOrder',                    icon:'🗑️', label:'Delete', danger:true }
+        ];
+
         function getStatusContextMenu() {
             let menu = document.getElementById('statusContextMenu');
             if (!menu) {
@@ -3848,16 +3873,29 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             const menu = getStatusContextMenu();
             menu.dataset.orderId = orderId;
             const name = order.deceasedName || order.customerName || order.orderRef || 'Order';
+            const statusItems = QUICK_STATUS_LIST.map(s => {
+                const active = order.status === s;
+                return `<button type="button" class="status-ctx-item${active ? ' active' : ''}" onclick="pickStatusFromMenu('${s.replace(/'/g,"\\'")}')">
+                            <span class="status-ctx-dot" style="background:${QUICK_STATUS_COLORS[s] || '#94a3b8'}"></span>
+                            <span>${esc(statusLabel(s))}</span>
+                            ${active ? '<span class="status-ctx-check">✓</span>' : ''}
+                        </button>`;
+            }).join('');
+            const actionItems = ORDER_ACTIONS.map(a => {
+                const disabled = a.needsPhone && !order.phone;
+                const title = disabled ? ' title="No phone number on this order"' : '';
+                return `<button type="button" class="status-ctx-item${a.danger ? ' danger' : ''}"${disabled ? ' disabled' : ''}${title} onclick="runOrderAction('${a.fn}')">
+                            <span class="status-ctx-ico">${a.icon}</span>
+                            <span>${esc(a.label)}</span>
+                        </button>`;
+            }).join('');
             menu.innerHTML =
                 `<div class="status-ctx-head">${esc(name)}</div>` +
-                QUICK_STATUS_LIST.map(s => {
-                    const active = order.status === s;
-                    return `<button type="button" class="status-ctx-item${active ? ' active' : ''}" onclick="pickStatusFromMenu('${s.replace(/'/g,"\\'")}')">
-                                <span class="status-ctx-dot" style="background:${QUICK_STATUS_COLORS[s] || '#94a3b8'}"></span>
-                                <span>${esc(statusLabel(s))}</span>
-                                ${active ? '<span class="status-ctx-check">✓</span>' : ''}
-                            </button>`;
-                }).join('');
+                `<div class="status-ctx-sub">Set status</div>` +
+                statusItems +
+                `<div class="status-ctx-divider"></div>` +
+                `<div class="status-ctx-sub">Actions</div>` +
+                actionItems;
             // Show first so we can measure, then clamp to stay on-screen.
             menu.style.display = 'block';
             const mw = menu.offsetWidth, mh = menu.offsetHeight;
@@ -3874,6 +3912,24 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             const orderId = menu ? menu.dataset.orderId : null;
             hideStatusContextMenu();
             if (orderId) quickSetStatus(orderId, status);
+        }
+
+        // Run an order action (Estimate, Invoice, Record Payment, …) from the
+        // context menu. The detail-view action functions all operate on
+        // currentOrder, so we point currentOrder at the right-clicked order
+        // first, then invoke the same function the action-bar button uses.
+        function runOrderAction(fnName) {
+            const menu = document.getElementById('statusContextMenu');
+            const orderId = menu ? menu.dataset.orderId : null;
+            hideStatusContextMenu();
+            if (!orderId) return;
+            const order = allOrders.find(o => o.orderId === orderId || o.id === orderId || o.ID === orderId);
+            if (!order) return;
+            currentOrder = order;
+            const fn = window[fnName];
+            if (typeof fn === 'function') {
+                try { fn(); } catch (e) { console.error('Order action failed:', fnName, e); showToast('⚠ Could not run that action', 'error'); }
+            }
         }
 
         // Update one order's status without opening it. Mirrors saveOrder's
