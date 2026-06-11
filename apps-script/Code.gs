@@ -43,7 +43,8 @@ const HEADERS = [
   "Stripe Session IDs",
   "Inscription Design",
   "Grave Number",
-  "Archived"
+  "Archived",
+  "Progress Token"
 ];
 
 // ============================================================
@@ -115,6 +116,11 @@ function doGet(e) {
   // ── Customer proof page: public, limited data, no login ──
   if (e && e.parameter && e.parameter.action === 'getProofData') {
     return getProofData(e.parameter.id, e.parameter.callback);
+  }
+
+  // ── Customer progress page: public, looked up by unguessable token ──
+  if (e && e.parameter && e.parameter.action === 'getProgressData') {
+    return getProgressData(e.parameter.token, e.parameter.callback);
   }
 
   try {
@@ -505,6 +511,7 @@ function upsertOrder(order) {
     "Inscription Design":  order.inscriptionDesign ? JSON.stringify(order.inscriptionDesign) : "",
     "Grave Number":        order.graveNumber || "",
     "Archived":            order.archived ? "Yes" : "",
+    "Progress Token":      order.progressToken || "",
   };
 
   // For columns the tracker UI doesn't manage (e.g., Stripe Session IDs,
@@ -665,6 +672,7 @@ function mapSheetOrderToTracker(sheetOrder) {
     inscriptionDesign:   parseJSONObject(sheetOrder["Inscription Design"]),
     graveNumber:         sheetOrder["Grave Number"] || "",
     archived:            sheetOrder["Archived"] === "Yes",
+    progressToken:       sheetOrder["Progress Token"] || "",
     log:                 parseLogEntries(sheetOrder["Log Entries"])
   };
 }
@@ -1020,6 +1028,57 @@ function getProofData(orderId, callback) {
         proofFileName:     proofFileName
       };
       return send({ success: true, proof });
+    }
+    return send({ success: false, message: 'Order not found' });
+  } catch (err) {
+    return send({ success: false, message: err.toString() });
+  }
+}
+
+// ============================================================
+// CUSTOMER PROGRESS DATA — public, looked up by unguessable token.
+// Returns ONLY non-sensitive milestone info (no prices, notes, or
+// contact details) for the read-only customer progress page.
+// ============================================================
+function getProgressData(token, callback) {
+  function send(obj) {
+    const json = JSON.stringify(obj);
+    if (callback) {
+      return ContentService.createTextOutput(callback + '(' + json + ')')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  try {
+    if (!token || String(token).length < 16) {
+      return send({ success: false, message: 'Invalid link' });
+    }
+    const sheet   = getOrCreateSheet();
+    const data    = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const tokenCol = headers.indexOf('Progress Token');
+    if (tokenCol === -1) return send({ success: false, message: 'Not available' });
+    const get = (row, col) => String(row[headers.indexOf(col)] || '');
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][tokenCol]) !== String(token)) continue;
+      const row = data[i];
+
+      const progress = {
+        orderRef:          get(row, 'Order ID').slice(-8).toUpperCase(),
+        customerFirstName: (get(row, 'Customer Name') || '').split(' ')[0],
+        deceasedName:      get(row, 'Deceased Name'),
+        status:            capitalizeStatus(get(row, 'Status')),
+        createdDate:       get(row, 'Created') || get(row, 'Order Date'),
+        orderDate:         get(row, 'Order Date'),
+        proofDate:         get(row, 'Proof Date'),
+        proofApproved:     get(row, 'Proof Approved') === 'Yes',
+        masonNotifiedAt:   get(row, 'Mason Notified At'),
+        productionStart:   get(row, 'Production Start'),
+        installDate:       get(row, 'Install Date')
+      };
+      return send({ success: true, progress });
     }
     return send({ success: false, message: 'Order not found' });
   } catch (err) {

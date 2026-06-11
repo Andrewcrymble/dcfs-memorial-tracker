@@ -3509,6 +3509,42 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                     </div>
                 </div>
 
+                <!-- Process timeline (top of modal) -->
+                <div class="card" style="margin-bottom:1.25rem;">
+                    <div class="card-header">
+                        <span class="card-header-icon">🗺️</span>
+                        <span class="card-header-title">Progress</span>
+                        <button onclick="shareProgressLink()" title="Copy a customer-facing progress link to share" style="margin-left:auto;display:inline-flex;align-items:center;gap:0.35rem;padding:0.3rem 0.7rem;background:#eef6ff;border:1px solid #93c5fd;border-radius:6px;color:var(--cyan-dark);font-size:0.75rem;font-weight:600;cursor:pointer;">🔗 Copy customer link</button>
+                    </div>
+                    <div class="card-body">
+                        ${renderOrderTimeline(o)}
+                    </div>
+                </div>
+
+                <!-- Order Notes (top of modal — emphasised as the primary card) -->
+                <div style="background:white;border-radius:var(--radius);box-shadow:0 6px 20px rgba(0,122,255,0.18),0 2px 6px rgba(0,0,0,0.08);border:2px solid var(--cyan);margin-bottom:1.25rem;">
+                    <div class="card-header" style="background:#eef6ff;border-bottom:1px solid rgba(0,122,255,0.2);">
+                        <span class="card-header-icon">📝</span>
+                        <span class="card-header-title" style="font-size:0.85rem;color:var(--cyan-dark);">Order Notes</span>
+                        <span style="margin-left:auto;font-size:0.75rem;font-weight:600;background:#dbeafe;color:var(--cyan-dark);padding:0.15rem 0.5rem;border-radius:4px;">${(o.noteEntries||[]).length} note${(o.noteEntries||[]).length!==1?'s':''}</span>
+                    </div>
+                    <div class="card-body">
+                        ${renderOrderNotes(o)}
+                    </div>
+                </div>
+
+                <!-- Mason Notes (top of modal — emphasised) -->
+                <div style="background:white;border-radius:var(--radius);box-shadow:0 6px 20px rgba(22,163,74,0.16),0 2px 6px rgba(0,0,0,0.08);border:2px solid #16a34a;margin-bottom:1.25rem;">
+                    <div class="card-header" style="background:#f0fdf4;border-bottom:1px solid rgba(22,163,74,0.2);">
+                        <span class="card-header-icon">🔨</span>
+                        <span class="card-header-title" style="font-size:0.85rem;color:#15803d;">Mason Notes</span>
+                        <span style="margin-left:auto;font-size:0.72rem;background:#dcfce7;color:#15803d;padding:0.15rem 0.5rem;border-radius:4px;font-weight:600;">Printed on Job Card</span>
+                    </div>
+                    <div class="card-body">
+                        ${renderMasonNotes(o)}
+                    </div>
+                </div>
+
                 <!-- Status -->
                 <div class="card" style="margin-bottom:1.25rem;">
                     <div class="card-header">
@@ -3616,9 +3652,9 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                             <span class="card-header-icon">🕐</span>
                             <span class="card-header-title">Activity Log</span>
                             <span style="margin-left:auto;font-size:0.72rem;color:var(--text-muted);">${(o.log || []).length} entries</span>
-                            <span id="activityLogToggle" style="margin-left:0.6rem;font-size:0.85rem;color:var(--text-muted);transition:transform 0.15s;">▾</span>
+                            <span id="activityLogToggle" style="margin-left:0.6rem;font-size:0.85rem;color:var(--text-muted);transition:transform 0.15s;transform:rotate(-90deg);">▾</span>
                         </div>
-                        <div class="card-body" id="activityLogBody">
+                        <div class="card-body" id="activityLogBody" style="display:none;">
                             ${renderActivityLog(o)}
                         </div>
                     </div>
@@ -3647,30 +3683,6 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                     </div>
                     <span style="background:#15803d;color:white;padding:0.3rem 0.9rem;border-radius:20px;font-size:0.8rem;font-weight:700;">✓ PAID</span>
                 </div>` : ''}
-
-                <!-- Order Notes (outside grid — fully interactive) -->
-                <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);border-left:4px solid var(--cyan);margin-bottom:1.25rem;">
-                    <div class="card-header">
-                        <span class="card-header-icon">📝</span>
-                        <span class="card-header-title">Order Notes</span>
-                        <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);">${(o.noteEntries||[]).length} note${(o.noteEntries||[]).length!==1?'s':''}</span>
-                    </div>
-                    <div class="card-body">
-                        ${renderOrderNotes(o)}
-                    </div>
-                </div>
-
-                <!-- Mason Notes (outside grid — fully interactive) -->
-                <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);border-left:4px solid #16a34a;margin-bottom:1.25rem;">
-                    <div class="card-header" style="background:#f0fdf4;">
-                        <span class="card-header-icon">🔨</span>
-                        <span class="card-header-title" style="color:#15803d;">Mason Notes</span>
-                        <span style="margin-left:auto;font-size:0.72rem;background:#dcfce7;color:#15803d;padding:0.15rem 0.5rem;border-radius:4px;font-weight:600;">Printed on Job Card</span>
-                    </div>
-                    <div class="card-body">
-                        ${renderMasonNotes(o)}
-                    </div>
-                </div>
 
                 <!-- Mason Notification (auto-fires when proof approved; manual resend available) -->
                 <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);border-left:4px solid ${o.masonNotifiedAt ? '#16a34a' : '#9ca3af'};margin-bottom:1.25rem;">
@@ -4434,12 +4446,68 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             try { sessionStorage.setItem('dcfs_activityLogCollapsed', next ? '1' : '0'); } catch(e){}
         }
 
-        // Apply the remembered collapse state on initial render
+        // Activity Log always opens minimised — user can expand it per-order if needed
         function applyActivityLogState() {
-            try {
-                const collapsed = sessionStorage.getItem('dcfs_activityLogCollapsed') === '1';
-                if (collapsed) toggleActivityLog(true);
-            } catch(e){}
+            try { toggleActivityLog(true); } catch(e){}
+        }
+
+        // Horizontal milestone timeline shown at the top of the order view.
+        // A step is "done" when the order's current status has reached that
+        // stage (or we have a concrete event date for it). Done steps show the
+        // date when we can derive one; pending steps are greyed out.
+        function renderOrderTimeline(order) {
+            const STAGE_ORDER = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed'];
+            const curIdx = STAGE_ORDER.indexOf(order.status);
+
+            // Earliest log timestamp whose text records a change to `name`.
+            const statusTs = (name) => {
+                let best = null;
+                (order.log || []).forEach(e => {
+                    const t = ((e && e.text) || '').toLowerCase();
+                    if (t.includes('status changed to ' + name.toLowerCase())) {
+                        const ms = new Date(e.ts).getTime();
+                        if (!isNaN(ms) && (best === null || ms < best)) best = ms;
+                    }
+                });
+                return best === null ? '' : new Date(best).toISOString();
+            };
+
+            const fmt = (d) => {
+                if (!d) return '';
+                const dt = new Date(d);
+                if (isNaN(dt.getTime())) return '';
+                return dt.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+            };
+
+            const reached = (name) => curIdx >= 0 && curIdx >= STAGE_ORDER.indexOf(name);
+
+            const steps = [
+                { icon:'📋', label:'Created',       done:true,                      date: fmt(order.orderDate || order.createdAt) },
+                { icon:'💷', label:'Estimate',      done: reached('Quoted'),        date: fmt(statusTs('Quoted')) },
+                { icon:'✅', label:'Approved',      done: reached('Confirmed'),     date: fmt(statusTs('Confirmed')) },
+                { icon:'🔨', label:'Sent to Mason', done: !!order.masonNotifiedAt,  date: fmt(order.masonNotifiedAt) },
+                { icon:'⚙️', label:'Production',    done: reached('Production'),    date: fmt(statusTs('Production')) },
+                { icon:'📦', label:'Ready',         done: reached('Ready'),         date: fmt(statusTs('Ready')) },
+                { icon:'🪦', label:'Installed',     done: reached('Installed'),     date: fmt(statusTs('Installed')) },
+            ];
+
+            const CYAN = '#007aff', GREY = '#e5e7eb';
+            return `
+            <div style="display:flex;align-items:flex-start;overflow-x:auto;gap:0;padding:0.25rem 0;">
+                ${steps.map((s, i) => {
+                    const next = steps[i+1];
+                    return `
+                    <div style="display:flex;flex-direction:column;align-items:center;min-width:80px;flex:1;">
+                        <div style="display:flex;align-items:center;width:100%;">
+                            <div style="flex:1;height:3px;background:${i===0?'transparent':(s.done?CYAN:GREY)};"></div>
+                            <div style="width:34px;height:34px;border-radius:50%;background:${s.done?CYAN:GREY};color:${s.done?'white':'#9ca3af'};display:flex;align-items:center;justify-content:center;font-size:0.95rem;flex-shrink:0;box-shadow:${s.done?'0 2px 6px rgba(0,122,255,0.3)':'none'};">${s.done?s.icon:'○'}</div>
+                            <div style="flex:1;height:3px;background:${!next?'transparent':((s.done&&next.done)?CYAN:GREY)};"></div>
+                        </div>
+                        <div style="font-size:0.7rem;font-weight:700;margin-top:0.35rem;color:${s.done?'#111827':'#9ca3af'};text-align:center;line-height:1.1;">${s.label}</div>
+                        <div style="font-size:0.65rem;color:#6b7280;text-align:center;margin-top:0.1rem;min-height:0.8rem;">${s.date || ''}</div>
+                    </div>`;
+                }).join('')}
+            </div>`;
         }
 
         function renderActivityLog(order) {
@@ -7806,6 +7874,50 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             };
             const message = messages[type] || `Notification: ${type}`;
             sendToWhatsApp(message);
+        }
+
+        // ══════════════════════════════════════════════════════
+        // CUSTOMER PROGRESS LINK (read-only timeline page)
+        // ══════════════════════════════════════════════════════
+        // Generate an unguessable token for an order. Reused once created so
+        // the same link keeps working on repeat shares.
+        function getProgressToken(order) {
+            if (order && order.progressToken && String(order.progressToken).length >= 16) {
+                return order.progressToken;
+            }
+            try {
+                if (window.crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '');
+                const a = new Uint8Array(16);
+                crypto.getRandomValues(a);
+                return Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
+            } catch (e) {
+                return (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
+            }
+        }
+
+        async function shareProgressLink() {
+            if (!currentOrder) { alert('Please select an order first.'); return; }
+
+            // Create + persist the token the first time this order is shared.
+            const existing = currentOrder.progressToken;
+            if (!existing || String(existing).length < 16) {
+                currentOrder.progressToken = getProgressToken(currentOrder);
+                try {
+                    await fetch(SCRIPT_URL, {
+                        method: 'POST', mode: 'no-cors',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({ action: 'upsert', order: currentOrder })
+                    });
+                } catch (e) { /* best effort — token also rides along on the next save */ }
+            }
+
+            const url = `https://tracker.crymbleandsons.com/track.html?t=${encodeURIComponent(currentOrder.progressToken)}`;
+            try {
+                await navigator.clipboard.writeText(url);
+                showToast('✓ Progress link copied — paste it to your customer', 'success');
+            } catch (e) {
+                window.prompt('Copy this customer progress link:', url);
+            }
         }
 
         // ══════════════════════════════════════════════════════
