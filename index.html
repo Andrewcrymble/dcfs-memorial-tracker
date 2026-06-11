@@ -1615,7 +1615,7 @@
                 <button class="filter-tab" data-filter="Confirmed" onclick="setFilter('Confirmed')">Confirmed</button>
                 <button class="filter-tab" data-filter="In Design" onclick="setFilter('In Design')">Design</button>
                 <button class="filter-tab" data-filter="Production" onclick="setFilter('Production')">Production</button>
-                <button class="filter-tab" data-filter="Ready" onclick="setFilter('Ready')">Being Installed</button>
+                <button class="filter-tab" data-filter="Ready" onclick="setFilter('Ready')">Ready</button>
                 <button class="filter-tab" data-filter="Installed" onclick="setFilter('Installed')">Installed</button>
                 <button class="filter-tab" data-filter="Completed" onclick="setFilter('Completed')">Completed</button>
                 <button class="filter-tab" data-filter="Query" onclick="setFilter('Query')">Query</button>
@@ -1670,7 +1670,7 @@
                 </div>
                 <div class="kanban-col" id="col-Ready" data-status="Ready">
                     <div class="kanban-col-header" style="--col-color:#16a34a">
-                        <span class="kanban-col-title">Being Installed</span>
+                        <span class="kanban-col-title">Ready</span>
                         <div class="kanban-col-meta">
                             <span class="kanban-col-count" id="col-count-Ready">0</span>
                             <span class="kanban-col-value" id="col-value-Ready">£0</span>
@@ -2144,9 +2144,9 @@
 
         // Display labels for statuses — the stored value stays the same (so
         // existing orders keep matching), only what staff see changes.
-        const STATUS_LABELS = {
-            'Ready': 'Being Installed'
-        };
+        // (No overrides currently — the "Ready" status is shown as "Ready"
+        // everywhere; add entries here if a status ever needs a friendlier name.)
+        const STATUS_LABELS = {};
         function statusLabel(s) { return STATUS_LABELS[s] || s; }
 
         // Global state
@@ -5082,7 +5082,7 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                 { icon:'✅', label:'Approved',      done: reached('Confirmed'),     date: fmt(statusTs('Confirmed')) },
                 { icon:'🔨', label:'Sent to Mason', done: !!order.masonNotifiedAt,  date: fmt(order.masonNotifiedAt) },
                 { icon:'⚙️', label:'Production',    done: reached('Production'),    date: fmt(statusTs('Production')) },
-                { icon:'📦', label:'Being Installed', done: reached('Ready'),       date: fmt(statusTs('Ready')) },
+                { icon:'📦', label:'Ready', done: reached('Ready'),       date: fmt(statusTs('Ready')) },
                 { icon:'🪦', label:'Installed',     done: reached('Installed'),     date: fmt(statusTs('Installed')) },
             ];
 
