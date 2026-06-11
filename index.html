@@ -890,6 +890,9 @@
         .pi-profit { color: var(--cyan); font-size: 0.72rem; }
         .pi-sep { color: var(--border); }
 
+        /* Eye toggle: hide internal Cost / Profit / Margin columns */
+        .costs-hidden .c-col { display: none !important; }
+
         /* ── LIVE TOTALS BAR ── */
         .live-totals {
             background: var(--green);
@@ -2588,12 +2591,22 @@
                         ? `<span title="Customer requested changes — see Order Notes" style="background:#dc2626;color:white;font-size:0.6rem;font-weight:800;padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.05em;">⚠ Changes</span>`
                         : '';
 
+                    // Amber flag for active jobs sitting 40+ days past design
+                    // approval — these are overdue for production / install.
+                    const daysApproved  = daysSinceDesignApproved(order);
+                    const overdueApproval = daysApproved !== null && daysApproved >= 40
+                        && status !== 'Installed' && status !== 'Completed';
+                    const overdueBadge = overdueApproval
+                        ? `<span title="${daysApproved} days since the design was approved — overdue for completion" style="background:#b45309;color:white;font-size:0.6rem;font-weight:800;padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.05em;">⏰ ${daysApproved}d since approval</span>`
+                        : '';
+
                     return `<li class="order-item" data-order-id="${safeId}"${notesAttr} style="position:relative;border-left:${cardBorderW} solid ${cardBorder};${cardBg}margin:0;border-radius:8px;padding:0.4rem 0.6rem;${archivedDim}">
                         ${archiveBtnHtml}
                         <div class="order-item-top" style="margin-bottom:0.1rem;${showArchiveBtn?'padding-right:26px;':''}">
                             <div class="order-name" style="font-size:0.78rem;line-height:1.2;display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
                                 <span>${order.deceasedName||'Unknown'}</span>
                                 ${changesBadge}
+                                ${overdueBadge}
                             </div>
                             ${daysBadge}
                         </div>
@@ -2673,6 +2686,32 @@
                 if (!resolved) return true;
             }
             return false;
+        }
+
+        // Best available "design approved" timestamp for an order:
+        //   1) the approvedAt stamp on the uploaded Proof file
+        //   2) the first "PROOF APPROVED" activity-log entry
+        //   3) fallback to the proof date when the artwork is marked approved
+        // Returns null when the design hasn't been approved yet.
+        function getDesignApprovedDate(order) {
+            if (!order) return null;
+            const proof = (order.files || []).find(f => f && f.type === 'Proof' && f.approvedAt);
+            if (proof && proof.approvedAt) return proof.approvedAt;
+            const log = order.log || [];
+            for (let i = 0; i < log.length; i++) {
+                if (/PROOF APPROVED/i.test(String((log[i] || {}).text || ''))) return log[i].ts;
+            }
+            if (order.artworkApproved && order.proofDate) return order.proofDate;
+            return null;
+        }
+
+        // Days since design approval, or null if not approved / undatable.
+        function daysSinceDesignApproved(order) {
+            const d = getDesignApprovedDate(order);
+            if (!d) return null;
+            const ms = new Date(d).getTime();
+            if (isNaN(ms)) return null;
+            return Math.floor((Date.now() - ms) / 86400000);
         }
 
         // Change Requests panel — pulls every "CHANGES REQUESTED" entry from
@@ -3787,10 +3826,10 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                                 <div style="font-size:0.82rem;font-weight:600;color:#111;">${label}</div>
                                 ${sub ? `<div style="font-size:0.72rem;color:#9ca3af;">${sub}</div>` : ''}
                             </td>
-                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;color:#374151;">£${parseFloat(cost).toFixed(2)}</td>
+                            <td class="c-col" style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;color:#374151;">£${parseFloat(cost).toFixed(2)}</td>
                             <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;font-weight:600;color:#111;">£${parseFloat(sell).toFixed(2)}</td>
-                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;font-weight:600;color:${marginCol};">£${parseFloat(margin).toFixed(2)}</td>
-                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:${marginCol};">${pct}%</td>
+                            <td class="c-col" style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;font-weight:600;color:${marginCol};">£${parseFloat(margin).toFixed(2)}</td>
+                            <td class="c-col" style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:${marginCol};">${pct}%</td>
                         </tr>`;
                     }
 
@@ -3831,10 +3870,10 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                                 <div style="font-size:0.82rem;font-weight:600;color:#92400e;">Cemetery / Churchyard Fee</div>
                                 <div style="font-size:0.72rem;color:#b45309;">${o.cemetery || 'Not selected'}${fee > 0 ? ' — pass-through, forwarded to cemetery' : ' — no fee configured in price book'}</div>
                             </td>
-                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;color:#92400e;">£${fee.toFixed(2)}</td>
+                            <td class="c-col" style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;color:#92400e;">£${fee.toFixed(2)}</td>
                             <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.82rem;font-weight:600;color:#92400e;">£${fee.toFixed(2)}</td>
-                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.78rem;color:#b45309;font-style:italic;">—</td>
-                            <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.78rem;color:#b45309;font-style:italic;">pass-thru</td>
+                            <td class="c-col" style="padding:0.5rem 0.6rem;text-align:right;font-size:0.78rem;color:#b45309;font-style:italic;">—</td>
+                            <td class="c-col" style="padding:0.5rem 0.6rem;text-align:right;font-size:0.78rem;color:#b45309;font-style:italic;">pass-thru</td>
                         </tr>`;
                     }
 
@@ -3851,21 +3890,22 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                     const marginCol = t.profitMargin >= 0 ? '#16a34a' : '#dc2626';
 
                     return `
-                    <div class="card detail-grid-wide" style="margin-bottom:0;">
+                    <div class="card detail-grid-wide" id="costCard" style="margin-bottom:0;">
                         <div class="card-header">
                             <span class="card-header-icon">📊</span>
                             <span class="card-header-title">Cost vs Retail Breakdown</span>
-                            <span style="margin-left:auto;font-size:0.78rem;font-weight:700;color:${marginCol};">Profit: £${t.profitMargin.toFixed(2)} (${marginPct}%)</span>
+                            <span class="c-col" style="margin-left:auto;font-size:0.78rem;font-weight:700;color:${marginCol};">Profit: £${t.profitMargin.toFixed(2)} (${marginPct}%)</span>
+                            <button id="costEyeBtn" onclick="toggleCostColumns()" title="Hide cost, profit & margin — safe to show a customer" style="margin-left:0.6rem;background:#f3f4f6;border:1px solid var(--border);border-radius:6px;font-size:0.72rem;font-weight:600;color:#374151;padding:0.25rem 0.55rem;cursor:pointer;white-space:nowrap;">👁️ Hide costs</button>
                         </div>
                         <div class="card-body" style="padding:0;">
                             <table style="width:100%;border-collapse:collapse;">
                                 <thead>
                                     <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
                                         <th style="padding:0.5rem 0.6rem;text-align:left;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Item</th>
-                                        <th style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Cost</th>
+                                        <th class="c-col" style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Cost</th>
                                         <th style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Retail</th>
-                                        <th style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Profit</th>
-                                        <th style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Margin</th>
+                                        <th class="c-col" style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Profit</th>
+                                        <th class="c-col" style="padding:0.5rem 0.6rem;text-align:right;font-size:0.75rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Margin</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -3874,10 +3914,10 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                                 <tfoot>
                                     <tr style="background:#f9fafb;border-top:2px solid #111;">
                                         <td style="padding:0.6rem 0.6rem;font-size:0.85rem;font-weight:700;color:#111;">TOTAL</td>
-                                        <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:#374151;">£${(t.totalCost + b.cemeteryFee).toFixed(2)}</td>
+                                        <td class="c-col" style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:#374151;">£${(t.totalCost + b.cemeteryFee).toFixed(2)}</td>
                                         <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:#111;">£${t.totalSell.toFixed(2)}</td>
-                                        <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:${marginCol};">£${t.profitMargin.toFixed(2)}</td>
-                                        <td style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:${marginCol};">${marginPct}%</td>
+                                        <td class="c-col" style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:${marginCol};">£${t.profitMargin.toFixed(2)}</td>
+                                        <td class="c-col" style="padding:0.6rem 0.6rem;text-align:right;font-size:0.85rem;font-weight:700;color:${marginCol};">${marginPct}%</td>
                                     </tr>
                                     ${dep > 0 ? `
                                     <tr style="background:#f0fdf4;">
@@ -3909,6 +3949,7 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             // Restore the user's collapsed/expanded preference for the
             // Activity Log so it doesn't pop back open between orders.
             try { applyActivityLogState(); } catch(e){}
+            try { applyCostVisibility(); } catch(e){}
             // Fire-and-forget: load Outlook emails for this order's customer
             // when the integration is enabled, configured, and signed in.
             if (OUTLOOK_ENABLED) {
@@ -4449,6 +4490,28 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
         // Activity Log always opens minimised — user can expand it per-order if needed
         function applyActivityLogState() {
             try { toggleActivityLog(true); } catch(e){}
+        }
+
+        // Eye toggle on the Cost vs Retail Breakdown — hides the internal
+        // Cost / Profit / Margin columns so the screen is safe to turn toward
+        // a customer. Preference is remembered for the session.
+        function updateCostEyeBtn(hidden) {
+            const btn = document.getElementById('costEyeBtn');
+            if (btn) btn.innerHTML = hidden ? '🙈 Show costs' : '👁️ Hide costs';
+        }
+        function toggleCostColumns() {
+            const card = document.getElementById('costCard');
+            if (!card) return;
+            const hidden = card.classList.toggle('costs-hidden');
+            try { sessionStorage.setItem('dcfs_costsHidden', hidden ? '1' : '0'); } catch(e){}
+            updateCostEyeBtn(hidden);
+        }
+        function applyCostVisibility() {
+            let hidden = false;
+            try { hidden = sessionStorage.getItem('dcfs_costsHidden') === '1'; } catch(e){}
+            const card = document.getElementById('costCard');
+            if (card) card.classList.toggle('costs-hidden', hidden);
+            updateCostEyeBtn(hidden);
         }
 
         // Horizontal milestone timeline shown at the top of the order view.
