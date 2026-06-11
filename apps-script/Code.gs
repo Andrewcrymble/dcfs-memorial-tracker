@@ -99,7 +99,8 @@ function respond(success, message, data) {
 function styleDataRow(sheet, rowNum, status) {
   const statusColors = {
     enquiry: "#f1f5f9", quoted: "#fef9e7", confirmed: "#dbeafe",
-    design: "#ede9fe", production: "#fff7ed", ready: "#d1fae5", installed: "#dcfce7"
+    design: "#ede9fe", production: "#fff7ed", ready: "#d1fae5", installed: "#dcfce7",
+    query: "#fce7f3"
   };
   const bg = statusColors[(status || '').toLowerCase()] || "#ffffff";
   const range = sheet.getRange(rowNum, 1, 1, HEADERS.length);
@@ -691,7 +692,8 @@ function capitalizeStatus(status) {
     "enquiry": "Enquiry", "quoted": "Quoted", "confirmed": "Confirmed",
     "design": "In Design", "in design": "In Design", "production": "Production",
     "ready": "Ready", "installed": "Installed",
-    "completed": "Completed", "complete": "Completed", "closed": "Completed"
+    "completed": "Completed", "complete": "Completed", "closed": "Completed",
+    "query": "Query"
   };
   return statusMap[status.toLowerCase()] || "Enquiry";
 }

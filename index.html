@@ -180,7 +180,7 @@
                 localStorage.setItem('dcfs_activity_cache', JSON.stringify(entries.slice(0, 30)));
 
                 // Cache stats
-                var stats = { total: orders.length, Enquiry:0, Quoted:0, Confirmed:0, 'In Design':0, Production:0, Ready:0, Installed:0, Completed:0 };
+                var stats = { total: orders.length, Enquiry:0, Quoted:0, Confirmed:0, 'In Design':0, Production:0, Ready:0, Installed:0, Completed:0, Query:0 };
                 (orders || []).forEach(function(o) {
                     var s = o.status || 'Enquiry';
                     if (stats[s] !== undefined) stats[s]++;
@@ -1571,6 +1571,7 @@
         <div class="stat-chip"><span class="stat-chip-count" id="st-Ready" style="color:#16a34a">—</span><span class="stat-chip-label">Ready</span></div>
         <div class="stat-chip"><span class="stat-chip-count" id="st-Installed" style="color:#5a8f2e">—</span><span class="stat-chip-label">Installed</span></div>
         <div class="stat-chip"><span class="stat-chip-count" id="st-Completed" style="color:#1e40af">—</span><span class="stat-chip-label">Completed</span></div>
+        <div class="stat-chip"><span class="stat-chip-count" id="st-Query" style="color:#db2777">—</span><span class="stat-chip-label">Query</span></div>
         <div class="stat-bar-divider"></div>
         <div class="stat-chip money"><span class="stat-chip-count" id="st-totalVal">—</span><span class="stat-chip-label">Total Value (Active)</span></div>
         <div class="stat-chip outstanding"><span class="stat-chip-count" id="st-outstanding">—</span><span class="stat-chip-label">Outstanding Balance</span></div>
@@ -1592,6 +1593,7 @@
                 <button class="filter-tab" data-filter="Ready" onclick="setFilter('Ready')">Being Installed</button>
                 <button class="filter-tab" data-filter="Installed" onclick="setFilter('Installed')">Installed</button>
                 <button class="filter-tab" data-filter="Completed" onclick="setFilter('Completed')">Completed</button>
+                <button class="filter-tab" data-filter="Query" onclick="setFilter('Query')">Query</button>
             </div>
         </div>
 
@@ -1677,6 +1679,25 @@
                         </div>
                     </div>
                     <ul class="kanban-cards" id="cards-Quoted"></ul>
+                </div>
+            </div>
+
+            <!-- Query label — legacy items migrated from the old software that
+                 still need checking (billed? completed? etc.). Its own section
+                 so they stand apart from the live pipeline. -->
+            <div class="board-section-label">🔎 Queries — Legacy Items to Check</div>
+
+            <!-- Query row: its own full-width column -->
+            <div class="kanban-row kanban-row-query">
+                <div class="kanban-col" id="col-Query" data-status="Query">
+                    <div class="kanban-col-header" style="--col-color:#db2777">
+                        <span class="kanban-col-title">Query</span>
+                        <div class="kanban-col-meta">
+                            <span class="kanban-col-count" id="col-count-Query">0</span>
+                            <span class="kanban-col-value" id="col-value-Query">£0</span>
+                        </div>
+                    </div>
+                    <ul class="kanban-cards" id="cards-Query"></ul>
                 </div>
             </div>
 
@@ -1777,7 +1798,7 @@
         // ── STATS BAR ──
         function renderStatsBar() {
             const fmtMoney = n => '£' + n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed'];
+            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed','Query'];
             const counts = {};
             statuses.forEach(s => counts[s] = 0);
             let total = 0;
@@ -2092,7 +2113,8 @@
             'In Design': '#8b5cf6',
             'Production': '#f97316',
             'Ready': '#10b981',
-            'Installed': '#059669'
+            'Installed': '#059669',
+            'Query': '#db2777'
         };
 
         // Display labels for statuses — the stored value stays the same (so
@@ -2463,10 +2485,10 @@
         }
 
         function renderKanbanBoard() {
-            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed'];
+            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed','Query'];
             const colors   = {
                 'Enquiry':'#94a3b8','Quoted':'#f59e0b','Confirmed':'#0097a7',
-                'In Design':'#8b5cf6','Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e','Completed':'#1e40af'
+                'In Design':'#8b5cf6','Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e','Completed':'#1e40af','Query':'#db2777'
             };
             const fmt = n => '£' + (n||0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 
@@ -3052,10 +3074,10 @@
         // ── Memorial Report — opens a printable view of every order
         // grouped by status, with latest note + price + date for each ──
         function openMemorialReport() {
-            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed'];
+            const statuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed','Query'];
             const statusColors = {
                 'Enquiry':'#94a3b8','Quoted':'#f59e0b','Confirmed':'#0097a7',
-                'In Design':'#8b5cf6','Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e'
+                'In Design':'#8b5cf6','Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e','Query':'#db2777'
             };
             const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const fmtMoney = n => '£' + (n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -3221,11 +3243,11 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 return;
             }
             // All statuses; the mason's active pipeline is ticked by default.
-            const ALL_STATUSES = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed'];
+            const ALL_STATUSES = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed','Query'];
             const DEFAULT_STATUSES = ['Confirmed','In Design','Production','Ready'];
             const statusColors = {
                 'Enquiry':'#94a3b8','Quoted':'#f59e0b','Confirmed':'#0097a7','In Design':'#8b5cf6',
-                'Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e','Completed':'#475569'
+                'Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e','Completed':'#475569','Query':'#db2777'
             };
             const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const fmtMoney = n => '£' + (n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
