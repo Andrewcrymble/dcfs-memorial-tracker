@@ -3215,6 +3215,11 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
         // (spec, inscription, cemetery, install date, mason cost, mason notes),
         // grouped by stage across the mason's active jobs. No customer prices.
         function openMasonReport() {
+            // Guard: if orders haven't loaded yet the report would look empty.
+            if (!Array.isArray(allOrders) || allOrders.length === 0) {
+                alert('Your orders haven’t finished loading yet.\n\nClick 🔄 Refresh (or wait for the dashboard to fill in), then open the Mason Report again.');
+                return;
+            }
             // The mason's active pipeline — confirmed through to being installed.
             const statuses = ['Confirmed','In Design','Production','Ready'];
             const statusColors = {
