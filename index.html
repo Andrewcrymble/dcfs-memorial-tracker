@@ -453,6 +453,7 @@
         .order-payment-row .pay-amt { font-weight: 600; color: #34c759; }
         .order-payment-row .pay-bal { font-weight: 600; color: #007aff; }
         .order-payment-row .pay-bal.clear { color: #34c759; }
+        .order-payment-row .pay-bal.overdue { color: #dc2626; font-weight: 700; }
         .order-payment-row .pay-date { color: var(--text-muted); font-size: 0.67rem; }
         .order-status-badge {
             display: inline-block;
@@ -1734,12 +1735,22 @@
                 <button class="installed-view-btn" onclick="setFilter('Installed'); renderKanbanBoard()">View all →</button>
             </div>
 
-            <!-- Completed summary row — installed AND billed/paid in full -->
-            <div class="installed-summary" id="completedSummary" style="border-left:4px solid #1e40af;">
-                <span class="installed-icon">📁</span>
-                <span class="installed-label" style="color:#1e40af;">Completed</span>
-                <span class="installed-count" id="completed-count">0 jobs billed &amp; closed</span>
-                <button class="installed-view-btn" style="color:#1e40af;" onclick="setFilter('Completed'); renderKanbanBoard()">View all →</button>
+            <!-- Completed section — finished jobs. Cards with an unpaid balance
+                 are flagged as an overdue invoice (red). -->
+            <div class="board-section-label">📁 Completed</div>
+
+            <!-- Completed row: its own full-width column -->
+            <div class="kanban-row kanban-row-completed">
+                <div class="kanban-col" id="col-Completed" data-status="Completed">
+                    <div class="kanban-col-header" style="--col-color:#1e40af">
+                        <span class="kanban-col-title">Completed</span>
+                        <div class="kanban-col-meta">
+                            <span class="kanban-col-count" id="col-count-Completed">0</span>
+                            <span class="kanban-col-value" id="col-value-Completed">£0</span>
+                        </div>
+                    </div>
+                    <ul class="kanban-cards" id="cards-Completed"></ul>
+                </div>
             </div>
 
             <!-- Change Requests panel — pending estimate + proof change
@@ -2417,11 +2428,12 @@
                 // Shorten date to DD/MM/YY
                 const shortDate = payDate ? payDate.split(' ')[0].replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$1/$2/' + '$3'.slice(2)) : '';
 
+                const overdue = isInvoiceOverdue(order);
                 const paymentRow = total > 0 ? `
                     <div class="order-payment-row">
                         <span class="pay-amt">${paid > 0 ? fmt(paid) + ' received' : 'Unpaid'}</span>
                         ${paid > 0 && shortDate ? `<span class="pay-date">${shortDate}</span>` : ''}
-                        <span class="pay-bal ${balance <= 0 ? 'clear' : ''}">${balance <= 0 ? '✓ Clear' : fmt(balance) + ' due'}</span>
+                        <span class="pay-bal ${balance <= 0 ? 'clear' : (overdue ? 'overdue' : '')}">${balance <= 0 ? '✓ Clear' : (overdue ? '⚠ Overdue · ' + fmt(balance) : fmt(balance) + ' due')}</span>
                     </div>` : '';
 
                 // Days since last movement (most recent log entry, or order creation date)
@@ -2546,18 +2558,13 @@
                 const orders = groups[status] || [];
                 const total = orders.reduce((sum,o) => sum + getOrderTotal(o), 0);
 
-                // Installed and Completed have no kanban-cards column — only
-                // summary bars at the bottom of the board. Handle them first
-                // so the early-return-on-missing-listEl below doesn't leave
-                // their counts stranded at 0.
+                // Installed has no kanban-cards column — only a summary bar at
+                // the bottom of the board. Handle it first so the
+                // early-return-on-missing-listEl below doesn't strand its count.
+                // (Completed DOES have a cards column now, so it falls through.)
                 if (status === 'Installed') {
                     const installedCount = document.getElementById('installed-count');
                     if (installedCount) installedCount.textContent = orders.length + ' jobs ' + (orders.length === 1 ? 'completed' : 'completed');
-                    return;
-                }
-                if (status === 'Completed') {
-                    const completedCount = document.getElementById('completed-count');
-                    if (completedCount) completedCount.textContent = orders.length + ' job' + (orders.length === 1 ? '' : 's') + ' billed & closed';
                     return;
                 }
 
@@ -2592,11 +2599,16 @@
                     const daysBg    = !validDays?'rgba(0,0,0,0.06)':daysSince<=30?'#dcfce7':daysSince<=90?'#fef9c3':daysSince<=120?'#ffedd5':'#fee2e2';
                     const borderColor = !validDays?'transparent':daysSince<=30?'#86efac':daysSince<=90?'#fde047':daysSince<=120?'#fdba74':'#fca5a5';
                     const daysLabel = !validDays ? null : daysSince===0 ? 'today' : `${daysSince}d`;
-                    const daysBadge = daysLabel ? `<span style="background:${daysBg};color:${daysColor};font-size:0.65rem;font-weight:700;padding:1px 5px;border-radius:999px;border:1px solid ${borderColor};">${daysLabel}</span>` : '';
+                    // Days-since-movement is misleading on completed jobs (a job
+                    // closed a year ago isn't "stale"), so suppress it there.
+                    const daysBadge = (daysLabel && order.status !== 'Completed') ? `<span style="background:${daysBg};color:${daysColor};font-size:0.65rem;font-weight:700;padding:1px 5px;border-radius:999px;border:1px solid ${borderColor};">${daysLabel}</span>` : '';
 
-                    const balHtml = bal > 0
-                        ? `<span style="font-size:0.7rem;font-weight:600;color:#007aff;">£${bal.toFixed(0)} due</span>`
-                        : orderTotal > 0 ? `<span style="font-size:0.7rem;color:#34c759;font-weight:600;">✓ Clear</span>` : '';
+                    const overdue = isInvoiceOverdue(order);
+                    const balHtml = overdue
+                        ? `<span style="font-size:0.7rem;font-weight:700;color:#dc2626;">⚠ Overdue £${bal.toFixed(0)}</span>`
+                        : bal > 0
+                            ? `<span style="font-size:0.7rem;font-weight:600;color:#007aff;">£${bal.toFixed(0)} due</span>`
+                            : orderTotal > 0 ? `<span style="font-size:0.7rem;color:#34c759;font-weight:600;">✓ Clear</span>` : '';
 
                     // Format creation date
                     const createdRaw = order.createdAt || order.orderDate || '';
@@ -2646,12 +2658,17 @@
                         .filter(Boolean).join(' · ');
 
                     // Red flag for jobs with an unresolved proof change request
+                    // OR a completed job whose invoice is still unpaid (overdue).
                     const flaggedChanges = hasOpenProofChangeRequest(order);
-                    const cardBorder    = flaggedChanges ? '#dc2626' : borderColor;
-                    const cardBorderW   = flaggedChanges ? '4px' : '3px';
-                    const cardBg        = flaggedChanges ? 'background:#fef2f2;' : '';
+                    const redFlag       = flaggedChanges || overdue;
+                    const cardBorder    = redFlag ? '#dc2626' : borderColor;
+                    const cardBorderW   = redFlag ? '4px' : '3px';
+                    const cardBg        = redFlag ? 'background:#fef2f2;' : '';
                     const changesBadge  = flaggedChanges
                         ? `<span title="Customer requested changes — see Order Notes" style="background:#dc2626;color:white;font-size:0.6rem;font-weight:800;padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.05em;">⚠ Changes</span>`
+                        : '';
+                    const overdueInvoiceBadge = overdue
+                        ? `<span title="Job completed but invoice still unpaid" style="background:#dc2626;color:white;font-size:0.6rem;font-weight:800;padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.05em;">⚠ Invoice overdue</span>`
                         : '';
 
                     // Amber flag for active jobs sitting 40+ days past design
@@ -2669,6 +2686,7 @@
                             <div class="order-name" style="font-size:0.86rem;font-weight:700;line-height:1.2;display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
                                 <span>${order.deceasedName||'Unknown'}</span>
                                 ${changesBadge}
+                                ${overdueInvoiceBadge}
                                 ${overdueBadge}
                             </div>
                             ${daysBadge}
@@ -6966,6 +6984,12 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
         // headstone / etc. price changes are reflected.
         function getOrderBalance(order) {
             return Math.max(0, getOrderTotal(order) - (parseFloat(order?.depositPaid) || 0));
+        }
+
+        // A completed job that still has money owing is treated as an overdue
+        // invoice (no grace period — the work is done, so payment is due).
+        function isInvoiceOverdue(order) {
+            return (order?.status === 'Completed') && getOrderBalance(order) > 0;
         }
 
         async function generateEstimate() {
