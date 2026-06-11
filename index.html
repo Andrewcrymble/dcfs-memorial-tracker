@@ -551,6 +551,31 @@
         .status-pill:active { transform: scale(0.95); }
         .status-pill.active { color: white; box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
 
+        /* Right-click status menu (board + list cards) */
+        .status-ctx-menu {
+            position: fixed; z-index: 9999; min-width: 190px;
+            background: #fff; border: 1px solid rgba(0,0,0,0.12);
+            border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+            padding: 0.3rem;
+        }
+        .status-ctx-head {
+            font-size: 0.7rem; font-weight: 700; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.04em;
+            padding: 0.35rem 0.55rem 0.4rem; max-width: 240px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            border-bottom: 1px solid rgba(0,0,0,0.06); margin-bottom: 0.25rem;
+        }
+        .status-ctx-item {
+            display: flex; align-items: center; gap: 0.55rem; width: 100%;
+            background: none; border: none; text-align: left; cursor: pointer;
+            padding: 0.45rem 0.55rem; border-radius: 7px;
+            font-size: 0.86rem; color: #1f2937; font-weight: 500;
+        }
+        .status-ctx-item:hover { background: rgba(0,0,0,0.05); }
+        .status-ctx-item.active { font-weight: 700; }
+        .status-ctx-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .status-ctx-check { margin-left: auto; color: #16a34a; font-weight: 700; }
+
         /* ── PRICE BREAKDOWN ── */
         .price-table { width: 100%; }
         .price-line { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
@@ -3770,6 +3795,117 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
         // mouseleave doesn't always fire when the page navigates underneath.
         document.addEventListener('click', kanbanHideNotesTooltip, true);
         document.addEventListener('scroll', kanbanHideNotesTooltip, true);
+
+        // ── Right-click (or long-press) a job card → change its status fast ──
+        // Works on both the kanban board and the flat list, since both use
+        // .order-item cards carrying data-order-id. Lets staff move a job
+        // between statuses without opening it.
+        const QUICK_STATUS_LIST = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed','Query'];
+        const QUICK_STATUS_COLORS = {
+            'Enquiry':'#94a3b8','Quoted':'#f59e0b','Confirmed':'#0097a7','In Design':'#8b5cf6',
+            'Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e','Completed':'#1e40af','Query':'#db2777'
+        };
+
+        function getStatusContextMenu() {
+            let menu = document.getElementById('statusContextMenu');
+            if (!menu) {
+                menu = document.createElement('div');
+                menu.id = 'statusContextMenu';
+                menu.className = 'status-ctx-menu';
+                menu.style.display = 'none';
+                document.body.appendChild(menu);
+            }
+            return menu;
+        }
+
+        function hideStatusContextMenu() {
+            const menu = document.getElementById('statusContextMenu');
+            if (menu) menu.style.display = 'none';
+        }
+
+        function showStatusContextMenu(x, y, orderId) {
+            const order = allOrders.find(o => o.orderId === orderId || o.id === orderId || o.ID === orderId);
+            if (!order) return;
+            const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const menu = getStatusContextMenu();
+            menu.dataset.orderId = orderId;
+            const name = order.deceasedName || order.customerName || order.orderRef || 'Order';
+            menu.innerHTML =
+                `<div class="status-ctx-head">${esc(name)}</div>` +
+                QUICK_STATUS_LIST.map(s => {
+                    const active = order.status === s;
+                    return `<button type="button" class="status-ctx-item${active ? ' active' : ''}" onclick="pickStatusFromMenu('${s.replace(/'/g,"\\'")}')">
+                                <span class="status-ctx-dot" style="background:${QUICK_STATUS_COLORS[s] || '#94a3b8'}"></span>
+                                <span>${esc(statusLabel(s))}</span>
+                                ${active ? '<span class="status-ctx-check">✓</span>' : ''}
+                            </button>`;
+                }).join('');
+            // Show first so we can measure, then clamp to stay on-screen.
+            menu.style.display = 'block';
+            const mw = menu.offsetWidth, mh = menu.offsetHeight;
+            const vw = window.innerWidth, vh = window.innerHeight;
+            let left = x, top = y;
+            if (left + mw > vw - 8) left = Math.max(8, vw - mw - 8);
+            if (top + mh > vh - 8)  top  = Math.max(8, vh - mh - 8);
+            menu.style.left = left + 'px';
+            menu.style.top  = top + 'px';
+        }
+
+        function pickStatusFromMenu(status) {
+            const menu = document.getElementById('statusContextMenu');
+            const orderId = menu ? menu.dataset.orderId : null;
+            hideStatusContextMenu();
+            if (orderId) quickSetStatus(orderId, status);
+        }
+
+        // Update one order's status without opening it. Mirrors saveOrder's
+        // optimistic-local-then-background-sync flow, but keeps you on the board.
+        async function quickSetStatus(orderId, newStatus) {
+            const order = allOrders.find(o => o.orderId === orderId || o.id === orderId || o.ID === orderId);
+            if (!order || order.status === newStatus) return;
+            order.status = newStatus;
+            if (!order.log) order.log = [];
+            order.log.push({
+                id: Date.now().toString(),
+                ts: new Date().toISOString(),
+                author: getCurrentUser(),
+                text: `Status changed to ${newStatus}`
+            });
+            // renderOrderList() also re-renders the kanban board, so the card
+            // jumps to its new column immediately.
+            try { renderOrderList(); } catch(e){}
+            if (currentOrder && currentOrder.orderId === order.orderId) {
+                try { renderOrderDetails(); } catch(e){}
+            }
+            const label = order.deceasedName || order.orderRef || 'Order';
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'upsert', order })
+                });
+                showToast(`✓ ${label} → ${statusLabel(newStatus)}`, 'success');
+            } catch (err) {
+                console.error('Quick status sync failed:', err);
+                showToast('⚠ Status saved locally — sync failed. Tap Refresh when online.', 'warn', 5000);
+            }
+        }
+
+        // Delegated handler — survives card re-renders. contextmenu also fires
+        // on long-press on most touch devices.
+        document.addEventListener('contextmenu', function(e) {
+            const card = e.target.closest('.order-item[data-order-id]');
+            if (!card) return;
+            e.preventDefault();
+            showStatusContextMenu(e.clientX, e.clientY, card.getAttribute('data-order-id'));
+        });
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#statusContextMenu')) hideStatusContextMenu();
+        });
+        document.addEventListener('scroll', hideStatusContextMenu, true);
+        window.addEventListener('resize', hideStatusContextMenu);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hideStatusContextMenu(); });
 
         function renderPipelineChart(groups, colors, fmt) {
             const chartStatuses = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready'];
