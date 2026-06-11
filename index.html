@@ -1835,7 +1835,8 @@
         // BeepMate WhatsApp Configuration
         const BEEPMATE_CONFIG = {
             apiKey: 'hpOMtOkD7gxw',
-            groupId: '120363425383353139', // Memorials group
+            groupId: '120363425383353139', // Memorials (office/staff) group
+            masonId: '120363422527827653', // Stone mason group — "Send to Mason" goes here
             baseUrl: 'https://beepmate.io/send'
         };
 
@@ -2006,9 +2007,10 @@
             }
         }
 
-        async function sendToWhatsApp(message) {
+        async function sendToWhatsApp(message, targetId) {
             try {
-                const url = `${BEEPMATE_CONFIG.baseUrl}?key=${BEEPMATE_CONFIG.apiKey}&id=${BEEPMATE_CONFIG.groupId}&msg=${encodeURIComponent(message)}`;
+                const id = targetId || BEEPMATE_CONFIG.groupId;
+                const url = `${BEEPMATE_CONFIG.baseUrl}?key=${BEEPMATE_CONFIG.apiKey}&id=${id}&msg=${encodeURIComponent(message)}`;
                 await fetch(url, { mode: 'no-cors' });
                 console.log('WhatsApp message sent');
                 return true;
@@ -2018,8 +2020,9 @@
             }
         }
 
-        // Upload PDF to Drive then send WhatsApp with link
-        async function sendPdfToWhatsApp(doc, docType, filename, summaryLines) {
+        // Upload PDF to Drive then send WhatsApp with link. `targetId` lets the
+        // caller route to a specific BeepMate group (defaults to staff group).
+        async function sendPdfToWhatsApp(doc, docType, filename, summaryLines, targetId) {
             const emoji = docType === 'Estimate' ? '📄' : docType === 'Invoice' ? '🧾' : '🔨';
 
             try {
@@ -2056,14 +2059,15 @@
                     const msg = `${emoji} *${docType.toUpperCase()}*\n\n` +
                         summaryLines.join('\n') +
                         `\n\n📎 *View PDF:*\n${result.viewUrl}`;
-                    await sendToWhatsApp(msg);
+                    await sendToWhatsApp(msg, targetId);
                     console.log('PDF uploaded and WhatsApp sent:', result.viewUrl);
                 } else {
                     console.warn('Drive upload returned no viewUrl:', result);
                     await sendToWhatsApp(
                         `${emoji} *${docType.toUpperCase()}*\n\n` +
                         summaryLines.join('\n') +
-                        '\n\n(PDF saved to your device)'
+                        '\n\n(PDF saved to your device)',
+                        targetId
                     );
                 }
             } catch (err) {
@@ -2072,7 +2076,8 @@
                 try {
                     await sendToWhatsApp(
                         `${emoji} *${docType.toUpperCase()} GENERATED*\n\n` +
-                        summaryLines.join('\n')
+                        summaryLines.join('\n'),
+                        targetId
                     );
                 } catch(e) {}
             }
@@ -4684,15 +4689,15 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
 
             const statusBlock = order.masonNotifiedAt
                 ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:0.6rem 0.8rem;font-size:0.85rem;color:#166534;margin-bottom:0.75rem;">
-                       ✅ Job card downloaded <strong>${notifiedAt}</strong>${order.masonNotifiedBy ? ` by <strong>${order.masonNotifiedBy}</strong>` : ''}.<br>
-                       <span style="font-size:0.78rem;">Send the downloaded job card to the mason. (WhatsApp / BeepMe automation coming soon.)</span>
+                       ✅ Job card sent to the mason on WhatsApp <strong>${notifiedAt}</strong>${order.masonNotifiedBy ? ` by <strong>${order.masonNotifiedBy}</strong>` : ''}.<br>
+                       <span style="font-size:0.78rem;">The mason group received the job card (PDF link).</span>
                    </div>`
                 : `<div style="background:#fef9c3;border:1px solid #fde68a;border-radius:6px;padding:0.6rem 0.8rem;font-size:0.85rem;color:#854d0e;margin-bottom:0.75rem;">
                        ⏳ Mason has not been sent the job card yet.<br>
-                       <span style="font-size:0.78rem;">Click below to download the job card to pass to the mason.</span>
+                       <span style="font-size:0.78rem;">Click below to send the job card to the mason on WhatsApp.</span>
                    </div>`;
 
-            const btnLabel = order.masonNotifiedAt ? '🔨 Re-download Job Card' : '🔨 Send to Mason';
+            const btnLabel = order.masonNotifiedAt ? '💬 Re-send to Mason' : '💬 Send to Mason';
             const btnDisabled = !proofFile ? 'disabled' : '';
             return `
                 ${proofRow}
@@ -4710,24 +4715,25 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 return;
             }
             const isResend = !!currentOrder.masonNotifiedAt;
+            if (isResend && !confirm('Re-send this job to the mason on WhatsApp? They have already been sent it once.')) return;
 
-            // Interim "send to mason" = download the job card PDF so it can be
-            // passed to the mason manually. (WhatsApp / BeepMe automation to
-            // follow.) Once the card downloads, record that it's been sent so
-            // the workflow + progress timeline reflect it.
+            showToast('💬 Sending job card to the mason…', 'info');
             try {
-                await generateMasonJobCard();
+                // Build the job card and send it to the mason's WhatsApp group
+                // (uploads the PDF to Drive and posts the link). No local
+                // download, and don't also message the office group.
+                await generateMasonJobCard({ download: false, sendToStaff: false, sendToMason: true });
             } catch (err) {
-                console.error('Job card generation failed:', err);
-                showToast('⚠ Could not generate the job card', 'warn', 5000);
+                console.error('Send to mason failed:', err);
+                showToast('⚠ Could not send the job card to the mason', 'warn', 5000);
                 return;
             }
 
             currentOrder.masonNotifiedAt = new Date().toISOString();
             currentOrder.masonNotifiedBy = getCurrentUser();
-            addActivityLog(`Mason job card downloaded to send${isResend ? ' (again)' : ''}`);
-            try { await saveOrder(currentOrder); } catch (e) { console.error('saveOrder after job card failed:', e); }
-            showToast('📄 Job card downloaded — send it to the mason', 'success');
+            addActivityLog(`Job card sent to mason on WhatsApp${isResend ? ' (re-send)' : ''}`);
+            try { await saveOrder(currentOrder); } catch (e) { console.error('saveOrder after mason send failed:', e); }
+            showToast('💬 Job card sent to the mason on WhatsApp', 'success');
             try { renderOrderDetails(); } catch (e) {}
         }
 
@@ -6881,7 +6887,8 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             }
         }
 
-        async function generateMasonJobCard() {
+        async function generateMasonJobCard(opts) {
+            opts = opts || {};
             if (!currentOrder) { alert('Please select an order first'); return; }
             const totals = calculateOrderTotals(currentOrder);
             const { jsPDF } = window.jspdf;
@@ -7269,9 +7276,9 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             dcsPdfFooter(doc);
             const jcRef = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
             const jcFilename = `JobCard_${jcRef}_${new Date().toISOString().slice(0,10)}.pdf`;
-            doc.save(jcFilename);
+            if (opts.download !== false) doc.save(jcFilename);
             addActivityLog(`Generated Mason Job Card — Cost: £${totals.totalCost.toFixed(2)}`);
-            sendPdfToWhatsApp(doc, 'Job Card', jcFilename, [
+            const summary = [
                 `Customer: ${currentOrder.customerName}`,
                 `Deceased: ${currentOrder.deceasedName}`,
                 `Ref: ${jcRef}`,
@@ -7279,7 +7286,16 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 currentOrder.cemetery ? `Cemetery: ${currentOrder.cemetery}` : '',
                 currentOrder.installDate ? `Install Date: ${currentOrder.installDate}` : '',
                 `Mason Cost: £${totals.totalCost.toFixed(2)}`
-            ].filter(Boolean));
+            ].filter(Boolean);
+            // Default: notify the staff/office group. Callers can route to the
+            // mason group instead (Send to Mason) and/or skip the staff send.
+            if (opts.sendToStaff !== false) {
+                sendPdfToWhatsApp(doc, 'Job Card', jcFilename, summary);
+            }
+            if (opts.sendToMason) {
+                await sendPdfToWhatsApp(doc, 'Job Card', jcFilename, summary, BEEPMATE_CONFIG.masonId);
+            }
+            return { doc, filename: jcFilename, summary };
         }
 
         function getPriceLineItems(order) {
