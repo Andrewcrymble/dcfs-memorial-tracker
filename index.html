@@ -3220,10 +3220,12 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 alert('Your orders haven’t finished loading yet.\n\nClick 🔄 Refresh (or wait for the dashboard to fill in), then open the Mason Report again.');
                 return;
             }
-            // The mason's active pipeline — confirmed through to being installed.
-            const statuses = ['Confirmed','In Design','Production','Ready'];
+            // All statuses; the mason's active pipeline is ticked by default.
+            const ALL_STATUSES = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed'];
+            const DEFAULT_STATUSES = ['Confirmed','In Design','Production','Ready'];
             const statusColors = {
-                'Confirmed':'#0097a7','In Design':'#8b5cf6','Production':'#f97316','Ready':'#16a34a'
+                'Enquiry':'#94a3b8','Quoted':'#f59e0b','Confirmed':'#0097a7','In Design':'#8b5cf6',
+                'Production':'#f97316','Ready':'#16a34a','Installed':'#5a8f2e','Completed':'#475569'
             };
             const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const fmtMoney = n => '£' + (n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -3238,20 +3240,25 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             };
 
             const groups = {};
-            statuses.forEach(s => groups[s] = []);
+            ALL_STATUSES.forEach(s => groups[s] = []);
             (allOrders || []).forEach(o => {
                 if (o.archived) return;
                 if (groups[o.status]) groups[o.status].push(o);
             });
 
-            const allJobs = statuses.reduce((a, s) => a.concat(groups[s]), []);
-            const totalCount = allJobs.length;
-            const totalCost  = allJobs.reduce((s, o) => s + masonCost(o), 0);
+            // Filter checkboxes — only offered for statuses that have jobs.
+            const available = ALL_STATUSES.filter(s => groups[s].length);
+            const toggles = available.map(s => {
+                const on = DEFAULT_STATUSES.indexOf(s) !== -1 ? 'checked' : '';
+                return `<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;background:#fff;border:1px solid #cbd5e1;border-radius:999px;padding:4px 11px;cursor:pointer;">
+                    <input type="checkbox" class="statusToggle" data-status="${esc(s)}" ${on}> ${esc(statusLabel(s))} <span style="color:#64748b;">(${groups[s].length})</span>
+                </label>`;
+            }).join(' ');
 
-            const sections = statuses.map(status => {
+            const sections = available.map(status => {
                 const orders = groups[status];
-                if (!orders.length) return '';
                 orders.sort((a, b) => fmtDate(a.installDate) === '—' ? 1 : (new Date(a.installDate) - new Date(b.installDate)));
+                const sectionCost = orders.reduce((s, o) => s + masonCost(o), 0);
 
                 const rows = orders.map(o => {
                     const hs = [o.hsType, o.hsSize, colourDisplayName(o.hsColour, true) || o.hsColour, o.hsFinish]
@@ -3283,11 +3290,12 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
                 }).join('');
 
                 const colour = statusColors[status] || '#666';
+                const hidden = DEFAULT_STATUSES.indexOf(status) === -1 ? 'display:none;' : '';
                 return `
-                    <section style="margin-bottom:1.4rem;">
+                    <section data-status="${esc(status)}" data-count="${orders.length}" data-cost="${sectionCost}" style="margin-bottom:1.4rem;${hidden}">
                         <h2 style="font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:white;background:${colour};padding:6px 10px;border-radius:4px;display:flex;align-items:center;gap:0.6rem;margin:0 0 8px;">
                             ${esc(statusLabel(status))}
-                            <span style="font-weight:400;font-size:11px;">${orders.length} ${orders.length === 1 ? 'job' : 'jobs'}</span>
+                            <span style="font-weight:400;font-size:11px;">${orders.length} ${orders.length === 1 ? 'job' : 'jobs'} · ${fmtMoney(sectionCost)}</span>
                         </h2>
                         <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
                             <thead>
@@ -3338,30 +3346,65 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
     border-radius:6px; font-size:0.95rem; font-weight:600; cursor:pointer;
     box-shadow:0 2px 8px rgba(0,0,0,0.15); z-index:1000;
   }
-  @media print { .print-btn { display:none; } }
+  .filterbar { display:flex; align-items:center; flex-wrap:wrap; gap:7px; margin:0 0 14px; font-size:12px; }
+  .filterbar b { text-transform:uppercase; letter-spacing:0.05em; color:#475569; font-size:11px; margin-right:4px; }
+  @media print { .print-btn, .filterbar { display:none; } }
 </style>
 </head>
 <body>
 <button class="print-btn" onclick="window.print()">🖨️ Print</button>
-<button class="print-btn" style="right:130px;background:#25d366;" onclick="if(window.opener&&window.opener.sendMasonReportToMason){this.disabled=true;this.textContent='⏳ Sending…';window.opener.sendMasonReportToMason();setTimeout(()=>{this.textContent='✓ Sent to Mason';},1200);}else{alert('Open this report from the tracker to enable sending.');}">💬 Send to Mason</button>
+<button id="sendBtn" class="print-btn" style="right:130px;background:#25d366;" onclick="sendChecked(this)">💬 Send to Mason</button>
 
 <div class="top">
   <h1>DAVID CRYMBLE &amp; SONS<small>FUNERAL DIRECTORS &amp; MEMORIAL MASONS</small></h1>
   <div class="meta">
     <strong>Mason Job Report</strong><br>
     Generated ${fmtDate(new Date())}<br>
-    Active jobs (Confirmed → Being Installed)
+    Tick the statuses to include / send
   </div>
 </div>
 
 <div class="conf">CONFIDENTIAL — Mason cost prices. Not for the customer.</div>
 
+<div class="filterbar"><b>Show / send:</b> ${toggles || '<span style="color:#888;">No jobs</span>'}</div>
+
 <div class="summary">
-  <div><span style="color:#6c6c70;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Jobs</span><strong>${totalCount}</strong></div>
-  <div><span style="color:#6c6c70;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Total Mason Cost</span><strong>${fmtMoney(totalCost)}</strong></div>
+  <div><span style="color:#6c6c70;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Jobs</span><strong id="sumJobs">0</strong></div>
+  <div><span style="color:#6c6c70;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Total Mason Cost</span><strong id="sumCost">£0.00</strong></div>
 </div>
 
-${sections || '<p style="color:#888;">No active mason jobs to report.</p>'}
+${sections || '<p style="color:#888;">No jobs to report.</p>'}
+
+<script>
+(function(){
+  function money(n){ return '£' + (Number(n)||0).toFixed(2).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ','); }
+  function checkedStatuses(){
+    return Array.prototype.slice.call(document.querySelectorAll('.statusToggle'))
+      .filter(function(c){ return c.checked; }).map(function(c){ return c.getAttribute('data-status'); });
+  }
+  function recompute(){
+    var jobs = 0, cost = 0;
+    Array.prototype.slice.call(document.querySelectorAll('.statusToggle')).forEach(function(cb){
+      var sec = document.querySelector('section[data-status="' + cb.getAttribute('data-status') + '"]');
+      if (!sec) return;
+      if (cb.checked){ sec.style.display=''; jobs += parseInt(sec.getAttribute('data-count'),10)||0; cost += parseFloat(sec.getAttribute('data-cost'))||0; }
+      else { sec.style.display='none'; }
+    });
+    document.getElementById('sumJobs').textContent = jobs;
+    document.getElementById('sumCost').textContent = money(cost);
+  }
+  Array.prototype.slice.call(document.querySelectorAll('.statusToggle')).forEach(function(cb){ cb.addEventListener('change', recompute); });
+  window.sendChecked = function(btn){
+    var s = checkedStatuses();
+    if (!s.length){ alert('Tick at least one status to send.'); return; }
+    if (!(window.opener && window.opener.sendMasonReportToMason)){ alert('Open this report from the tracker to enable sending.'); return; }
+    btn.disabled = true; btn.textContent = '⏳ Sending…';
+    window.opener.sendMasonReportToMason(s);
+    setTimeout(function(){ btn.textContent = '✓ Sent (' + s.length + ')'; btn.disabled = false; }, 1500);
+  };
+  recompute();
+})();
+<\/script>
 
 </body>
 </html>`;
@@ -3376,9 +3419,10 @@ ${sections || '<p style="color:#888;">No active mason jobs to report.</p>'}
             win.document.close();
         }
 
-        // Collect the mason's active jobs as flat rows for the PDF/report.
-        function gatherMasonJobs() {
-            const statuses = ['Confirmed','In Design','Production','Ready'];
+        // Collect the mason's jobs as flat rows for the PDF/report.
+        // `statuses` defaults to the active mason pipeline.
+        function gatherMasonJobs(statuses) {
+            statuses = (Array.isArray(statuses) && statuses.length) ? statuses : ['Confirmed','In Design','Production','Ready'];
             const masonCost = o => {
                 try { const t = calculateOrderTotals(o); if (t && Number.isFinite(t.totalCost) && t.totalCost > 0) return t.totalCost; } catch(e){}
                 return parseFloat(o.totalCostPrice) || 0;
@@ -3409,8 +3453,8 @@ ${sections || '<p style="color:#888;">No active mason jobs to report.</p>'}
         }
 
         // Build the Mason Job Report as a landscape PDF (jsPDF) and return the doc.
-        function buildMasonReportPdf() {
-            const rows = gatherMasonJobs();
+        function buildMasonReportPdf(statuses) {
+            const rows = gatherMasonJobs(statuses);
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({ orientation: 'landscape' });
             const fmtMoney = n => '£' + (n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -3423,8 +3467,9 @@ ${sections || '<p style="color:#888;">No active mason jobs to report.</p>'}
             doc.text('FUNERAL DIRECTORS & MEMORIAL MASONS', 148.5, 21, { align: 'center' });
             doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(22,101,52);
             doc.text('MASON JOB REPORT', 148.5, 30, { align: 'center' });
+            const inclStatuses = (Array.isArray(statuses) && statuses.length ? statuses : ['Confirmed','In Design','Production','Ready']).map(statusLabel).join(', ');
             doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(120,120,120);
-            doc.text(`Generated ${today}  ·  Active jobs (Confirmed → Being Installed)`, 148.5, 35, { align: 'center' });
+            doc.text(`Generated ${today}  ·  ${inclStatuses}`, 148.5, 35, { align: 'center' });
             doc.setTextColor(180,83,9); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
             doc.text('CONFIDENTIAL — Mason cost prices. Not for the customer.', 148.5, 40, { align: 'center' });
             doc.setTextColor(0,0,0);
@@ -3491,13 +3536,13 @@ ${sections || '<p style="color:#888;">No active mason jobs to report.</p>'}
 
         // Build the mason report PDF and send it to the mason's WhatsApp group
         // via BeepMate's direct file POST (multipart) — no Drive needed.
-        async function sendMasonReportToMason() {
+        async function sendMasonReportToMason(statuses) {
             try {
-                const rows = gatherMasonJobs();
-                if (!rows.length) { alert('No active mason jobs to send.'); return; }
+                const rows = gatherMasonJobs(statuses);
+                if (!rows.length) { alert('No jobs in the selected statuses to send.'); return; }
                 showToast('💬 Sending mason report…', 'info');
 
-                const doc = buildMasonReportPdf();
+                const doc = buildMasonReportPdf(statuses);
                 const filename = `MasonReport_${new Date().toISOString().slice(0,10)}.pdf`;
                 const blob = doc.output('blob');
 
