@@ -196,14 +196,30 @@ const STAGES = ['enquiry', 'quoted', 'confirmed', 'in design', 'production', 're
 
 // Customer-facing milestones. `stage` ties each to a point in the pipeline.
 const MILESTONES = [
-  { stage: 'enquiry',    icon: '📋', label: 'Order Received',        desc: "We've received your order and begun the arrangements.", dateKey: 'createdDate' },
-  { stage: 'quoted',     icon: '💷', label: 'Estimate Provided',     desc: 'Your estimate has been prepared for you.',             dateKey: null },
-  { stage: 'confirmed',  icon: '✅', label: 'Order Confirmed',       desc: 'Your order is confirmed and booked into our schedule.', dateKey: null },
-  { stage: 'in design',  icon: '✍️', label: 'Design Approved',       desc: 'The memorial design and inscription have been finalised.', dateKey: 'proofDate' },
-  { stage: 'production', icon: '🔨', label: 'In Production',          desc: 'Your memorial is being hand-crafted by our masons.',   dateKey: 'productionStart' },
-  { stage: 'ready',      icon: '📦', label: 'Ready for Installation', desc: 'Your memorial is complete and ready to be installed.', dateKey: null },
-  { stage: 'installed',  icon: '🕊️', label: 'Installed',             desc: 'Your memorial has been installed at the cemetery.',    dateKey: 'installDate' }
+  { stage: 'enquiry',    icon: '📋', label: 'Order Received',        desc: "We've received your order and begun the arrangements." },
+  { stage: 'quoted',     icon: '💷', label: 'Estimate Provided',     desc: 'Your estimate has been prepared for you.' },
+  { stage: 'confirmed',  icon: '✅', label: 'Order Confirmed',       desc: 'Your order is confirmed and booked into our schedule.' },
+  { stage: 'in design',  icon: '✍️', label: 'Design Approved',       desc: 'The memorial design and inscription have been finalised.' },
+  { stage: 'production', icon: '🔨', label: 'In Production',          desc: 'Your memorial is being hand-crafted by our masons.' },
+  { stage: 'ready',      icon: '📦', label: 'Ready for Installation', desc: 'Your memorial is complete and ready to be installed.' },
+  { stage: 'installed',  icon: '🕊️', label: 'Installed',             desc: 'Your memorial has been installed at the cemetery.' }
 ];
+
+// Resolve the date to show for a milestone: prefer the explicit date column,
+// then fall back to the date that stage was reached in the activity log.
+function milestoneDate(stage, p) {
+  const sd = p.statusDates || {};
+  switch (stage) {
+    case 'enquiry':    return p.createdDate;
+    case 'quoted':     return sd['quoted'];
+    case 'confirmed':  return sd['confirmed'];
+    case 'in design':  return p.proofDate || sd['in design'];
+    case 'production': return p.productionStart || sd['production'];
+    case 'ready':      return sd['ready'];
+    case 'installed':  return p.installDate || sd['installed'];
+  }
+  return '';
+}
 
 function stageIdx(status) {
   let s = String(status || '').toLowerCase();
@@ -264,7 +280,7 @@ function render(p) {
     const isCurrent = (mi === ci);
     if (done) currentLabel = m.label;
 
-    const date = (done && m.dateKey) ? cleanDate(p[m.dateKey]) : '';
+    const date = done ? cleanDate(milestoneDate(m.stage, p)) : '';
     const cls = 'step' + (done ? ' done' : '') + (isCurrent ? ' current' : '');
     return (
       '<div class="' + cls + '">' +

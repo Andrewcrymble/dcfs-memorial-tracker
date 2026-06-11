@@ -1065,11 +1065,24 @@ function getProgressData(token, callback) {
       if (String(data[i][tokenCol]) !== String(token)) continue;
       const row = data[i];
 
+      // Pull the date each stage was first reached out of the log column so
+      // every milestone can show a date (the sheet only has explicit date
+      // columns for a few stages). Only dates are exposed — not the log text.
+      const statusDates = {};
+      String(get(row, 'Log Entries')).split(' | ').forEach(function (entry) {
+        const m = entry.match(/^\[(\d{1,2}\/\d{1,2}\/\d{4})[^\]]*\][^:]*:\s*Status changed to\s+(.+?)\s*$/i);
+        if (m) {
+          const stage = m[2].trim().toLowerCase();
+          if (!statusDates[stage]) statusDates[stage] = m[1]; // first = earliest reached
+        }
+      });
+
       const progress = {
         orderRef:          get(row, 'Order ID').slice(-8).toUpperCase(),
         customerFirstName: (get(row, 'Customer Name') || '').split(' ')[0],
         deceasedName:      get(row, 'Deceased Name'),
         status:            capitalizeStatus(get(row, 'Status')),
+        statusDates:       statusDates,
         createdDate:       get(row, 'Created') || get(row, 'Order Date'),
         orderDate:         get(row, 'Order Date'),
         proofDate:         get(row, 'Proof Date'),
