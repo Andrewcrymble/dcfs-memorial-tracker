@@ -3534,29 +3534,47 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             return doc;
         }
 
-        // Build the mason report PDF and send it to the mason's WhatsApp group
-        // via BeepMate's direct file POST (multipart) — no Drive needed.
+        // Build the mason report PDF, upload it to Google Drive, then send the
+        // mason's WhatsApp group a link — the same proven mechanism job cards
+        // and estimates use (direct browser→BeepMate file POSTs don't deliver).
         async function sendMasonReportToMason(statuses) {
             try {
                 const rows = gatherMasonJobs(statuses);
                 if (!rows.length) { alert('No jobs in the selected statuses to send.'); return; }
-                showToast('💬 Sending mason report…', 'info');
+                showToast('☁️ Uploading mason report…', 'info');
 
                 const doc = buildMasonReportPdf(statuses);
                 const filename = `MasonReport_${new Date().toISOString().slice(0,10)}.pdf`;
-                const blob = doc.output('blob');
+                const base64 = doc.output('datauristring').split(',')[1];
 
-                // Text caption first (so the group sees context), then the PDF file.
+                // Upload to Drive. No Content-Type header → simple request, so
+                // the Apps Script response (with viewUrl) is readable cross-origin.
+                let viewUrl = '';
+                try {
+                    const resp = await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: 'uploadFile',
+                            orderId: 'MASON-REPORTS',
+                            customerName: 'DC&S',
+                            deceasedName: 'Mason Reports',
+                            fileName: filename,
+                            fileType: 'Mason Report',
+                            fileData: base64,
+                            mimeType: 'application/pdf'
+                        })
+                    });
+                    const result = await resp.json();
+                    if (result && result.success && result.viewUrl) viewUrl = result.viewUrl;
+                    else console.warn('Mason report upload returned:', result);
+                } catch (e) { console.warn('Mason report upload failed:', e); }
+
                 const today = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
-                await sendToWhatsApp(`🔨 *MASON JOB REPORT* — ${today}\n${rows.length} active job${rows.length === 1 ? '' : 's'}. PDF attached.`, BEEPMATE_CONFIG.masonId);
+                const msg = `🔨 *MASON JOB REPORT* — ${today}\n${rows.length} job${rows.length === 1 ? '' : 's'}.`
+                    + (viewUrl ? `\n\n📎 *View / print the report:*\n${viewUrl}` : `\n\n(Report PDF could not be uploaded — please try again.)`);
+                await sendToWhatsApp(msg, BEEPMATE_CONFIG.masonId);
 
-                const fd = new FormData();
-                fd.append('file', blob, filename);
-                fd.append('key', BEEPMATE_CONFIG.apiKey);
-                fd.append('id', BEEPMATE_CONFIG.masonId);
-                await fetch(BEEPMATE_CONFIG.baseUrl, { method: 'POST', mode: 'no-cors', body: fd });
-
-                showToast('💬 Mason report sent to the mason on WhatsApp', 'success');
+                showToast(viewUrl ? '💬 Mason report link sent on WhatsApp' : '⚠ Sent text, but the PDF upload failed', viewUrl ? 'success' : 'warn', 5000);
             } catch (err) {
                 console.error('sendMasonReportToMason failed:', err);
                 showToast('⚠ Could not send the mason report', 'warn', 5000);
