@@ -4441,7 +4441,7 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             const isPermit = file.type === 'Cemetery Permit' || file.type === 'Grave Paper' || file.type === 'Signed Form';
             const confirmMsg = isPermit
                 ? `Mark "${file.name}" as APPROVED?\n\nUse this when permission has been granted (e.g. cemetery returned the signed permit). The submitted/approved dates will be kept on the file.`
-                : `Mark "${file.name}" as APPROVED?\n\nThis will record the approval date and notify the stone mason by email with the proof attached.`;
+                : `Mark "${file.name}" as APPROVED?\n\nThis records the approval date. Use "Send to Mason" to download the job card when you're ready to send it on.`;
             if (!confirm(confirmMsg)) return;
             file.approved = true;
             file.approvedAt = new Date().toISOString();
@@ -4450,34 +4450,10 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             addActivityLog(`${logLabel}: ${file.name}`);
             await saveOrder(currentOrder);
 
-            // Auto-notify mason on first internal approval of a Proof file
-            if (file.type === 'Proof' && !currentOrder.masonNotifiedAt) {
-                try {
-                    const res = await fetch(SCRIPT_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain' },
-                        body: JSON.stringify({
-                            action: 'notifyMason',
-                            orderId: currentOrder.orderId,
-                            triggeredBy: getCurrentUser() + ' (internal approval)',
-                            force: false
-                        })
-                    });
-                    let result = null;
-                    try { result = await res.json(); } catch(e) {}
-                    if (result && result.success) {
-                        currentOrder.masonNotifiedAt = (result.data && result.data.masonNotifiedAt) || new Date().toISOString();
-                        currentOrder.masonNotifiedBy = getCurrentUser() + ' (internal approval)';
-                        await saveOrder(currentOrder);
-                        showToast('✅ Mason notified', 'success');
-                    } else if (result && result.message) {
-                        showToast('⚠ Mason not notified: ' + result.message, 'warn', 5000);
-                    }
-                } catch (err) {
-                    console.error('Auto-notifyMason failed:', err);
-                    showToast('⚠ Could not reach mason notification service', 'warn', 5000);
-                }
-            }
+            // Mason is sent the job card manually via the "Send to Mason"
+            // button (downloads the job card PDF). The old auto-email on proof
+            // approval is disabled — the email backend lacks send permission
+            // and we're moving to WhatsApp / BeepMe.
 
             renderOrderDetails();
         }
