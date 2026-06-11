@@ -1851,6 +1851,12 @@
             let totalVal = 0;
             let outstanding = 0;
             const activeStatuses = new Set(['Enquiry','Quoted','Confirmed','In Design','Production','Ready']);
+            // Money still owed = the active pipeline PLUS completed jobs (a
+            // completed job with a balance is an overdue invoice, so it's still
+            // outstanding). Query items (legacy entries being checked) and
+            // Installed are deliberately excluded so they don't inflate the
+            // outstanding figure.
+            const outstandingStatuses = new Set(['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Completed']);
 
             (allOrders || []).forEach(o => {
                 const s = o.status || 'Enquiry';
@@ -1858,10 +1864,8 @@
                 total++;
                 const val = getOrderTotal(o);
                 const bal = getOrderBalance(o);
-                if (activeStatuses.has(s)) {
-                    totalVal += val;
-                    outstanding += bal;
-                }
+                if (activeStatuses.has(s)) totalVal += val;
+                if (outstandingStatuses.has(s)) outstanding += bal;
             });
 
             const el = id => document.getElementById(id);
