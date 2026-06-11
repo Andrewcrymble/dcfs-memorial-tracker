@@ -823,30 +823,33 @@
 
         /* ── FORM STYLES ── */
         .form-section {
-            background: var(--bg);
-            border-radius: 8px;
-            padding: 1.25rem;
-            margin-bottom: 1rem;
+            background: white;
+            border-radius: 10px;
+            padding: 1.15rem 1.3rem 1.3rem;
+            margin-bottom: 1.1rem;
             border: 1px solid var(--border);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
         .section-title {
-            font-size: 0.8rem;
+            font-size: 0.82rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             color: var(--green);
-            margin-bottom: 0.85rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
         }
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; }
-        .form-group { display: flex; flex-direction: column; gap: 0.25rem; }
-        .form-group label { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem 1rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.3rem; }
+        .form-group label { font-size: 0.68rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.85; }
         .form-group input,
         .form-group select,
         .form-group textarea {
-            padding: 0.5rem 0.75rem;
+            padding: 0.6rem 0.8rem;
             border: 1px solid var(--border);
-            border-radius: 6px;
-            font-size: 0.9rem;
+            border-radius: 7px;
+            font-size: 0.95rem;
             font-family: inherit;
             background: white;
             transition: border-color 0.15s;
@@ -2610,7 +2613,7 @@
                     return `<li class="order-item" data-order-id="${safeId}"${notesAttr} style="position:relative;border-left:${cardBorderW} solid ${cardBorder};${cardBg}margin:0;border-radius:8px;padding:0.4rem 0.6rem;${archivedDim}">
                         ${archiveBtnHtml}
                         <div class="order-item-top" style="margin-bottom:0.1rem;${showArchiveBtn?'padding-right:26px;':''}">
-                            <div class="order-name" style="font-size:0.78rem;line-height:1.2;display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
+                            <div class="order-name" style="font-size:0.86rem;font-weight:700;line-height:1.2;display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
                                 <span>${order.deceasedName||'Unknown'}</span>
                                 ${changesBadge}
                                 ${overdueBadge}
