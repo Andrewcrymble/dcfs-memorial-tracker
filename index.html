@@ -4446,7 +4446,7 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             const isPermit = file.type === 'Cemetery Permit' || file.type === 'Grave Paper' || file.type === 'Signed Form';
             const confirmMsg = isPermit
                 ? `Mark "${file.name}" as APPROVED?\n\nUse this when permission has been granted (e.g. cemetery returned the signed permit). The submitted/approved dates will be kept on the file.`
-                : `Mark "${file.name}" as APPROVED?\n\nThis records the approval date. Use "Send to Mason" to download the job card when you're ready to send it on.`;
+                : `Mark "${file.name}" as APPROVED?\n\nThis records the approval date and sends the job card to the mason on WhatsApp.`;
             if (!confirm(confirmMsg)) return;
             file.approved = true;
             file.approvedAt = new Date().toISOString();
@@ -4455,10 +4455,22 @@ ${sections || '<p style="color:#888;">No orders to report.</p>'}
             addActivityLog(`${logLabel}: ${file.name}`);
             await saveOrder(currentOrder);
 
-            // Mason is sent the job card manually via the "Send to Mason"
-            // button (downloads the job card PDF). The old auto-email on proof
-            // approval is disabled — the email backend lacks send permission
-            // and we're moving to WhatsApp / BeepMe.
+            // Auto-send the job card to the mason on the first proof approval.
+            // Same WhatsApp/BeepMate route as the manual "Send to Mason" button.
+            if (file.type === 'Proof' && !currentOrder.masonNotifiedAt) {
+                try {
+                    showToast('💬 Sending job card to the mason…', 'info');
+                    await generateMasonJobCard({ download: false, sendToStaff: false, sendToMason: true });
+                    currentOrder.masonNotifiedAt = new Date().toISOString();
+                    currentOrder.masonNotifiedBy = getCurrentUser() + ' (proof approval)';
+                    addActivityLog('Job card sent to mason on WhatsApp (proof approval)');
+                    await saveOrder(currentOrder);
+                    showToast('💬 Job card sent to the mason on WhatsApp', 'success');
+                } catch (err) {
+                    console.error('Auto send-to-mason on approval failed:', err);
+                    showToast('⚠ Could not auto-send to the mason — use the Send to Mason button', 'warn', 5000);
+                }
+            }
 
             renderOrderDetails();
         }
