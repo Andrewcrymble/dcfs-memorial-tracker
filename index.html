@@ -1802,13 +1802,16 @@
                 <div id="dashboardInboxList" style="font-size:0.85rem;max-height:380px;overflow-y:auto;padding-right:0.5rem;"></div>
             </div>
 
-            <!-- hidden: full order-grid used by filter tabs when a specific filter is set -->
-            <div class="order-grid-wrap" id="orderGridWrap" style="display:none;">
-                <ul class="order-grid" id="orderList">
-                    <li class="loading">Loading orders…</li>
-                </ul>
-            </div>
+        </div>
 
+        <!-- Full order-grid shown by the filter tabs when a specific status is
+             selected. It is a SIBLING of #boardWrap (not nested inside it) so
+             that hiding the board for a filtered view doesn't also hide this
+             grid — otherwise every filter tab renders into a hidden container. -->
+        <div class="order-grid-wrap" id="orderGridWrap" style="display:none;">
+            <ul class="order-grid" id="orderList">
+                <li class="loading">Loading orders…</li>
+            </ul>
         </div>
     </div>
 
