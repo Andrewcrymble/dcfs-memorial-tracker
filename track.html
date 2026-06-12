@@ -276,6 +276,15 @@ function showError(msg) {
   document.getElementById('loadingView').style.display = 'none';
   document.getElementById('contentView').style.display = 'none';
   if (msg) document.getElementById('errorMsg').textContent = msg;
+  if (!document.getElementById('errRetryBtn')) {
+    var b = document.createElement('button');
+    b.id = 'errRetryBtn';
+    b.textContent = '↻ Try again';
+    b.onclick = function () { location.reload(); };
+    b.style.cssText = 'margin-top:1rem;background:var(--green);color:#fff;border:none;border-radius:999px;' +
+      'padding:0.55rem 1.4rem;font-size:0.85rem;font-weight:700;cursor:pointer;';
+    document.getElementById('errorMsg').insertAdjacentElement('afterend', b);
+  }
   document.getElementById('errorView').style.display = '';
 }
 

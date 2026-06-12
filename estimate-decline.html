@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Request Changes — David Crymble &amp; Sons</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -196,6 +196,7 @@
     <div class="icon">✅</div>
     <h2>Thank you</h2>
     <p>Your change request has been received. A member of the David Crymble &amp; Sons team will be in touch shortly.</p>
+    <p style="font-size:0.85rem;color:#6c6c70;margin-top:0.75rem;">If you don't hear from us within one working day, please call <strong>028 9066 7784</strong> so we can be sure we received it.</p>
   </div>
 </div>
 
@@ -253,9 +254,14 @@
     btn.disabled = true;
     btn.textContent = 'Sending…';
 
+    // Apps Script doesn't return CORS headers, so a readable cross-origin POST
+    // isn't possible here. Fire the write reliably with no-cors and show a
+    // thank-you that carries a "call us if you don't hear back" safety net,
+    // rather than falsely reporting a hard success or failure.
     try {
-      const resp = await fetch(SCRIPT_URL, {
+      await fetch(SCRIPT_URL, {
         method: 'POST',
+        mode:   'no-cors',
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
           action: 'submitEstimateChanges',
@@ -263,22 +269,11 @@
           changes: changes
         })
       });
-      let result = {};
-      try { result = await resp.json(); } catch (e) {}
-      if (result && result.success) {
-        document.getElementById('form').style.display = 'none';
-        document.getElementById('thankyou').style.display = 'block';
-      } else {
-        showError((result && result.message) || 'Could not send your request — please call us on 028 9066 7784.');
-        btn.disabled = false;
-        btn.textContent = 'Send Change Request';
-      }
     } catch (err) {
-      // no-cors / network error — assume it went through
       console.warn('Submit error:', err);
-      document.getElementById('form').style.display = 'none';
-      document.getElementById('thankyou').style.display = 'block';
     }
+    document.getElementById('form').style.display = 'none';
+    document.getElementById('thankyou').style.display = 'block';
   }
 
   // Submit on Ctrl+Enter for convenience
