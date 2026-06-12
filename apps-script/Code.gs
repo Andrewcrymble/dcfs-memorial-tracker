@@ -582,11 +582,18 @@ function upsertOrder(order) {
                         : (balance <= 0 ? 'Paid' : 'Part Paid');
   const _finalStripeDate = order.stripePaymentDate || _prevStr('Stripe Payment Date');
   const _finalStripeAmt  = (parseFloat(order.stripePaymentAmount) || 0) || _prevNum('Stripe Payment Amount');
-  const logText = (order.log || []).map(l =>
-    '[' + new Date(l.ts).toLocaleDateString("en-GB") + ' ' +
-    new Date(l.ts).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) +
-    '] ' + (l.author || "Staff") + ': ' + l.text
-  ).join(" | ");
+  const logText = (order.log || []).map(l => {
+    // Parse the timestamp robustly (handles ISO and dd/mm/yyyy) then format it
+    // unambiguously with Utilities.formatDate. The old code used
+    // new Date(l.ts).toLocaleDateString — if l.ts was ever a "dd/mm/yyyy"
+    // string, new Date() reads it as US mm/dd and the day/month get swapped,
+    // which silently scrambled dates on repeatedly-saved orders.
+    const d = new Date(parseGbDateTime(l.ts) || l.ts);
+    const stamp = isNaN(d.getTime())
+      ? String(l.ts || '')
+      : Utilities.formatDate(d, 'Europe/London', 'dd/MM/yyyy HH:mm');
+    return '[' + stamp + '] ' + (l.author || "Staff") + ': ' + l.text;
+  }).join(" | ");
 
   const fmtDate = d => {
     if (!d || d === "Invalid Date") return "";

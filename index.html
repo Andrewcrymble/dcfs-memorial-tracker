@@ -3753,8 +3753,10 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             const fmtAgo = ts => {
                 const d = new Date(ts);
                 if (!ts || isNaN(d.getTime())) return '';
-                let diff = (Date.now() - d) / 60000;
-                if (diff < 0) diff = 0;
+                const diff = (Date.now() - d) / 60000;
+                // Future-dated entry (bad data) — show the actual date rather
+                // than masking it as "just now", so the anomaly is visible.
+                if (diff < -2) return '⚠ ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
                 if (diff < 1)     return 'just now';
                 if (diff < 60)    return Math.round(diff) + 'm ago';
                 if (diff < 1440)  return Math.round(diff / 60) + 'h ago';
