@@ -3656,7 +3656,7 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                     + (viewUrl ? `\n\n📎 *View / print the report:*\n${viewUrl}` : `\n\n(Report PDF could not be uploaded — please try again.)`);
                 await sendToWhatsApp(msg, BEEPMATE_CONFIG.masonId);
 
-                showToast(viewUrl ? '💬 Mason report link sent on WhatsApp' : '⚠ Sent text, but the PDF upload failed', viewUrl ? 'success' : 'warn', 5000);
+                showToast(viewUrl ? '💬 Mason report sent — please confirm it arrived in WhatsApp' : '⚠ Sent text, but the PDF upload failed', viewUrl ? 'success' : 'warn', 5000);
             } catch (err) {
                 console.error('sendMasonReportToMason failed:', err);
                 showToast('⚠ Could not send the mason report', 'warn', 5000);
@@ -5104,7 +5104,7 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                     currentOrder.masonNotifiedBy = getCurrentUser() + ' (proof approval)';
                     addActivityLog('Job card sent to mason on WhatsApp (proof approval)');
                     await saveOrder(currentOrder);
-                    showToast('💬 Job card sent to the mason on WhatsApp', 'success');
+                    showToast('💬 Job card sent to the mason — please confirm it arrived in WhatsApp', 'success', 5000);
                 } catch (err) {
                     console.error('Auto send-to-mason on approval failed:', err);
                     showToast('⚠ Could not auto-send to the mason — use the Send to Mason button', 'warn', 5000);
@@ -5384,7 +5384,7 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             currentOrder.masonNotifiedBy = getCurrentUser();
             addActivityLog(`Job card sent to mason on WhatsApp${isResend ? ' (re-send)' : ''}`);
             try { await saveOrder(currentOrder); } catch (e) { console.error('saveOrder after mason send failed:', e); }
-            showToast('💬 Job card sent to the mason on WhatsApp', 'success');
+            showToast('💬 Job card sent to the mason — please confirm it arrived in WhatsApp', 'success', 5000);
             try { renderOrderDetails(); } catch (e) {}
         }
 
