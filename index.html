@@ -5718,16 +5718,10 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                                 </div>
                             </div>
                         </div>
+                        <!-- Stone type is chosen via the image cards above; this
+                             hidden field carries the resolved price-book type. -->
+                        <input type="hidden" name="hsType" id="f_hsType" value="${order.hsType || ''}">
                         <div class="form-grid">
-                            <div class="form-group">
-                                <label>Type</label>
-                                <select name="hsType" id="f_hsType" onchange="onHsTypeChange()">
-                                    <option value="">Select type</option>
-                                    ${getHeadstoneTypes().map(type =>
-                                        `<option value="${type}" ${order.hsType === type ? 'selected' : ''}>${type}</option>`
-                                    ).join('')}
-                                </select>
-                            </div>
                             <div class="form-group">
                                 <label>Size</label>
                                 <select name="hsSize" id="f_hsSize" onchange="updateFormPrices()">
@@ -5760,17 +5754,6 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                                     <option value="Grey" ${order.hsColour === 'Grey' ? 'selected' : ''}>Grey (-£50)</option>
                                     <option value="Ruby Red" ${order.hsColour === 'Ruby Red' ? 'selected' : ''}>Ruby Red (+£150)</option>
                                     <option value="Other" ${order.hsColour === 'Other' ? 'selected' : ''}>Other</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Finish</label>
-                                <select name="hsFinish">
-                                    <option value="">Select finish</option>
-                                    <option value="Polished" ${order.hsFinish === 'Polished' ? 'selected' : ''}>Polished</option>
-                                    <option value="Honed" ${order.hsFinish === 'Honed' ? 'selected' : ''}>Honed</option>
-                                    <option value="Flamed" ${order.hsFinish === 'Flamed' ? 'selected' : ''}>Flamed</option>
-                                    <option value="Sandblasted" ${order.hsFinish === 'Sandblasted' ? 'selected' : ''}>Sandblasted</option>
-                                    <option value="Natural" ${order.hsFinish === 'Natural' ? 'selected' : ''}>Natural</option>
                                 </select>
                             </div>
                         </div>
@@ -6080,60 +6063,50 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             ];
         }
 
+        // Maps a stone-style card label to the matching price-book type. The
+        // price book has some spelling quirks (e.g. "Denmore", "Half Denmore"),
+        // so an explicit map avoids the old fuzzy-match silently failing.
+        const STONE_TYPE_MAP = {
+            'Ogee': 'Ogee',
+            'G3': 'G3',
+            'Densmore': 'Denmore',
+            '1/2 Densmore': 'Half Denmore',
+            'Murphy': 'Murphy'
+        };
+
+        // Resolve a card label to the actual price-book type. Prefers an exact
+        // price-book match (so it keeps working if the sheet spelling is fixed),
+        // then the explicit map, then the label itself.
+        function resolveStoneType(cardLabel) {
+            const types = getHeadstoneTypes();
+            if (types.indexOf(cardLabel) !== -1) return cardLabel;
+            const mapped = STONE_TYPE_MAP[cardLabel];
+            if (mapped && types.indexOf(mapped) !== -1) return mapped;
+            return mapped || cardLabel;
+        }
+
         function selectStone(type) {
-            window._selectedStoneType = type;
-            const sel = document.getElementById('f_hsType');
-            if (sel) {
-                const opts = Array.from(sel.options);
-                const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-                const typeNorm = norm(type);
-
-                // 1. Exact match
-                let match = opts.find(o => o.value === type);
-                // 2. Case-insensitive exact
-                if (!match) match = opts.find(o => o.value.toLowerCase() === type.toLowerCase());
-                // 3. Normalised (strip non-alphanumeric)
-                if (!match) match = opts.find(o => norm(o.value) === typeNorm);
-                // 4. For '1/2 Densmore' / 'Half Densmore' etc — match on base word + half/1/2
-                if (!match) {
-                    const isHalf = /half|½|1\/2|1.2/i.test(type);
-                    const baseWord = type.toLowerCase().replace(/half|½|1\/2|1.2|densmore|ogee|murphy|g3|\s/gi,'').trim();
-                    match = opts.find(o => {
-                        if (!o.value) return false;
-                        const oNorm = o.value.toLowerCase();
-                        const oIsHalf = /half|½|1\/2|1.2/i.test(oNorm);
-                        // Both mention densmore (or the stone name) and share half/full status
-                        return norm(o.value).includes(norm(type.replace(/1\/2|half|½/gi,'').trim())) && oIsHalf === isHalf;
-                    });
-                }
-                // 5. Partial — every significant word in type appears in option
-                if (!match) {
-                    const words = type.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 1);
-                    match = opts.find(o => words.every(w => o.value.toLowerCase().includes(w)));
-                }
-
-                if (match) {
-                    sel.value = match.value;
-                    window._selectedStoneType = match.value;
-                    onHsTypeChange();
-                } else {
-                    console.warn('Stone picker: no price book match found for type:', type, '— available:', opts.map(o=>o.value));
-                }
-            }
-            // Highlight selected card
+            const resolved = resolveStoneType(type);
+            const hidden = document.getElementById('f_hsType');
+            if (hidden) hidden.value = resolved;
+            window._selectedStoneType = resolved;
+            // Highlight the chosen card (by its display label)
             document.querySelectorAll('.stone-card').forEach(c => {
                 c.classList.toggle('selected', c.dataset.type === type);
             });
+            onHsTypeChange();   // rebuild the size list for this type
             updateFormPrices();
         }
 
         // Rebuild headstone size dropdown with prices when type changes
         function onHsTypeChange() {
-            // Sync stone picker highlight when type select changes
+            // Sync stone-picker highlight from the hidden hsType (a price-book
+            // value), matching each card via resolveStoneType so the right card
+            // lights up even when the label and price-book spelling differ.
             const currentType = document.getElementById('f_hsType')?.value;
             window._selectedStoneType = currentType || null;
             document.querySelectorAll('.stone-card').forEach(c => {
-                c.classList.toggle('selected', c.dataset.type === currentType);
+                c.classList.toggle('selected', resolveStoneType(c.dataset.type) === currentType);
             });
 
             const hsType = document.getElementById('f_hsType')?.value || '';
