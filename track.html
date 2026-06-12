@@ -297,7 +297,11 @@ function render(p) {
     // to view/approve it. ──
     if (m.special === 'proof') {
       const ps = p.proofStatus || 'pending';
-      const done = ps === 'sent' || ps === 'changes_requested' || ps === 'approved' || !!p.proofApproved;
+      // Done if a proof was sent/approved through the system, OR the pipeline
+      // has already reached the design stage or beyond — you can't get past
+      // design without a proof, so don't strand it as "pending" on older jobs.
+      const pastDesign = ci >= stageIdx('in design') && ci >= 0;
+      const done = ps === 'sent' || ps === 'changes_requested' || ps === 'approved' || !!p.proofApproved || pastDesign;
       const awaiting = (ps === 'sent' || ps === 'changes_requested') && !p.proofApproved;
       if (done) currentLabel = m.label;
       const desc = (ps === 'changes_requested')
