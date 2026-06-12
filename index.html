@@ -1917,10 +1917,9 @@
 
         // When true, WhatsApp sends are routed through Apps Script (which can
         // read BeepMate's reply and report real success/failure + log/email on
-        // failure) instead of the browser's blind no-cors send. Leave false
-        // until BEEPMATE_BASE_URL and BEEPMATE_API_KEY are set in the Apps
-        // Script Script Properties and tested — see testWhatsApp() in Code.gs.
-        const WHATSAPP_SERVER_SIDE = false;
+        // failure) instead of the browser's blind no-cors send. Enabled after a
+        // live test confirmed BeepMate returns HTTP 200 on delivery.
+        const WHATSAPP_SERVER_SIDE = true;
 
         // Send message to BeepMate WhatsApp
         // Normalise a phone string into international digits-only for use
