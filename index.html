@@ -1915,6 +1915,13 @@
             baseUrl: 'https://beepmate.io/send'
         };
 
+        // When true, WhatsApp sends are routed through Apps Script (which can
+        // read BeepMate's reply and report real success/failure + log/email on
+        // failure) instead of the browser's blind no-cors send. Leave false
+        // until BEEPMATE_BASE_URL and BEEPMATE_API_KEY are set in the Apps
+        // Script Script Properties and tested — see testWhatsApp() in Code.gs.
+        const WHATSAPP_SERVER_SIDE = false;
+
         // Send message to BeepMate WhatsApp
         // Normalise a phone string into international digits-only for use
         // in https://wa.me/ URLs. UK numbers starting "0" become "44…".
@@ -2083,16 +2090,44 @@
         }
 
         async function sendToWhatsApp(message, targetId) {
+            // Preferred path once configured: send via Apps Script so the result
+            // is actually readable (and failures get logged + emailed server-side).
+            if (WHATSAPP_SERVER_SIDE) {
+                return sendWhatsAppViaServer(message, targetId);
+            }
+            // Legacy direct send — fire-and-forget, result can't be confirmed.
             try {
                 const id = targetId || BEEPMATE_CONFIG.groupId;
                 const url = `${BEEPMATE_CONFIG.baseUrl}?key=${BEEPMATE_CONFIG.apiKey}&id=${id}&msg=${encodeURIComponent(message)}`;
                 await fetch(url, { mode: 'no-cors' });
-                console.log('WhatsApp message sent');
+                console.log('WhatsApp message sent (unconfirmed)');
                 return true;
             } catch (error) {
                 console.error('Error sending WhatsApp message:', error);
                 return false;
             }
+        }
+
+        // Route a WhatsApp send through Apps Script via JSONP so we can read a
+        // real success/failure. Resolves true only when the server confirms it.
+        function sendWhatsAppViaServer(message, targetId) {
+            return new Promise(resolve => {
+                const cb = '__waCb_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
+                const cleanup = () => { try { delete window[cb]; } catch (e) {} };
+                const to = setTimeout(() => { cleanup(); console.warn('WhatsApp send timed out'); resolve(false); }, 20000);
+                window[cb] = function (resp) {
+                    clearTimeout(to); cleanup();
+                    if (!resp || !resp.success) console.warn('WhatsApp send failed:', resp);
+                    resolve(!!(resp && resp.success));
+                };
+                const params = new URLSearchParams({ action: 'sendWhatsApp', msg: message, callback: cb, _: Date.now() });
+                if (targetId) params.set('target', targetId);
+                if (currentOrder && currentOrder.orderId) params.set('orderId', currentOrder.orderId);
+                const s = document.createElement('script');
+                s.src = SCRIPT_URL + '?' + params.toString();
+                s.onerror = () => { clearTimeout(to); cleanup(); resolve(false); };
+                document.head.appendChild(s);
+            });
         }
 
         // Upload PDF to Drive then send WhatsApp with link. `targetId` lets the

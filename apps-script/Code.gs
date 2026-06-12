@@ -124,6 +124,11 @@ function doGet(e) {
     return getProgressData(e.parameter.token, e.parameter.callback);
   }
 
+  // ── Server-side WhatsApp send (so delivery can actually be confirmed) ──
+  if (e && e.parameter && e.parameter.action === 'sendWhatsApp') {
+    return sendWhatsAppServer(e.parameter, e.parameter.callback);
+  }
+
   try {
     const sheet = getOrCreateSheet();
     const data = sheet.getDataRange().getValues();
@@ -342,6 +347,106 @@ function markPaymentReceived(orderId, amountPounds, paymentType, sessionId) {
   } catch (err) {
     Logger.log('markPaymentReceived error: ' + err);
   }
+}
+
+// ============================================================
+// SERVER-SIDE WHATSAPP SEND (BeepMate)
+// Sending from the server lets us READ BeepMate's response and report real
+// success/failure (the browser can't, due to CORS). Credentials live in
+// Script Properties: BEEPMATE_BASE_URL, BEEPMATE_API_KEY (and optional
+// BEEPMATE_GROUP_ID as a default target). Called via JSONP from the app.
+// ============================================================
+function sendWhatsAppServer(params, callback) {
+  function send(obj) {
+    const json = JSON.stringify(obj);
+    if (callback) {
+      return ContentService.createTextOutput(callback + '(' + json + ')')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
+  }
+  try {
+    const props   = PropertiesService.getScriptProperties();
+    const baseUrl = props.getProperty('BEEPMATE_BASE_URL');
+    const apiKey  = props.getProperty('BEEPMATE_API_KEY');
+    if (!baseUrl || !apiKey) {
+      return send({ success: false, error: 'WhatsApp not configured (set BEEPMATE_BASE_URL and BEEPMATE_API_KEY in Script Properties)' });
+    }
+    const target = params.target || props.getProperty('BEEPMATE_GROUP_ID') || '';
+    const msg    = params.msg || '';
+    if (!target) return send({ success: false, error: 'No WhatsApp target id' });
+
+    const url = baseUrl + '?key=' + encodeURIComponent(apiKey) +
+                '&id=' + encodeURIComponent(target) +
+                '&msg=' + encodeURIComponent(msg);
+    const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    const code = resp.getResponseCode();
+    const bodyText = resp.getContentText();
+    // Baseline success check on the HTTP status. If BeepMate signals logical
+    // failures with a 200 + error body, refine this after the first live test.
+    const ok = code >= 200 && code < 300;
+    if (!ok) whatsAppFailureAlert(params.orderId, target, code, bodyText);
+    return send({ success: ok, status: code });
+  } catch (err) {
+    whatsAppFailureAlert(params.orderId, params.target, 0, String(err));
+    return send({ success: false, error: String(err) });
+  }
+}
+
+// A failed WhatsApp send shouts in two places: a warning on the order's log
+// and an email to the office, so it never fails silently.
+function whatsAppFailureAlert(orderId, target, code, detail) {
+  try {
+    if (orderId) {
+      const sheet   = getOrCreateSheet();
+      const data    = sheet.getDataRange().getValues();
+      const headers = data[0];
+      const logCol  = headers.indexOf('Log Entries');
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) !== String(orderId)) continue;
+        if (logCol >= 0) {
+          const cur = String(data[i][logCol] || '');
+          const ts  = Utilities.formatDate(new Date(), 'Europe/London', 'dd/MM/yyyy HH:mm');
+          const warn = '[' + ts + '] System: ⚠️ WHATSAPP SEND FAILED (target ' + target + ', code ' + code + ') — message NOT delivered, please send it manually';
+          sheet.getRange(i + 1, logCol + 1).setValue(cur ? cur + ' | ' + warn : warn);
+        }
+        break;
+      }
+    }
+  } catch (e) { Logger.log('whatsAppFailureAlert log error: ' + e); }
+  try {
+    const officeEmail = PropertiesService.getScriptProperties().getProperty('OFFICE_EMAIL') || 'memorials@crymbleandsons.com';
+    MailApp.sendEmail({
+      to: officeEmail,
+      subject: '⚠️ WhatsApp message failed to send',
+      body: 'A WhatsApp message could not be delivered.\n\n' +
+            'Order: ' + (orderId || '(none)') + '\n' +
+            'Target id: ' + target + '\n' +
+            'HTTP code: ' + code + '\n' +
+            'Detail: ' + String(detail).slice(0, 500) + '\n\n' +
+            'Please send the message manually.'
+    });
+  } catch (e) { Logger.log('whatsAppFailureAlert email error: ' + e); }
+}
+
+// One-click test — Run this in the Apps Script editor after setting the
+// Beepmate Script Properties. Sends a test message to the test number and
+// logs Beepmate's HTTP response so you can confirm the integration works.
+function testWhatsApp() {
+  const props   = PropertiesService.getScriptProperties();
+  const baseUrl = props.getProperty('BEEPMATE_BASE_URL');
+  const apiKey  = props.getProperty('BEEPMATE_API_KEY');
+  if (!baseUrl || !apiKey) {
+    Logger.log('❌ Set BEEPMATE_BASE_URL and BEEPMATE_API_KEY in Script Properties first.');
+    return;
+  }
+  const target = '447545972340'; // 07545972340 in international format
+  const url = baseUrl + '?key=' + encodeURIComponent(apiKey) +
+              '&id=' + encodeURIComponent(target) +
+              '&msg=' + encodeURIComponent('✅ DC&S tracker test — server-side WhatsApp is working.');
+  const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  Logger.log('HTTP ' + resp.getResponseCode());
+  Logger.log('Body: ' + resp.getContentText());
 }
 
 // ============================================================
