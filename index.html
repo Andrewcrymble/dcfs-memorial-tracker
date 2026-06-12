@@ -3844,6 +3844,9 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
         // Order actions offered in the right-click menu — the same buttons that
         // sit in the order detail action bar. Each runs against the right-clicked
         // order. `needsPhone` items are disabled when the order has no phone.
+        // Delete is deliberately NOT here — it's a destructive, no-undo action
+        // and the quick menu is for everyday changes. It stays in the order
+        // detail action bar only.
         const ORDER_ACTIONS = [
             { fn:'editOrder',                      icon:'✏️', label:'Edit Order' },
             { fn:'generateEstimate',               icon:'📄', label:'Estimate' },
@@ -3851,9 +3854,8 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             { fn:'generateInvoice',                icon:'🧾', label:'Invoice' },
             { fn:'shareProofLink',                 icon:'🔗', label:'Share Proof' },
             { fn:'sendEstimateToCustomerWhatsApp', icon:'💬', label:'WhatsApp Estimate', needsPhone:true },
-            { fn:'createPaymentLink',              icon:'💳', label:'Payment Link' },
-            { fn:'recordPaymentManual',            icon:'💰', label:'Record Payment' },
-            { fn:'deleteOrder',                    icon:'🗑️', label:'Delete', danger:true }
+            { fn:'createPaymentLink',              icon:'💳', label:'Send Payment Request' },
+            { fn:'recordPaymentManual',            icon:'💰', label:'Mark Payment Received' }
         ];
 
         function getStatusContextMenu() {
@@ -4564,8 +4566,8 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                     <button class="btn btn-cyan" onclick="generateInvoice()">🧾 Invoice</button>
                     <button class="btn" style="background:#7c3aed;color:white;" onclick="shareProofLink()">🔗 Share Proof</button>
                     <button class="btn" style="background:#25d366;color:white;" onclick="sendEstimateToCustomerWhatsApp()" ${o.phone ? '' : 'disabled title="No phone number on order"'}>💬 WhatsApp Estimate</button>
-                    <button class="btn" style="background:#635bff;color:white;" onclick="createPaymentLink()">💳 Payment Link</button>
-                    <button class="btn" style="background:#16a34a;color:white;" onclick="recordPaymentManual()">💰 Record Payment</button>
+                    <button class="btn" style="background:#635bff;color:white;" onclick="createPaymentLink()" title="Create a Stripe link and send it to the customer to pay">💳 Send Payment Request</button>
+                    <button class="btn" style="background:#16a34a;color:white;" onclick="recordPaymentManual()" title="Log a payment you've already received (cash, transfer, card)">💰 Mark Payment Received</button>
                     <div class="spacer"></div>
                     <button class="btn btn-danger" onclick="deleteOrder()">🗑️ Delete</button>
                 </div>
@@ -5540,12 +5542,28 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             showOrderForm(currentOrder);
         }
 
+        // Next order reference for the current year. Derives the sequence from
+        // the highest existing HS<year>-NNNN ref rather than the order count, so
+        // deleting/archiving an order can't produce a duplicate number.
+        function nextOrderRef() {
+            const year = new Date().getFullYear();
+            let maxN = 0;
+            (allOrders || []).forEach(o => {
+                const m = String(o.orderRef || '').match(/^HS(\d{4})-(\d+)$/);
+                if (m && m[1] === String(year)) {
+                    const n = parseInt(m[2], 10);
+                    if (n > maxN) maxN = n;
+                }
+            });
+            return 'HS' + year + '-' + String(maxN + 1).padStart(4, '0');
+        }
+
         // Show new order modal
         function showNewOrderModal() {
             editingOrderId = null;
             showOrderForm({
                 orderId: 'ORD' + Date.now(),
-                orderRef: 'HS' + new Date().getFullYear() + '-' + String(allOrders.length + 1).padStart(4, '0'),
+                orderRef: nextOrderRef(),
                 status: 'Enquiry',
                 orderDate: new Date().toISOString().split('T')[0],
                 inscriptionType: 'new',
@@ -6259,7 +6277,7 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             const formData = new FormData(event.target);
             const orderData = editingOrderId ? {...currentOrder} : {
                 orderId: 'ORD' + Date.now(),
-                orderRef: 'HS' + new Date().getFullYear() + '-' + String(allOrders.length + 1).padStart(4, '0'),
+                orderRef: nextOrderRef(),
                 status: 'Enquiry',
                 orderDate: new Date().toISOString().split('T')[0],
                 log: [],
@@ -8621,6 +8639,21 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
 
         function shareProofLink() {
             if (!currentOrder) { alert('Please select an order first.'); return; }
+
+            // Guard: warn if no proof artwork has been uploaded. The customer
+            // page will still render a proof from the order details, but staff
+            // usually mean to upload the finished artwork first.
+            const hasProofFile = (currentOrder.files || []).some(f => f && f.type === 'Proof');
+            if (!hasProofFile) {
+                const proceed = confirm(
+                    'No proof file has been uploaded for this order yet.\n\n' +
+                    'The customer will see a proof generated from the order details — not uploaded artwork. ' +
+                    'If you have finished artwork, add it via Files → "Proof" first.\n\n' +
+                    'Share the link anyway?'
+                );
+                if (!proceed) return;
+            }
+
             const url = getProofUrl(currentOrder);
 
             // Check for existing proof status in log entries array

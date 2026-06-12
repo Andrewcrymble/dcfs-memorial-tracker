@@ -349,7 +349,7 @@ function handleCreatePaymentLink(data) {
     const prevDeposit  = parseFloat(data.previousDeposit)  || 0;
     const newBalance   = Math.max(0, totalOrder - prevDeposit - amountPounds);
     const shortRef     = (orderRef || orderId || "").slice(-8).toUpperCase();
-    const successUrl   = "https://andrewcrymble.github.io/dcfs-memorial-tracker/payment-success.html"
+    const successUrl   = "https://tracker.crymbleandsons.com/payment-success.html"
       + "?ref="  + encodeURIComponent(shortRef)
       + "&amt="  + amountPounds.toFixed(2)
       + "&bal="  + newBalance.toFixed(2)
