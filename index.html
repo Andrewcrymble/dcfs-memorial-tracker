@@ -9313,6 +9313,9 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                 if (idx >= 0) allOrders[idx] = Object.assign({}, allOrders[idx], order);
                 else allOrders.unshift(order);
                 window._idLastDesignDirty = false;
+                // Also save a dated snapshot of the composed proof image into
+                // Attached Files (Artwork) + Drive.
+                idSaveArtworkSnapshot(order, design);
             }).catch(err => {
                 console.warn('Designer save failed:', err);
                 flashSaved('⚠ Sync failed', '#d97706');
@@ -9704,6 +9707,52 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                 console.warn('renderInscriptionPreview failed:', err);
                 return null;
             }
+        }
+
+        // Save a snapshot of the composed stone + inscription as a timestamped
+        // "Artwork" file on the order (Attached Files + Drive). Called on each
+        // designer Save, so multiple saves leave a dated history of proofs.
+        async function idSaveArtworkSnapshot(order, design) {
+            try {
+                const oid = order.orderId || order.id;
+                if (!oid || !design) return;
+                const stoneFile = (order.hsType && STONE_IMAGES[order.hsType]) ? STONE_IMAGES[order.hsType] : 'headstone.png';
+                const sResp = await fetch(stoneFile);
+                const blob  = await sResp.blob();
+                const stoneDataUrl = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
+                const composed = await renderInscriptionPreview(stoneDataUrl, design);
+                if (!composed) return;
+                const base64 = composed.split(',')[1];
+                const now = new Date();
+                const stamp = now.toLocaleDateString('en-GB').replace(/\//g, '-') + ' ' +
+                              now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/:/g, '-');
+                const fileName = 'Inscription proof ' + stamp + '.png';
+                const up = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'uploadFile',
+                        orderId: oid,
+                        customerName: order.customerName,
+                        deceasedName: order.deceasedName,
+                        fileName: fileName,
+                        fileType: 'Artwork',
+                        fileData: base64,
+                        mimeType: 'image/png'
+                    })
+                });
+                let result = {};
+                try { result = await up.json(); } catch (e) {}
+                if (result.success && currentOrder && currentOrder.orderId === oid) {
+                    if (!currentOrder.files) currentOrder.files = [];
+                    currentOrder.files.push({
+                        name: fileName, type: 'Artwork',
+                        fileId: result.fileId, viewUrl: result.viewUrl, driveUrl: result.viewUrl,
+                        uploadedAt: new Date().toISOString()
+                    });
+                    if (result.folderUrl && !currentOrder.folderLink) currentOrder.folderLink = result.folderUrl;
+                    try { renderOrderDetails(); } catch (e) {}
+                }
+            } catch (e) { console.warn('Artwork snapshot save failed:', e); }
         }
 
         function idReset() {
