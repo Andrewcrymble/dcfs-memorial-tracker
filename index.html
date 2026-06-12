@@ -4767,6 +4767,11 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
         function renderFiles(order) {
             const files = order.files || [];
             const fileTypes = ['Proof', 'Artwork', 'Photo', 'Finished Photo', 'Signed Form', 'Cemetery Permit', 'Grave Paper', 'Invoice', 'Other'];
+            // Default the picker to the last type staff used, so the common
+            // case (uploading another of the same kind) is one fewer click.
+            let lastType = '';
+            try { lastType = localStorage.getItem('dcfs_last_file_type') || ''; } catch(e) {}
+            if (fileTypes.indexOf(lastType) === -1) lastType = '';
             const fileTypeRequired = true; // default is "none" — must select before upload
 
             // ── Proof status banner ──
@@ -4884,12 +4889,12 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                     <div style="font-size:0.75rem;color:#9ca3af;margin-bottom:0.75rem;">Proofs, artwork, photos, permits — any file type</div>
                     <div style="display:flex;gap:0.5rem;justify-content:center;align-items:center;flex-wrap:wrap;">
                         <select id="fileTypeSelect" onchange="updateBrowseBtn()" style="padding:0.35rem 0.6rem;border:1px solid #d1d5db;border-radius:6px;font-size:0.82rem;background:white;">
-                            <option value="">— Select file type —</option>
-                            ${fileTypes.map(t => `<option value="${t}">${t}</option>`).join('')}
+                            <option value="" ${lastType ? '' : 'selected'}>— Select file type —</option>
+                            ${fileTypes.map(t => `<option value="${t}" ${t === lastType ? 'selected' : ''}>${t}</option>`).join('')}
                         </select>
-                        <label id="browseBtnLabel" style="padding:0.35rem 0.9rem;background:#9ca3af;color:white;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:not-allowed;opacity:0.7;" title="Select a file type first">
+                        <label id="browseBtnLabel" style="padding:0.35rem 0.9rem;background:${lastType ? '#4f46e5' : '#9ca3af'};color:white;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:${lastType ? 'pointer' : 'not-allowed'};opacity:${lastType ? '1' : '0.7'};" title="${lastType ? '' : 'Select a file type first'}">
                             📂 Browse
-                            <input type="file" multiple style="display:none;" onchange="handleFileSelect(this)" id="browseFileInput">
+                            <input type="file" multiple style="display:none;" onchange="handleFileSelect(this)" id="browseFileInput" ${lastType ? '' : 'disabled'}>
                         </label>
                     </div>
                     <div id="uploadProgress" style="margin-top:0.75rem;font-size:0.8rem;color:#6b7280;"></div>
@@ -4906,6 +4911,7 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             label.style.cursor = hasType ? 'pointer' : 'not-allowed';
             label.style.opacity = hasType ? '1' : '0.7';
             label.title = hasType ? '' : 'Select a file type first';
+            if (hasType) { try { localStorage.setItem('dcfs_last_file_type', sel.value); } catch(e) {} }
             if (inp) inp.disabled = !hasType;
         }
 
@@ -5533,6 +5539,7 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             await saveOrder(currentOrder);
             renderOrderList();
             renderOrderDetails();
+            showToast('✓ Status: ' + statusLabel(newStatus), 'success');
         }
 
         // Edit order
@@ -6344,6 +6351,19 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             // Stamp creation date on new orders
             if (!editingOrderId) {
                 orderData.createdAt = new Date().toISOString();
+            }
+
+            // Soft validation — a £0 total almost always means no headstone was
+            // picked. Fine for an early enquiry, but warn so staff don't end up
+            // with a £0 estimate / wrong "outstanding" figure by accident.
+            const computedTotal = parseFloat(orderData.totalSellPrice) || 0;
+            if (computedTotal <= 0) {
+                const proceed = confirm(
+                    'This order has no priced items yet, so the total is £0.\n\n' +
+                    'That\'s fine for an early enquiry — but if you meant to add a headstone or other items, ' +
+                    'click Cancel and select them first.\n\nSave anyway?'
+                );
+                if (!proceed) return;
             }
 
             closeOrderModal();
