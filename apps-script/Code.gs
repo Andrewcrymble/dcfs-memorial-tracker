@@ -100,7 +100,7 @@ function styleDataRow(sheet, rowNum, status) {
   const statusColors = {
     enquiry: "#f1f5f9", quoted: "#fef9e7", confirmed: "#dbeafe",
     design: "#ede9fe", production: "#fff7ed", ready: "#d1fae5", installed: "#dcfce7",
-    query: "#fce7f3"
+    query: "#fce7f3", completed: "#e0e7ff"
   };
   const bg = statusColors[(status || '').toLowerCase()] || "#ffffff";
   const range = sheet.getRange(rowNum, 1, 1, HEADERS.length);
@@ -290,7 +290,24 @@ function markPaymentReceived(orderId, amountPounds, paymentType, sessionId) {
       Logger.log('Payment marked for order: ' + orderId + ' \u2014 \u00A3' + amountPounds);
       return;
     }
+    // Payment couldn't be matched to an order \u2014 don't let it vanish into the
+    // logs. Email the office so the payment is reconciled manually.
     Logger.log('Order not found for webhook orderId: ' + orderId);
+    try {
+      const officeEmail = PropertiesService.getScriptProperties().getProperty('OFFICE_EMAIL') || 'memorials@crymbleandsons.com';
+      MailApp.sendEmail({
+        to: officeEmail,
+        subject: '\u26A0\uFE0F Unmatched Stripe payment \u2014 \u00A3' + amountPounds.toFixed(2),
+        body: 'A Stripe payment was received but could not be matched to an order.\n\n' +
+              'Order ID in payment: ' + orderId + '\n' +
+              'Amount: \u00A3' + amountPounds.toFixed(2) + '\n' +
+              'Type: ' + paymentType + '\n' +
+              'Stripe session: ' + sessionId + '\n\n' +
+              'Please reconcile this payment against the correct order manually.'
+      });
+    } catch (mailErr) {
+      Logger.log('Failed to email office about unmatched payment: ' + mailErr);
+    }
   } catch (err) {
     Logger.log('markPaymentReceived error: ' + err);
   }
@@ -409,7 +426,22 @@ function upsertOrder(order) {
     }
   }
 
-  const balance = (parseFloat(order.totalSellPrice) || 0) - (parseFloat(order.depositPaid) || 0);
+  // Payment fields are also written by the Stripe webhook (markPaymentReceived).
+  // Guard against a stale browser save (loaded before a payment landed) wiping
+  // it: if the client sends no deposit, keep the deposit already on the sheet,
+  // and preserve webhook-written Stripe fields the client doesn't send.
+  const _ci = name => headers.indexOf(name);
+  const _prev = existingRow > 0 ? data[existingRow - 1] : null;
+  const _prevNum = name => { const c = _ci(name); return (_prev && c >= 0) ? (parseFloat(_prev[c]) || 0) : 0; };
+  const _prevStr = name => { const c = _ci(name); return (_prev && c >= 0) ? String(_prev[c] || '') : ''; };
+  const _clientDeposit = parseFloat(order.depositPaid) || 0;
+  const _finalDeposit  = _clientDeposit > 0 ? _clientDeposit : _prevNum('Deposit Paid');
+  const _totalSell     = parseFloat(order.totalSellPrice) || 0;
+  const balance        = _totalSell - _finalDeposit;
+  const _finalPayStatus = _finalDeposit <= 0 ? (order.paymentStatus || 'Unpaid')
+                        : (balance <= 0 ? 'Paid' : 'Part Paid');
+  const _finalStripeDate = order.stripePaymentDate || _prevStr('Stripe Payment Date');
+  const _finalStripeAmt  = (parseFloat(order.stripePaymentAmount) || 0) || _prevNum('Stripe Payment Amount');
   const logText = (order.log || []).map(l =>
     '[' + new Date(l.ts).toLocaleDateString("en-GB") + ' ' +
     new Date(l.ts).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) +
@@ -435,14 +467,17 @@ function upsertOrder(order) {
       const v = order.createdAt || order.created;
       if (!v || v === "Invalid Date") return fmtDateTime();
       try {
-        const d = new Date(v);
+        // Parse via parseGbDateTime first: a stored "dd/mm/yyyy HH:MM" value
+        // would otherwise be misread by new Date() (dd>12 = Invalid Date) and
+        // reset to "now" on every save, drifting the Created date forward.
+        const d = new Date(parseGbDateTime(v));
         if (isNaN(d.getTime())) return fmtDateTime();
         return d.toLocaleDateString("en-GB") + " " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
       } catch (e) { return fmtDateTime(); }
     })(),
     "Last Updated":        fmtDateTime(),
     "Status":              order.status || "enquiry",
-    "Payment Status":      order.paymentStatus || "Unpaid",
+    "Payment Status":      _finalPayStatus,
     "Customer Name":       order.customerName || "",
     "Phone":               order.phone || "",
     "Email":               order.email || "",
@@ -488,7 +523,7 @@ function upsertOrder(order) {
     "Total Price":         order.totalSellPrice || 0,
     "Profit Margin":       order.profitMargin || 0,
     "Margin Percentage":   order.marginPercentage || 0,
-    "Deposit Paid":        order.depositPaid || 0,
+    "Deposit Paid":        _finalDeposit,
     "Balance Due":         Math.max(0, balance),
     "Proof Date":          fmtDate(order.proofDate),
     "Proof Approved":      order.artworkApproved ? "Yes" : "No",
@@ -505,8 +540,8 @@ function upsertOrder(order) {
     "Note Entries":        order.noteEntries ? JSON.stringify(order.noteEntries) : "[]",
     "Mason Note Entries":  order.masonNoteEntries ? JSON.stringify(order.masonNoteEntries) : "[]",
     "Stripe Link ID":      order.stripePaymentUrl || order.stripeLinkId || "",
-    "Stripe Payment Date": order.stripePaymentDate || "",
-    "Stripe Payment Amount": order.stripePaymentAmount || 0,
+    "Stripe Payment Date": _finalStripeDate,
+    "Stripe Payment Amount": _finalStripeAmt,
     "Mason Notified At":   order.masonNotifiedAt || "",
     "Mason Notified By":   order.masonNotifiedBy || "",
     "Inscription Design":  order.inscriptionDesign ? JSON.stringify(order.inscriptionDesign) : "",
@@ -695,7 +730,11 @@ function capitalizeStatus(status) {
     "completed": "Completed", "complete": "Completed", "closed": "Completed",
     "query": "Query"
   };
-  return statusMap[status.toLowerCase()] || "Enquiry";
+  const key = String(status).toLowerCase().trim();
+  if (statusMap[key]) return statusMap[key];
+  // Unknown status — preserve it (title-cased) instead of silently reverting
+  // to "Enquiry", which would lose the status on every sheet round-trip.
+  return String(status).trim().replace(/\b\w/g, function (c) { return c.toUpperCase(); });
 }
 
 function parseJSON(str) {
@@ -1181,6 +1220,16 @@ function submitProofResponse(orderId, approved, message) {
           notifyMason(orderId, 'Customer approval', false);
         } catch (e) {
           Logger.log('Auto-notifyMason failed: ' + e);
+          // Make the failure visible to staff: append a warning to the log so
+          // they know to send the job card to the mason manually.
+          try {
+            if (logCol >= 0) {
+              const cur = String(sheet.getRange(rowNum, logCol + 1).getValue() || '');
+              const wts = Utilities.formatDate(new Date(), 'Europe/London', 'dd/MM/yyyy HH:mm');
+              const warn = '[' + wts + '] System: ⚠️ MASON AUTO-NOTIFY FAILED — customer approved, please send the job card to the mason manually';
+              sheet.getRange(rowNum, logCol + 1).setValue(cur ? cur + ' | ' + warn : warn);
+            }
+          } catch (e2) {}
         }
       }
 
