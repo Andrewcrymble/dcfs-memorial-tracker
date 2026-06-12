@@ -1079,6 +1079,27 @@ function getProgressData(token, callback) {
         }
       });
 
+      // Proof status (same log parsing as the proof page) so the customer
+      // progress page can show a "Proof Ready for Review" milestone.
+      const logText = String(get(row, 'Log Entries'));
+      let proofStatus = 'pending';
+      if (logText.indexOf('PROOF APPROVED') !== -1)        proofStatus = 'approved';
+      else if (logText.indexOf('CHANGES REQUESTED') !== -1) proofStatus = 'changes_requested';
+      else if (logText.indexOf('Proof link sent') !== -1)  proofStatus = 'sent';
+
+      // Finished photo of the installed memorial (staff upload), shown on the
+      // final step once the job is complete. Files are shared anyone-with-link,
+      // so a Drive thumbnail URL embeds directly.
+      let finishedPhotoUrl = '';
+      try {
+        const files = JSON.parse(get(row, 'Files') || '[]');
+        const fp = (files || []).find(function (f) { return f && f.type === 'Finished Photo'; });
+        if (fp && fp.fileId)      finishedPhotoUrl = 'https://drive.google.com/thumbnail?id=' + fp.fileId + '&sz=w1200';
+        else if (fp)              finishedPhotoUrl = fp.viewUrl || fp.driveUrl || fp.downloadUrl || '';
+      } catch (e) {}
+
+      const orderIdVal = get(row, 'Order ID');
+
       const progress = {
         orderRef:          get(row, 'Order ID').slice(-8).toUpperCase(),
         customerFirstName: (get(row, 'Customer Name') || '').split(' ')[0],
@@ -1091,7 +1112,10 @@ function getProgressData(token, callback) {
         proofApproved:     get(row, 'Proof Approved') === 'Yes',
         masonNotifiedAt:   get(row, 'Mason Notified At'),
         productionStart:   get(row, 'Production Start'),
-        installDate:       get(row, 'Install Date')
+        installDate:       get(row, 'Install Date'),
+        proofStatus:       proofStatus,
+        proofUrl:          orderIdVal ? ('https://tracker.crymbleandsons.com/proof.html?id=' + encodeURIComponent(orderIdVal)) : '',
+        finishedPhotoUrl:  finishedPhotoUrl
       };
       return send({ success: true, progress });
     }

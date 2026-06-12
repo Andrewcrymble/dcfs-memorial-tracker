@@ -125,6 +125,21 @@
     vertical-align: middle;
   }
 
+  .step .proof-btn {
+    display: inline-block; margin-top: 0.55rem;
+    background: var(--green); color: #fff; text-decoration: none;
+    font-size: 0.8rem; font-weight: 700;
+    padding: 0.45rem 0.95rem; border-radius: 999px;
+    box-shadow: 0 2px 8px rgba(74,124,47,0.3);
+  }
+  .step .proof-btn:active { transform: scale(0.97); }
+  .step .step-photo {
+    display: block; margin-top: 0.6rem;
+    width: 100%; max-width: 320px; height: auto;
+    border-radius: 12px; border: 1px solid var(--border);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.14);
+  }
+
   .footer-note { text-align: center; font-size: 0.75rem; color: var(--sub); line-height: 1.5; }
   .footer-note a { color: var(--green2); }
 
@@ -199,6 +214,7 @@ const MILESTONES = [
   { stage: 'enquiry',    icon: '📋', label: 'Order Received',        desc: "We've received your order and begun the arrangements." },
   { stage: 'quoted',     icon: '💷', label: 'Estimate Provided',     desc: 'Your estimate has been prepared for you.' },
   { stage: 'confirmed',  icon: '✅', label: 'Order Confirmed',       desc: 'Your order is confirmed and booked into our schedule.' },
+  { special: 'proof',    icon: '🖋️', label: 'Proof Ready for Review', desc: 'Your memorial proof is ready — please review and approve it.' },
   { stage: 'in design',  icon: '✍️', label: 'Design Approved',       desc: 'The memorial design and inscription have been finalised.' },
   { stage: 'production', icon: '🔨', label: 'In Production',          desc: 'Your memorial is being hand-crafted by our masons.' },
   { stage: 'ready',      icon: '📦', label: 'Ready for Installation', desc: 'Your memorial is complete and ready to be installed.' },
@@ -272,15 +288,52 @@ function render(p) {
 
   // Build the timeline.
   let currentLabel = 'Order Received';
+  // When a proof is awaiting the customer's review, that's the one actionable
+  // "current" step — don't also highlight the pipeline stage as in-progress.
+  const proofAwaiting = (p.proofStatus === 'sent' || p.proofStatus === 'changes_requested') && !p.proofApproved;
   const html = MILESTONES.map(function (m) {
+    // ── Special: Proof Ready for Review — driven by proof status, not the
+    // pipeline stage. Appears once the proof link has been sent, with a button
+    // to view/approve it. ──
+    if (m.special === 'proof') {
+      const ps = p.proofStatus || 'pending';
+      const done = ps === 'sent' || ps === 'changes_requested' || ps === 'approved' || !!p.proofApproved;
+      const awaiting = (ps === 'sent' || ps === 'changes_requested') && !p.proofApproved;
+      if (done) currentLabel = m.label;
+      const desc = (ps === 'changes_requested')
+        ? "You've requested changes — we're updating your proof and will send it again shortly."
+        : m.desc;
+      const date = done ? cleanDate(p.proofDate) : '';
+      const btn = (awaiting && p.proofUrl)
+        ? '<a class="proof-btn" href="' + p.proofUrl + '" target="_blank" rel="noopener">View &amp; approve your proof →</a>'
+        : '';
+      const cls = 'step' + (done ? ' done' : '') + (awaiting ? ' current' : '');
+      return (
+        '<div class="' + cls + '">' +
+          '<div class="marker">' + (done ? m.icon : '') + '</div>' +
+          '<div class="body">' +
+            '<div class="step-label">' + m.label + '</div>' +
+            '<div class="step-desc">' + desc + '</div>' +
+            (date ? '<div class="step-date">' + date + '</div>' : '') +
+            btn +
+          '</div>' +
+        '</div>'
+      );
+    }
+
     const mi = stageIdx(m.stage);
     let done = ci >= mi && ci >= 0;
     // "Design Approved" is also satisfied once the proof is signed off.
     if (m.stage === 'in design' && p.proofApproved) done = true;
-    const isCurrent = (mi === ci);
+    const isCurrent = (mi === ci) && !proofAwaiting;
     if (done) currentLabel = m.label;
 
     const date = done ? cleanDate(milestoneDate(m.stage, p)) : '';
+    // Finished photo of the installed memorial on the final step, once a
+    // "Finished Photo" has been uploaded for a completed/installed job.
+    const photo = (m.stage === 'installed' && done && p.finishedPhotoUrl)
+      ? '<img class="step-photo" src="' + p.finishedPhotoUrl + '" alt="Photo of the installed memorial" loading="lazy">'
+      : '';
     const cls = 'step' + (done ? ' done' : '') + (isCurrent ? ' current' : '');
     return (
       '<div class="' + cls + '">' +
@@ -289,6 +342,7 @@ function render(p) {
           '<div class="step-label">' + m.label + '</div>' +
           '<div class="step-desc">' + m.desc + '</div>' +
           (date ? '<div class="step-date">' + date + '</div>' : '') +
+          photo +
         '</div>' +
       '</div>'
     );
