@@ -8951,11 +8951,30 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             const canvH  = (canvas && canvas.height) || 700;
             let posX = 50, posY = 35;
             if (last) {
-                const stepPct = ((last.size || 22) * lsp / canvH) * 100;
+                // Floor the step so lines never collapse onto each other when
+                // the canvas height is large/unset at this moment.
+                const stepPct = Math.max(4, ((last.size || 22) * lsp / canvH) * 100);
                 posX = (typeof last.posX === 'number') ? last.posX : 50;
                 posY = Math.min(95, ((typeof last.posY === 'number') ? last.posY : 35) + stepPct);
             }
             _idLines.push(ID_DEFAULT_LINE({ posX, posY }));
+            idRenderLinesList();
+            idRender();
+        }
+
+        // Evenly distribute every line down the centre of the stone face — a
+        // quick "roughly position it" so staff start from a clean stack and
+        // only nudge from there, instead of all lines bunched at one point.
+        function idAutoStackLines() {
+            const n = _idLines.length;
+            if (!n) return;
+            const topPct = 26, botPct = 72;   // usable stone-face band
+            _idLines.forEach((line, i) => {
+                line.posX = 50;
+                line.posY = (n === 1) ? (topPct + botPct) / 2
+                                      : topPct + (botPct - topPct) * (i / (n - 1));
+            });
+            window._idLastDesignDirty = true;
             idRenderLinesList();
             idRender();
         }
@@ -9082,6 +9101,7 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                       <div class="id-card-body">
                         <div id="id_linesList"></div>
                         <button type="button" id="id_addLineBtn" onclick="idAddLine()" style="margin-top:8px;padding:6px 12px;background:#f0fdf4;border:1px solid #86efac;color:#15803d;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:pointer;">+ Add Line</button>
+                        <button type="button" onclick="idAutoStackLines()" title="Space all lines evenly down the centre of the stone" style="margin-top:8px;margin-left:6px;padding:6px 12px;background:#eef6ff;border:1px solid #93c5fd;color:#1d4ed8;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:pointer;">↕ Auto-stack lines</button>
                       </div>
                     </div>
 
@@ -9366,8 +9386,26 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                 if (typeof line.posY !== 'number') {
                     line.posY = yPct;
                 }
-                yPct = Math.min(95, line.posY + ((line.size || 22) * lspVal / canvH) * 100);
+                // Floor the step so a large/unset canvas height can't collapse
+                // the lines onto one another.
+                yPct = Math.min(95, line.posY + Math.max(4, ((line.size || 22) * lspVal / canvH) * 100));
             });
+
+            // If the lines ended up with no real vertical spread — e.g. fresh
+            // text where every line defaulted to the same posY, or a stale
+            // design with all lines bunched — distribute them evenly so they
+            // open "roughly positioned" instead of mashed at one point. A
+            // genuine per-line layout (distinct positions) is left untouched.
+            if (_idLines.length > 1) {
+                const posYs = _idLines.map(l => (typeof l.posY === 'number' ? l.posY : 35));
+                if (Math.max.apply(null, posYs) - Math.min.apply(null, posYs) < 3) {
+                    const topPct = 26, botPct = 72;
+                    _idLines.forEach((line, i) => {
+                        line.posX = 50;
+                        line.posY = topPct + (botPct - topPct) * (i / (_idLines.length - 1));
+                    });
+                }
+            }
 
             idRenderLinesList();
         }
