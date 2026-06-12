@@ -35,7 +35,7 @@ const HEADERS = [
   "Deposit Paid", "Balance Due",
   "Proof Date", "Proof Approved", "Production Start", "Install Date",
   "Artwork Notes", "General Notes", "Mason Notes",
-  "Folder Link", "Files", "Extra Charges", "Mason Charges",
+  "Folder Link", "Files", "Extra Charges", "Mason Charges", "Payments",
   "Log Entries",
   "Note Entries", "Mason Note Entries",
   "Stripe Link ID", "Stripe Payment Date", "Stripe Payment Amount",
@@ -170,7 +170,21 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     // Stripe webhooks have a 'type' field; app actions have an 'action' field
-    if (body.type) return handleStripeWebhook(body);
+    if (body.type) {
+      // Shared-secret guard. Only enforced once a WEBHOOK_SECRET script
+      // property is set — so deploying this is a no-op until you configure it
+      // and can't reject live payments before the Stripe endpoint URL is
+      // updated. To enable: set WEBHOOK_SECRET in Script Properties AND append
+      // ?key=<that secret> to the webhook endpoint URL in the Stripe dashboard.
+      const webhookSecret = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
+      if (webhookSecret && (!e.parameter || e.parameter.key !== webhookSecret)) {
+        Logger.log('Rejected webhook: missing/invalid key');
+        return ContentService
+          .createTextOutput(JSON.stringify({ received: false, error: 'unauthorized' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      return handleStripeWebhook(body);
+    }
     const action = body.action || "upsert";
     if (action === "upsert")              return upsertOrder(body.order);
     if (action === "delete")              return deleteOrder(body.orderId);
@@ -270,6 +284,23 @@ function markPaymentReceived(orderId, amountPounds, paymentType, sessionId) {
       if (sdCol >= 0) sheet.getRange(rowNum, sdCol + 1).setValue(new Date().toLocaleString('en-GB'));
       const saCol = col('Stripe Payment Amount');
       if (saCol >= 0) sheet.getRange(rowNum, saCol + 1).setValue(amountPounds);
+
+      // Add this payment to the structured payment history so it shows in the
+      // detail-view "Payments received" list alongside manually-recorded ones.
+      const payCol = col('Payments');
+      if (payCol >= 0) {
+        let pays = [];
+        try { pays = JSON.parse(String(data[i][payCol] || '[]')); if (!Array.isArray(pays)) pays = []; } catch (e) { pays = []; }
+        pays.push({
+          id: String(new Date().getTime()),
+          ts: new Date().toISOString(),
+          amount: amountPounds,
+          method: 'Stripe / Card',
+          note: paymentType,
+          author: 'Stripe'
+        });
+        sheet.getRange(rowNum, payCol + 1).setValue(JSON.stringify(pays));
+      }
 
       // Record the session ID so subsequent retries are skipped
       if (sessCol >= 0 && sessionId) {
@@ -435,7 +466,11 @@ function upsertOrder(order) {
   const _prevNum = name => { const c = _ci(name); return (_prev && c >= 0) ? (parseFloat(_prev[c]) || 0) : 0; };
   const _prevStr = name => { const c = _ci(name); return (_prev && c >= 0) ? String(_prev[c] || '') : ''; };
   const _clientDeposit = parseFloat(order.depositPaid) || 0;
-  const _finalDeposit  = _clientDeposit > 0 ? _clientDeposit : _prevNum('Deposit Paid');
+  // Trust the client deposit when it's positive OR when the save is a
+  // deliberate payment edit (recordPayment / removePayment set _depositExplicit,
+  // which must be allowed to set the deposit to 0). Otherwise keep the sheet's
+  // existing deposit so a stale save can't wipe a webhook-recorded payment.
+  const _finalDeposit  = (order._depositExplicit || _clientDeposit > 0) ? _clientDeposit : _prevNum('Deposit Paid');
   const _totalSell     = parseFloat(order.totalSellPrice) || 0;
   const balance        = _totalSell - _finalDeposit;
   const _finalPayStatus = _finalDeposit <= 0 ? (order.paymentStatus || 'Unpaid')
@@ -536,6 +571,9 @@ function upsertOrder(order) {
     "Files":               order.files ? JSON.stringify(order.files) : "[]",
     "Extra Charges":       order.extraCharges ? JSON.stringify(order.extraCharges) : "[]",
     "Mason Charges":       order.masonCharges ? JSON.stringify(order.masonCharges) : "[]",
+    // Payment history. Preserve the sheet's value if the client doesn't send
+    // one (older client / not loaded) so a webhook-appended entry isn't lost.
+    "Payments":            order.payments ? JSON.stringify(order.payments) : (_prevStr('Payments') || "[]"),
     "Log Entries":         logText,
     "Note Entries":        order.noteEntries ? JSON.stringify(order.noteEntries) : "[]",
     "Mason Note Entries":  order.masonNoteEntries ? JSON.stringify(order.masonNoteEntries) : "[]",
@@ -696,6 +734,7 @@ function mapSheetOrderToTracker(sheetOrder) {
     files:               parseJSON(sheetOrder["Files"]),
     extraCharges:        parseJSON(sheetOrder["Extra Charges"]),
     masonCharges:        parseJSON(sheetOrder["Mason Charges"]),
+    payments:            parseJSON(sheetOrder["Payments"]),
     noteEntries:         parseJSON(sheetOrder["Note Entries"]),
     masonNoteEntries:    parseJSON(sheetOrder["Mason Note Entries"]),
     stripeLinkId:        sheetOrder["Stripe Link ID"] || "",

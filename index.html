@@ -4760,6 +4760,27 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                 html += `<div class="price-balance"><span class="label">Balance Outstanding</span><span class="amount">£${Math.max(0, displayTotal - deposit).toFixed(2)}</span></div>`;
             }
 
+            // Payment history — each recorded payment, with a remove (undo)
+            // button so a mis-entered or duplicated payment can be reversed.
+            const pmts = Array.isArray(order.payments) ? order.payments : [];
+            if (pmts.length) {
+                const escP = s => String(s || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+                html += `<div style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px dashed rgba(0,0,0,0.12);">`;
+                html += `<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#6b7280;margin-bottom:0.3rem;">Payments received</div>`;
+                pmts.forEach(p => {
+                    const amt = parseFloat(p.amount) || 0;
+                    const d = p.ts ? new Date(p.ts).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '';
+                    const meta = escP([p.method, p.note].filter(Boolean).join(' · '));
+                    const sid = String(p.id || '').replace(/'/g, "\\'");
+                    html += `<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;padding:0.2rem 0;">`
+                          + `<span style="color:#16a34a;font-weight:700;">£${amt.toFixed(2)}</span>`
+                          + `<span style="color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d}${meta ? ' · ' + meta : ''}</span>`
+                          + `<button onclick="removePayment('${sid}')" title="Remove this payment" style="margin-left:auto;background:none;border:none;color:#dc2626;cursor:pointer;font-size:0.9rem;line-height:1;">✕</button>`
+                          + `</div>`;
+                });
+                html += `</div>`;
+            }
+
             return html;
         }
 
@@ -8251,6 +8272,17 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             currentOrder.stripePaymentAmount = amt;
             currentOrder.stripePaymentReceived = true;
 
+            // Structured payment history (for the detail-view list + undo).
+            if (!Array.isArray(currentOrder.payments)) currentOrder.payments = [];
+            currentOrder.payments.push({
+                id: Date.now().toString(),
+                ts: new Date().toISOString(),
+                amount: amt,
+                method: method,
+                note: note,
+                author: getCurrentUser()
+            });
+
             if (!currentOrder.log) currentOrder.log = [];
             const noteStr = note ? ` — ${note}` : '';
             currentOrder.log.push({
@@ -8272,9 +8304,52 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             const idx = allOrders.findIndex(o => o.orderId === currentOrder.orderId);
             if (idx >= 0) allOrders[idx] = currentOrder;
 
+            // Flag this save as a deliberate payment edit so the backend trusts
+            // the deposit value (its anti-clobber guard otherwise keeps the
+            // sheet's deposit when the client sends a lower/zero figure). The
+            // flag is transient — removed right after this save.
+            currentOrder._depositExplicit = true;
             await saveOrder(currentOrder);
+            delete currentOrder._depositExplicit;
             renderOrderList();
             renderOrderDetails();
+        }
+
+        // Remove (undo) a recorded payment — fixes a mis-entered or duplicated
+        // payment by subtracting it from the deposit and reversing the balance.
+        async function removePayment(id) {
+            if (!currentOrder || !Array.isArray(currentOrder.payments)) return;
+            const idx = currentOrder.payments.findIndex(p => String(p.id) === String(id));
+            if (idx < 0) return;
+            const p = currentOrder.payments[idx];
+            const amt = parseFloat(p.amount) || 0;
+            if (!confirm(`Remove this £${amt.toFixed(2)} payment?\n\nThis will add £${amt.toFixed(2)} back to the outstanding balance.`)) return;
+
+            currentOrder.payments.splice(idx, 1);
+            const newDeposit = Math.max(0, (parseFloat(currentOrder.depositPaid) || 0) - amt);
+            const total      = getOrderTotal(currentOrder);
+            currentOrder.depositPaid   = newDeposit;
+            currentOrder.balanceDue    = Math.max(0, total - newDeposit);
+            currentOrder.paymentStatus = newDeposit <= 0 ? 'Unpaid' : (currentOrder.balanceDue <= 0 ? 'Paid' : 'Part Paid');
+
+            const meta = [p.method, p.note].filter(Boolean).join(' · ');
+            if (!currentOrder.log) currentOrder.log = [];
+            currentOrder.log.push({
+                id: Date.now().toString(),
+                ts: new Date().toISOString(),
+                author: getCurrentUser(),
+                text: `↩️ Payment removed: £${amt.toFixed(2)}${meta ? ' (' + meta + ')' : ''}. New balance: £${currentOrder.balanceDue.toFixed(2)}`
+            });
+
+            const i = allOrders.findIndex(o => o.orderId === currentOrder.orderId);
+            if (i >= 0) allOrders[i] = currentOrder;
+
+            currentOrder._depositExplicit = true;
+            await saveOrder(currentOrder);
+            delete currentOrder._depositExplicit;
+            renderOrderList();
+            renderOrderDetails();
+            showToast('Payment removed', 'success');
         }
 
         function createPaymentLink() {
