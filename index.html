@@ -8646,10 +8646,22 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             const waText = encodeURIComponent(
                 `Hi ${currentOrder.customerFirstName || currentOrder.customerName || ''},\n\nPlease find your memorial proof for ${currentOrder.deceasedName || 'the memorial'} at the link below.\n\nKindly review all details carefully — you can approve or request changes directly on the page:\n\n${url}\n\nIf you have any questions, please don't hesitate to contact us.\n\nKind regards,\nDavid Crymble & Sons`
             );
-            document.getElementById('whatsappProofLink').href = `https://wa.me/?text=${waText}`;
+            const waLink = document.getElementById('whatsappProofLink');
+            waLink.href = `https://wa.me/?text=${waText}`;
+            waLink.onclick = markProofSent;
 
             const overlay = document.getElementById('proofLinkOverlay');
             overlay.style.display = 'flex';
+        }
+
+        // Record (once) that the proof link was shared with the customer. This
+        // logs "Proof link sent", which is what flips the customer progress
+        // page to the "Proof Ready for Review" step with a review button.
+        function markProofSent() {
+            if (!currentOrder) return;
+            const logFull = (currentOrder.log || []).map(e => e.text || '').join(' | ');
+            if (logFull.includes('Proof link sent') || logFull.includes('PROOF APPROVED')) return;
+            addActivityLog('Proof link sent');
         }
 
         function closeProofLinkModal() {
@@ -8658,6 +8670,7 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
 
         function copyProofLink() {
             const url = document.getElementById('proofLinkUrl').textContent;
+            markProofSent();
             navigator.clipboard.writeText(url).then(() => {
                 const btn = document.getElementById('btnCopyProof');
                 const orig = btn.textContent;
