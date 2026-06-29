@@ -7203,19 +7203,27 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                 row(label, ec.type === 'discount' ? 'Applied discount' : 'Additional charge', sign * ec.amount);
             });
 
+            // Additional services — part of the agreed total and the 50% deposit,
+            // so they belong on the estimate line items and TOTAL too.
+            const servicesSell = parseFloat(currentOrder.servicesSellPrice) || 0;
+            if (servicesSell > 0)
+                row('Additional Services', '', servicesSell);
+
+            const subtotal = totals.totalSell + servicesSell;
+
             // Total box
             y += 2;
             doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3); doc.line(20, y, 190, y); y += 6;
             doc.setDrawColor(0,0,0); doc.setLineWidth(0.5); doc.line(110, y - 2, 190, y - 2);
             doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(0,0,0);
             doc.text('TOTAL', 115, y + 5);
-            doc.text(`£${totals.totalSell.toFixed(2)}`, 188, y + 5, { align: 'right' });
+            doc.text(`£${subtotal.toFixed(2)}`, 188, y + 5, { align: 'right' });
             doc.setLineWidth(0.5); doc.line(110, y + 9, 190, y + 9);
             y += 18;
 
             if (parseFloat(currentOrder.depositPaid) > 0) {
                 const dep = parseFloat(currentOrder.depositPaid);
-                const bal = Math.max(0, totals.totalSell - dep);
+                const bal = Math.max(0, subtotal - dep);
                 doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(0,0,0);
                 doc.text('Deposit Received', 115, y); doc.text(`-£${dep.toFixed(2)}`, 188, y, { align: 'right' }); y += 6;
                 doc.setDrawColor(0,0,0); doc.setLineWidth(0.3); doc.line(110, y, 190, y); y += 4;
@@ -7377,12 +7385,12 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
 
             const estFilename = `Estimate_${estRef}_${new Date().toISOString().slice(0,10)}.pdf`;
             doc.save(estFilename);
-            addActivityLog(`Generated Estimate — Total: £${totals.totalSell.toFixed(2)}`);
+            addActivityLog(`Generated Estimate — Total: £${subtotal.toFixed(2)}`);
             sendPdfToWhatsApp(doc, 'Estimate', estFilename, [
                 `Customer: ${currentOrder.customerName}`,
                 `In Memory Of: ${currentOrder.deceasedName}`,
                 `Ref: ${estRef}`,
-                `Total: £${totals.totalSell.toFixed(2)}`
+                `Total: £${subtotal.toFixed(2)}`
             ]);
             // Upload estimate PDF to Drive (so proof page can link to it)
             window._lastEstimateDoc = doc;
@@ -7476,15 +7484,24 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                 row(label, ec.type === 'discount' ? 'Applied discount' : 'Additional charge', sign * ec.amount);
             });
 
+            // Additional services — these are part of the agreed total and the
+            // 50% deposit (getOrderTotal includes them), so they must appear on
+            // the invoice too. Omitting them understated the sub total and made
+            // the balance-after-deposit wrong.
+            const servicesSell = parseFloat(currentOrder.servicesSellPrice) || 0;
+            if (servicesSell > 0)
+                row('Additional Services', '', servicesSell);
+
             // Totals section
             y += 2;
             doc.setDrawColor(0,0,0); doc.setLineWidth(0.3); doc.line(20, y, 190, y); y += 6;
 
+            const subtotal = totals.totalSell + servicesSell;
             const dep = parseFloat(currentOrder.depositPaid) || 0;
             if (dep > 0) {
-                const bal = Math.max(0, totals.totalSell - dep);
+                const bal = Math.max(0, subtotal - dep);
                 doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(0,0,0);
-                doc.text('Sub Total', 115, y); doc.text(`£${totals.totalSell.toFixed(2)}`, 188, y, { align: 'right' }); y += 7;
+                doc.text('Sub Total', 115, y); doc.text(`£${subtotal.toFixed(2)}`, 188, y, { align: 'right' }); y += 7;
                 doc.text('Deposit Received', 115, y);
                 doc.text(`-£${dep.toFixed(2)}`, 188, y, { align: 'right' }); y += 7;
                 doc.setLineWidth(0.5); doc.line(110, y, 190, y); y += 5;
@@ -7495,7 +7512,7 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             } else {
                 doc.setDrawColor(0,0,0); doc.setLineWidth(0.5); doc.line(110, y, 190, y); y += 5;
                 doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(0,0,0);
-                doc.text('TOTAL DUE', 115, y); doc.text(`£${totals.totalSell.toFixed(2)}`, 188, y, { align: 'right' });
+                doc.text('TOTAL DUE', 115, y); doc.text(`£${subtotal.toFixed(2)}`, 188, y, { align: 'right' });
                 doc.setLineWidth(0.5); doc.line(110, y + 4, 190, y + 4);
                 y += 14;
             }
@@ -7518,12 +7535,15 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                 y = iy + 6;
             }
 
-            // Payment QR code — auto-create 50% deposit link if one doesn't exist yet
-            const invDepositUrl = await autoGetDepositLink();
-            const invDepositAmt = currentOrder.stripePaymentAmount || (getOrderTotal(currentOrder)/2);
-            const invDepositLbl = currentOrder.stripePaymentLabel || '50% Deposit';
-            if (invDepositUrl) {
-                y = await addPdfPaymentQR(doc, y, invDepositUrl, invDepositLbl, invDepositAmt);
+            // Payment QR code — collect the OUTSTANDING BALANCE (the deposit is
+            // already paid), NOT a fresh 50% deposit. Skip entirely once the
+            // order is paid in full.
+            const invBalance = dep > 0 ? Math.max(0, subtotal - dep) : subtotal;
+            if (invBalance > 0) {
+                const invPayUrl = await autoGetBalanceLink(invBalance);
+                if (invPayUrl) {
+                    y = await addPdfPaymentQR(doc, y, invPayUrl, 'Balance Due', invBalance);
+                }
             }
 
             // Payment details box
@@ -7538,16 +7558,72 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
             }
 
             dcsPdfFooter(doc);
-            const bal2 = dep > 0 ? Math.max(0, totals.totalSell - dep) : totals.totalSell;
+
+            // ── Final page: the finished-memorial image ──
+            // Prefer an actual photo of the completed stone (the "Finished
+            // Photo" / "Photo" the office uploads), then the approved proof,
+            // then any proof/artwork. Falls back to the composed design image
+            // so an image always appears on the invoice.
+            try {
+                let imgDataUrl = null, imgAspect = null;
+                const files = currentOrder.files || [];
+                const memFile = files.find(f => f && f.type === 'Finished Photo' && f.fileId)
+                            || files.find(f => f && f.type === 'Photo' && f.fileId)
+                            || files.find(f => f && f.type === 'Proof' && f.approved && f.fileId)
+                            || files.find(f => f && f.type === 'Proof' && f.fileId)
+                            || files.find(f => f && f.type === 'Artwork' && f.fileId);
+                if (memFile) {
+                    const t = await fetchProofImageDataUrl(currentOrder.orderId, memFile.fileId);
+                    if (t && t.dataUrl && t.w && t.h) { imgDataUrl = t.dataUrl; imgAspect = t.w / t.h; }
+                }
+                if (!imgDataUrl) {
+                    // Compose the stone image + saved inscription design (same as
+                    // the estimate proof page). Fall back to the generic
+                    // headstone.png so an image ALWAYS appears, even for stone
+                    // types with no dedicated artwork.
+                    const stoneImgSrc = currentOrder.hsImage
+                        || (currentOrder.hsType && STONE_IMAGES[currentOrder.hsType])
+                        || 'headstone.png';
+                    const resp = await fetch(stoneImgSrc);
+                    const blob = await resp.blob();
+                    const stoneDataUrl = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
+                    const design = currentOrder.inscriptionDesign;
+                    const designLines = design && Array.isArray(design.lines) && design.lines.length
+                        ? design.lines.filter(l => (l.text || '').trim()) : null;
+                    imgDataUrl = (designLines && designLines.length)
+                        ? (await renderInscriptionPreview(stoneDataUrl, design) || stoneDataUrl)
+                        : stoneDataUrl;
+                    imgAspect = 90 / 108;
+                }
+                if (imgDataUrl) {
+                    doc.addPage();
+                    const py = dcsPdfHeader(doc, 'YOUR MEMORIAL', 'The approved memorial — for your records');
+                    const aspect = imgAspect || (90 / 108);
+                    let imgH = 252 - py;
+                    let imgW = imgH * aspect;
+                    if (imgW > 165) { imgW = 165; imgH = imgW / aspect; }
+                    const imgX = (210 - imgW) / 2;
+                    const imgFmt = /^data:image\/jpe?g/i.test(imgDataUrl) ? 'JPEG' : 'PNG';
+                    doc.addImage(imgDataUrl, imgFmt, imgX, py, imgW, imgH);
+                    doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.4); doc.rect(imgX, py, imgW, imgH);
+                    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60);
+                    doc.text(`${currentOrder.hsType || ''}${currentOrder.hsSize ? ' — ' + currentOrder.hsSize : ''}${currentOrder.hsColour ? ' · ' + currentOrder.hsColour : ''}`,
+                             105, py + imgH + 6, { align: 'center' });
+                    doc.setTextColor(0, 0, 0);
+                    dcsPdfFooter(doc);
+                }
+            } catch (e) { console.warn('Invoice memorial image error:', e); }
+
+            const bal2 = dep > 0 ? Math.max(0, subtotal - dep) : subtotal;
             const invRef = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
             const invFilename = `Invoice_${invRef}_${new Date().toISOString().slice(0,10)}.pdf`;
             doc.save(invFilename);
-            addActivityLog(`Generated Invoice — Total: £${totals.totalSell.toFixed(2)}, Balance: £${bal2.toFixed(2)}`);
+            addActivityLog(`Generated Invoice — Total: £${subtotal.toFixed(2)}, Balance: £${bal2.toFixed(2)}`);
             sendPdfToWhatsApp(doc, 'Invoice', invFilename, [
                 `Customer: ${currentOrder.customerName}`,
                 `In Memory Of: ${currentOrder.deceasedName}`,
                 `Ref: ${invRef}`,
-                `Total: £${totals.totalSell.toFixed(2)}`,
+                `Total: £${subtotal.toFixed(2)}`,
                 `Balance Due: £${bal2.toFixed(2)}`
             ]);
         }
@@ -8510,6 +8586,53 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                 }
             } catch(e) {
                 console.warn('Auto-create deposit link failed (PDF will still generate):', e);
+            }
+            return null;
+        }
+
+        // Get or create a Stripe link for a specific outstanding amount — used
+        // by the final invoice to collect the remaining BALANCE (deposit already
+        // paid), rather than a fresh 50% deposit. Reuses the order's stored link
+        // when its amount already matches, otherwise creates a fresh one.
+        async function autoGetBalanceLink(amount) {
+            if (!currentOrder || !(amount > 0)) return null;
+            amount = Math.round(amount * 100) / 100;
+
+            if (currentOrder.stripePaymentUrl) {
+                const storedAmount = parseFloat(currentOrder.stripePaymentAmount || 0);
+                if (Math.abs(storedAmount - amount) < 0.01) {
+                    return currentOrder.stripePaymentUrl;
+                }
+            }
+            const ref = (currentOrder.orderRef || currentOrder.orderId || '').slice(-8).toUpperCase();
+
+            try {
+                const resp = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'createPaymentLink',
+                        orderId: currentOrder.orderId,
+                        orderRef: currentOrder.orderRef || currentOrder.orderId,
+                        customerName: currentOrder.customerName,
+                        deceasedName: currentOrder.deceasedName,
+                        amountPence: Math.round(amount * 100),
+                        paymentType: 'balance',
+                        totalSellPrice: getOrderTotal(currentOrder),
+                        previousDeposit: parseFloat(currentOrder.depositPaid) || 0,
+                        description: `Balance Due — ${currentOrder.deceasedName || 'Memorial'} (Ref: ${ref})`
+                    })
+                });
+                const result = await resp.json();
+                if (result.success && result.url) {
+                    currentOrder.stripePaymentUrl = result.url;
+                    currentOrder.stripeLinkId = result.linkId;
+                    currentOrder.stripePaymentLabel = 'Balance Due';
+                    currentOrder.stripePaymentAmount = amount;
+                    saveOrder(currentOrder).catch(e => console.warn('Auto-save balance link:', e));
+                    return result.url;
+                }
+            } catch(e) {
+                console.warn('Auto-create balance link failed (PDF will still generate):', e);
             }
             return null;
         }
