@@ -1591,6 +1591,7 @@
             <button class="btn btn-secondary" onclick="refreshOrders()">🔄 Refresh</button>
             <button class="btn btn-secondary" onclick="openMemorialReport()">📊 Report</button>
             <button class="btn btn-secondary" onclick="openMasonReport()" title="Printable job list for the stone mason">🔨 Mason Report</button>
+            <button class="btn btn-secondary" onclick="openMasonPayReport()" title="Jobs sent to the mason with costs — what you owe him">💷 Mason Pay</button>
             <button class="btn btn-secondary" onclick="openPriceBook()" title="Open the Google Sheet to update product prices">💷 Price Book</button>
             <button id="testConnBtn" class="btn btn-secondary" onclick="testConnection()">🔍 Test</button>
         </div>
@@ -2301,6 +2302,8 @@
                         renderOrderList();
                         // Cache activity log for login screen
                         try { if (typeof cacheActivityForLogin === 'function') cacheActivityForLogin(allOrders); } catch(e){}
+                        // Deep-link from the website Control Centre (?focus=<status>)
+                        try { applyFocusFromUrl(); } catch(e){}
                         delete window[callbackName];
                         resolve();
                     };
@@ -2402,6 +2405,27 @@
             }).catch(() => {
                 if (btn) { btn.textContent = '🔄 Refresh'; btn.disabled = false; }
             });
+        }
+
+        // Deep-link support: the website Control Centre links each dashboard
+        // figure to ?focus=<status> so a click lands on that filtered view.
+        // Applied once, after orders load, then stripped from the URL.
+        var _focusApplied = false;
+        function applyFocusFromUrl() {
+            if (_focusApplied) return;
+            var focus = '';
+            try { focus = new URLSearchParams(window.location.search).get('focus') || ''; } catch(e) {}
+            if (!focus) return;
+            _focusApplied = true;
+            var valid = ['all','Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed','Query'];
+            var match = valid.filter(function(s){ return s.toLowerCase() === focus.toLowerCase(); })[0];
+            if (!match) return;
+            try { setFilter(match); } catch(e) {}
+            try {
+                var cleaned = window.location.search.replace(/[?&]focus=[^&]*/, '').replace(/^&/, '?');
+                if (cleaned === '?') cleaned = '';
+                history.replaceState({}, '', window.location.pathname + cleaned + window.location.hash);
+            } catch(e) {}
         }
 
         // Filter orders
@@ -3518,6 +3542,218 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
     window.opener.sendMasonReportToMason(s);
     setTimeout(function(){ btn.textContent = '✓ Sent (' + s.length + ')'; btn.disabled = false; }, 1500);
   };
+  recompute();
+})();
+<\/script>
+
+</body>
+</html>`;
+
+            const win = window.open('', '_blank');
+            if (!win) {
+                alert('Pop-up blocked — please allow pop-ups for tracker.crymbleandsons.com to open the report.');
+                return;
+            }
+            win.document.open();
+            win.document.write(html);
+            win.document.close();
+        }
+
+        // <datalist> options for the order form's "Mason" field — distinct
+        // mason names already used across orders, plus a couple of defaults.
+        function masonDatalistOptions() {
+            const set = new Set(['Orchard', 'Brian Cunningham']);
+            (allOrders || []).forEach(o => { if (o && o.masonName) set.add(String(o.masonName).trim()); });
+            return [...set].filter(Boolean).sort()
+                .map(m => `<option value="${m.replace(/"/g, '&quot;')}">`).join('');
+        }
+
+        // Mason PAYMENT report — jobs grouped by which mason did them, with a
+        // cost per job and a per-mason subtotal so you know what to pay each
+        // one. Status filter (default: Installed) controls which jobs show, and
+        // tick boxes let you exclude jobs already paid.
+        function openMasonPayReport() {
+            if (!Array.isArray(allOrders) || allOrders.length === 0) {
+                alert('Your orders haven’t finished loading yet.\n\nClick 🔄 Refresh (or wait for the dashboard to fill in), then open the Mason Pay report again.');
+                return;
+            }
+            const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const fmtMoney = n => '£' + (n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+            const fmtDate = d => {
+                const dt = new Date(d);
+                if (!d || isNaN(dt.getTime())) return '—';
+                return dt.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+            };
+            const masonCost = o => {
+                try { const t = calculateOrderTotals(o); if (t && Number.isFinite(t.totalCost) && t.totalCost > 0) return t.totalCost; } catch(e){}
+                return parseFloat(o.totalCostPrice) || 0;
+            };
+
+            const ALL_STATUSES = ['Enquiry','Quoted','Confirmed','In Design','Production','Ready','Installed','Completed','Query'];
+            const DEFAULT_STATUSES = ['Installed'];   // start on installed jobs — usually what's payable
+
+            const jobs = (allOrders || []).filter(o => o && !o.archived);
+
+            // Status filter toggles — only offered for statuses that have jobs.
+            const present = ALL_STATUSES.filter(s => jobs.some(o => o.status === s));
+            const toggles = present.map(s => {
+                const on = DEFAULT_STATUSES.indexOf(s) !== -1 ? 'checked' : '';
+                const n = jobs.filter(o => o.status === s).length;
+                return `<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;background:#fff;border:1px solid #cbd5e1;border-radius:999px;padding:4px 11px;cursor:pointer;">
+                    <input type="checkbox" class="statusToggle" data-status="${esc(s)}" ${on}> ${esc(statusLabel(s))} <span style="color:#64748b;">(${n})</span>
+                </label>`;
+            }).join(' ');
+
+            // Group jobs by which mason did them (blank → Unassigned, sorted last).
+            const groups = {};
+            jobs.forEach(o => {
+                const m = (o.masonName || '').trim() || '— Unassigned —';
+                (groups[m] = groups[m] || []).push(o);
+            });
+            const masonNames = Object.keys(groups).sort((a, b) => {
+                if (a === '— Unassigned —') return 1;
+                if (b === '— Unassigned —') return -1;
+                return a.localeCompare(b);
+            });
+
+            const sections = masonNames.map(m => {
+                const list = groups[m].slice().sort((a, b) => new Date(a.installDate || '2999') - new Date(b.installDate || '2999'));
+                const rows = list.map(o => {
+                    const work = [
+                        [o.hsType, o.hsSize].filter(Boolean).join(' '),
+                        o.surroundType ? (o.surroundType + (o.surroundGranite ? ' (granite)' : '')) : '',
+                        o.stoneType || '',
+                        o.inscriptionText ? (o.inscriptionType === 'additional' ? 'Add. inscription' : 'New inscription') : ''
+                    ].filter(Boolean).join(' · ') || '—';
+                    const notes = [o.masonNotes || '', ...((o.masonNoteEntries || []).map(n => (n && n.text) ? n.text : ''))].filter(Boolean).join(' · ');
+                    const c = masonCost(o);
+                    const hide = DEFAULT_STATUSES.indexOf(o.status) !== -1 ? '' : 'display:none;';
+                    return `
+                        <tr data-status="${esc(o.status)}" data-cost="${c}" style="${hide}">
+                            <td style="text-align:center;"><input type="checkbox" class="payToggle" data-cost="${c}" checked></td>
+                            <td style="font-weight:600;">${esc(o.deceasedName || '—')}</td>
+                            <td>${esc(o.orderRef || '')}</td>
+                            <td>${esc(statusLabel(o.status) || o.status || '')}</td>
+                            <td style="white-space:nowrap;">${fmtDate(o.installDate)}</td>
+                            <td style="font-size:0.82rem;">${esc(work)}</td>
+                            <td style="text-align:right;font-weight:600;white-space:nowrap;">${fmtMoney(c)}</td>
+                            <td style="font-size:0.8rem;max-width:220px;">${notes ? esc(notes) : '<span style="color:#aaa;">—</span>'}</td>
+                        </tr>`;
+                }).join('');
+                return `<tbody data-mason="${esc(m)}">
+                    <tr class="masonHead"><td colspan="6">🧱 ${esc(m)}</td><td class="subtotal" style="text-align:right;">£0.00</td><td></td></tr>
+                    ${rows}
+                </tbody>`;
+            }).join('');
+
+            const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mason Payment Report — David Crymble &amp; Sons — ${fmtDate(new Date())}</title>
+<style>
+  @media print { @page { size: A4 landscape; margin: 12mm; } }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color:#1c1c1e; margin:0; padding:18px; background:#fff; }
+  h1 { font-family:'Times New Roman', serif; font-weight:900; letter-spacing:0.06em; font-size:24px; margin:0; }
+  h1 small { display:block; font-size:0.5em; letter-spacing:0.18em; color:#6c6c70; margin-top:4px; font-weight:700; }
+  table { width:100%; border-collapse:collapse; font-size:0.84rem; page-break-inside:auto; }
+  tbody tr { page-break-inside:avoid; }
+  td { padding:6px 8px; vertical-align:top; border-bottom:1px solid #ececec; }
+  th { font-weight:700; font-size:11px; text-transform:uppercase; color:#444; letter-spacing:0.04em; text-align:left; padding:6px 8px; border-bottom:1.5px solid #333; }
+  .masonHead td { background:#eef2ff; font-weight:700; font-size:12.5px; color:#1e293b; border-top:2px solid #c7d2fe; padding-top:8px; padding-bottom:8px; }
+  .summary {
+    display:flex; gap:1.5rem; flex-wrap:wrap;
+    background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:10px 14px; margin:10px 0 18px;
+    font-size:13px;
+  }
+  .summary div strong { display:block; font-size:20px; color:#1c1c1e; margin-top:1px; }
+  .top { display:flex; align-items:flex-end; justify-content:space-between; gap:1rem; padding-bottom:8px; border-bottom:2px solid #16a34a; margin-bottom:14px; }
+  .top .meta { text-align:right; font-size:12px; color:#6c6c70; line-height:1.5; }
+  .conf { font-size:11px; color:#b45309; font-weight:700; margin-bottom:6px; }
+  .hint { font-size:11px; color:#64748b; margin:0 0 12px; }
+  .filterbar { display:flex; align-items:center; flex-wrap:wrap; gap:7px; margin:0 0 14px; font-size:12px; }
+  .filterbar b { text-transform:uppercase; letter-spacing:0.05em; color:#475569; font-size:11px; margin-right:4px; }
+  .print-btn {
+    position:fixed; top:12px; right:12px;
+    background:#16a34a; color:white; border:none; padding:0.6rem 1.2rem;
+    border-radius:6px; font-size:0.95rem; font-weight:600; cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.15); z-index:1000;
+  }
+  @media print { .print-btn, .filterbar { display:none; } }
+</style>
+</head>
+<body>
+<button class="print-btn" onclick="window.print()">🖨️ Print</button>
+
+<div class="top">
+  <h1>DAVID CRYMBLE &amp; SONS<small>FUNERAL DIRECTORS &amp; MEMORIAL MASONS</small></h1>
+  <div class="meta">
+    <strong>Mason Payment Report</strong><br>
+    Generated ${fmtDate(new Date())}<br>
+    Grouped by mason
+  </div>
+</div>
+
+<div class="conf">CONFIDENTIAL — Mason cost prices. Not for the customer.</div>
+<p class="hint">Tick the statuses to include (Installed by default). Each job is ticked — untick any you've already paid; the “Selected total” is what to pay this run.</p>
+
+<div class="filterbar"><b>Show statuses:</b> ${toggles || '<span style="color:#888;">No jobs</span>'}</div>
+
+<div class="summary">
+  <div><span style="color:#6c6c70;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Jobs shown</span><strong id="sumJobs">0</strong></div>
+  <div><span style="color:#6c6c70;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Total shown</span><strong id="sumTotal">£0.00</strong></div>
+  <div><span style="color:#6c6c70;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Selected total to pay</span><strong id="sumSel">£0.00</strong></div>
+</div>
+
+${jobs.length ? `<table>
+  <thead>
+    <tr>
+      <th style="width:3%;text-align:center;">Pay</th>
+      <th style="width:17%;">Memorial For</th>
+      <th style="width:8%;">Ref</th>
+      <th style="width:10%;">Status</th>
+      <th style="width:9%;">Install</th>
+      <th style="width:24%;">Work</th>
+      <th style="width:9%;text-align:right;">Mason Cost</th>
+      <th style="width:13%;">Mason Notes</th>
+    </tr>
+  </thead>
+  ${sections}
+</table>` : '<p style="color:#888;">No jobs to report.</p>'}
+
+<script>
+(function(){
+  function money(n){ return '£' + (Number(n)||0).toFixed(2).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ','); }
+  function checkedStatuses(){
+    return Array.prototype.slice.call(document.querySelectorAll('.statusToggle'))
+      .filter(function(c){ return c.checked; }).map(function(c){ return c.getAttribute('data-status'); });
+  }
+  function recompute(){
+    var cs = checkedStatuses();
+    var grand = 0, sel = 0, jobs = 0;
+    Array.prototype.slice.call(document.querySelectorAll('tbody[data-mason]')).forEach(function(tb){
+      var sub = 0, anyVis = false;
+      Array.prototype.slice.call(tb.querySelectorAll('tr[data-cost]')).forEach(function(tr){
+        var vis = cs.indexOf(tr.getAttribute('data-status')) !== -1;
+        tr.style.display = vis ? '' : 'none';
+        if (vis){
+          anyVis = true; jobs++;
+          var c = parseFloat(tr.getAttribute('data-cost')) || 0;
+          grand += c; sub += c;
+          var cb = tr.querySelector('.payToggle');
+          if (cb && cb.checked) sel += c;
+        }
+      });
+      tb.style.display = anyVis ? '' : 'none';
+      var st = tb.querySelector('.subtotal');
+      if (st) st.textContent = money(sub);
+    });
+    document.getElementById('sumJobs').textContent = jobs;
+    document.getElementById('sumTotal').textContent = money(grand);
+    document.getElementById('sumSel').textContent = money(sel);
+  }
+  Array.prototype.slice.call(document.querySelectorAll('.statusToggle')).forEach(function(cb){ cb.addEventListener('change', recompute); });
+  Array.prototype.slice.call(document.querySelectorAll('.payToggle')).forEach(function(cb){ cb.addEventListener('change', recompute); });
   recompute();
 })();
 <\/script>
@@ -5941,6 +6177,11 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                         <div class="form-group">
                             <label>General Notes</label>
                             <textarea name="notes" rows="3">${order.notes || ''}</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Mason (who's doing the work)</label>
+                            <input type="text" name="masonName" list="masonNameList" value="${(order.masonName || '').replace(/"/g, '&quot;')}" placeholder="e.g. Orchard, Brian Cunningham">
+                            <datalist id="masonNameList">${masonDatalistOptions()}</datalist>
                         </div>
                         <div class="form-group">
                             <label>Mason Notes (Job Card only)</label>
