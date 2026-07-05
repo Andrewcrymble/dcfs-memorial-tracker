@@ -5620,9 +5620,14 @@ ${jobs.length ? `<table>
                        <span style="font-size:0.78rem;">Click below to send the job card to the mason on WhatsApp.</span>
                    </div>`;
 
+            const masonRow = order.masonName
+                ? `<div style="font-size:0.85rem;color:#374151;margin-bottom:0.6rem;">🔨 Assigned mason: <strong>${String(order.masonName).replace(/</g,'&lt;')}</strong></div>`
+                : `<div style="font-size:0.82rem;color:#b45309;margin-bottom:0.6rem;">🔨 No mason assigned yet — set one under Notes → “Mason (who's doing the work)”.</div>`;
+
             const btnLabel = order.masonNotifiedAt ? '💬 Re-send to Mason' : '💬 Send to Mason';
             const btnDisabled = !proofFile ? 'disabled' : '';
             return `
+                ${masonRow}
                 ${proofRow}
                 ${statusBlock}
                 <div style="display:flex;justify-content:flex-end;">
@@ -7938,6 +7943,14 @@ ${jobs.length ? `<table>
             doc.setTextColor(0, 0, 0);
             y += 15;
 
+            // ── Assigned mason ──
+            if (currentOrder.masonName) {
+                doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(55, 65, 81);
+                doc.text('MASON: ' + String(currentOrder.masonName).toUpperCase(), 24, y);
+                doc.setTextColor(0, 0, 0);
+                y += 8;
+            }
+
             // ── Proof approval status banner ──
             const proofFile = (currentOrder.files || []).find(f => f.type === 'Proof');
             if (proofFile) {
@@ -8292,6 +8305,7 @@ ${jobs.length ? `<table>
             if (opts.download !== false) doc.save(jcFilename);
             addActivityLog(`Generated Mason Job Card — Cost: £${totals.totalCost.toFixed(2)}`);
             const summary = [
+                currentOrder.masonName ? `🔨 Mason: ${currentOrder.masonName}` : '',
                 `Customer: ${currentOrder.customerName}`,
                 `Deceased: ${currentOrder.deceasedName}`,
                 `Ref: ${jcRef}`,
