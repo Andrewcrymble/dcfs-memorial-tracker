@@ -2464,7 +2464,27 @@
 
         // Filter and search orders
         function filterOrders() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+            // On the kanban ('all') view the board hides Installed/Completed as cards,
+            // so a search there would find nothing. When a search term is typed, show the
+            // flat results list instead (it covers EVERY status, including Installed), and
+            // restore the board when the search is cleared.
+            if (currentFilter === 'all') {
+                const searching = !!searchTerm;
+                const board = document.getElementById('boardWrap');
+                const grid  = document.getElementById('orderGridWrap');
+                const installedSummary = document.getElementById('installedSummary');
+                const completedSummary = document.getElementById('completedSummary');
+                const dashActivity = document.getElementById('dashboardActivity');
+                const dashInbox    = document.getElementById('dashboardInbox');
+                if (board) board.style.display = searching ? 'none' : '';
+                if (installedSummary) installedSummary.style.display = searching ? 'none' : '';
+                if (completedSummary) completedSummary.style.display = searching ? 'none' : '';
+                if (dashActivity) dashActivity.style.display = searching ? 'none' : '';
+                if (dashInbox) dashInbox.style.display = (!searching && typeof OUTLOOK_ENABLED !== 'undefined' && OUTLOOK_ENABLED) ? '' : 'none';
+                if (grid) grid.style.display = searching ? '' : 'none';
+                if (!searching) { try { renderKanbanBoard(); } catch (e) {} }
+            }
             renderOrderList(searchTerm);
         }
 
