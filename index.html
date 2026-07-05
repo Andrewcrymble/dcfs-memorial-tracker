@@ -5666,10 +5666,28 @@ ${jobs.length ? `<table>
                 ? `<div style="font-size:0.85rem;color:#374151;margin-bottom:0.6rem;">🔨 Assigned mason: <strong>${String(order.masonName).replace(/</g,'&lt;')}</strong></div>`
                 : `<div style="font-size:0.82rem;color:#b45309;margin-bottom:0.6rem;">🔨 No mason assigned yet — set one under Notes → “Mason (who's doing the work)”.</div>`;
 
+            // Mason payment vs suggested cost — what you should pay him vs what you did.
+            const fmtM = n => '£' + (Number(n) || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            let masonSuggested = 0;
+            try { const t = calculateOrderTotals(order); if (t && isFinite(t.totalCost) && t.totalCost > 0) masonSuggested = t.totalCost; } catch (e) {}
+            if (!masonSuggested) masonSuggested = parseFloat(order.totalCostPrice) || 0;
+            const masonPaid = parseFloat(order.masonPaidAmount) || 0;
+            const variance = masonSuggested - masonPaid;
+            const varLabel = variance === 0 ? 'Exact match' : (variance > 0 ? fmtM(variance) + ' under' : fmtM(-variance) + ' over');
+            const varColor = variance > 0 ? '#16a34a' : (variance < 0 ? '#dc2626' : '#334155');
+            const payBox = (masonPaid > 0 || order.masonPaidDate)
+                ? `<div style="display:flex;flex-wrap:wrap;gap:1.25rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:0.65rem 0.9rem;margin-bottom:0.75rem;font-size:0.9rem;">
+                       <div><div style="color:#64748b;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.04em;">Suggested cost</div><strong>${fmtM(masonSuggested)}</strong></div>
+                       <div><div style="color:#64748b;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.04em;">Paid${order.masonPaidDate ? ' · ' + order.masonPaidDate : ''}</div><strong>${fmtM(masonPaid)}</strong></div>
+                       <div><div style="color:#64748b;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.04em;">Variance</div><strong style="color:${varColor};">${varLabel}</strong></div>
+                   </div>`
+                : `<div style="font-size:0.82rem;color:#64748b;margin-bottom:0.6rem;">💷 Not recorded as paid yet — suggested cost <strong>${fmtM(masonSuggested)}</strong>. Enter what you paid under <strong>Edit Order → Notes</strong>.</div>`;
+
             const btnLabel = order.masonNotifiedAt ? '💬 Re-send to Mason' : '💬 Send to Mason';
             const btnDisabled = !proofFile ? 'disabled' : '';
             return `
                 ${masonRow}
+                ${payBox}
                 ${proofRow}
                 ${statusBlock}
                 <div style="display:flex;justify-content:flex-end;">
@@ -6233,6 +6251,16 @@ ${jobs.length ? `<table>
                         <div class="form-group">
                             <label>Mason Notes (Job Card only)</label>
                             <textarea name="masonNotes" rows="3">${order.masonNotes || ''}</textarea>
+                        </div>
+                        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+                            <div class="form-group" style="flex:1;min-width:150px;">
+                                <label>💷 Paid to the mason (£)</label>
+                                <input type="number" name="masonPaidAmount" min="0" step="0.01" value="${order.masonPaidAmount || ''}" placeholder="what you actually paid">
+                            </div>
+                            <div class="form-group" style="flex:1;min-width:150px;">
+                                <label>Mason paid on</label>
+                                <input type="date" name="masonPaidDate" value="${order.masonPaidDate || ''}">
+                            </div>
                         </div>
                     </div>
 
