@@ -3676,6 +3676,10 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
                 </tbody>`;
             }).join('');
 
+            // Dropdown to focus the report on a single mason (default: all).
+            const masonOptions = '<option value="">All masons</option>' +
+                masonNames.map(m => `<option value="${esc(m)}">${esc(m)} (${groups[m].length})</option>`).join('');
+
             const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3727,7 +3731,11 @@ ${sections || '<p style="color:#888;">No jobs to report.</p>'}
 <div class="conf">CONFIDENTIAL — Mason cost prices. Not for the customer.</div>
 <p class="hint">Tick the statuses to include (Installed by default). Each job is ticked — untick any you've already paid; the “Selected total” is what to pay this run.</p>
 
-<div class="filterbar"><b>Show statuses:</b> ${toggles || '<span style="color:#888;">No jobs</span>'}</div>
+<div class="filterbar">
+  <b>Mason:</b> <select id="masonFilter" style="font-size:12px;padding:4px 9px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;font-family:inherit;">${masonOptions}</select>
+  <span style="display:inline-block;width:14px;"></span>
+  <b>Show statuses:</b> ${toggles || '<span style="color:#888;">No jobs</span>'}
+</div>
 
 <div class="summary">
   <div><span style="color:#6c6c70;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Jobs shown</span><strong id="sumJobs">0</strong></div>
@@ -3760,11 +3768,14 @@ ${jobs.length ? `<table>
   }
   function recompute(){
     var cs = checkedStatuses();
+    var mf = document.getElementById('masonFilter');
+    var selMason = mf ? mf.value : '';
     var grand = 0, sel = 0, jobs = 0;
     Array.prototype.slice.call(document.querySelectorAll('tbody[data-mason]')).forEach(function(tb){
+      var masonMatch = !selMason || tb.getAttribute('data-mason') === selMason;
       var sub = 0, anyVis = false;
       Array.prototype.slice.call(tb.querySelectorAll('tr[data-cost]')).forEach(function(tr){
-        var vis = cs.indexOf(tr.getAttribute('data-status')) !== -1;
+        var vis = masonMatch && cs.indexOf(tr.getAttribute('data-status')) !== -1;
         tr.style.display = vis ? '' : 'none';
         if (vis){
           anyVis = true; jobs++;
@@ -3784,6 +3795,7 @@ ${jobs.length ? `<table>
   }
   Array.prototype.slice.call(document.querySelectorAll('.statusToggle')).forEach(function(cb){ cb.addEventListener('change', recompute); });
   Array.prototype.slice.call(document.querySelectorAll('.payToggle')).forEach(function(cb){ cb.addEventListener('change', recompute); });
+  var mfEl = document.getElementById('masonFilter'); if (mfEl) mfEl.addEventListener('change', recompute);
   recompute();
 })();
 <\/script>
