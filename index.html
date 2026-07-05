@@ -1738,12 +1738,26 @@
                 </div>
             </div>
 
-            <!-- Installed summary row (no cards, just count) -->
-            <div class="installed-summary" id="installedSummary">
-                <span class="installed-icon">✅</span>
-                <span class="installed-label">Installed</span>
-                <span class="installed-count" id="installed-count">0 jobs completed</span>
-                <button class="installed-view-btn" onclick="setFilter('Installed'); renderKanbanBoard()">View all →</button>
+            <!-- Installed — jobs installed but awaiting full payment stay on the
+                 board here. Once recorded as fully paid they drop off into the
+                 archive (still viewable via "View all installed" or search). -->
+            <div id="installedSummary">
+                <div class="board-section-label" style="display:flex;align-items:center;gap:0.75rem;">
+                    <span>✅ Installed — awaiting full payment</span>
+                    <button class="installed-view-btn" style="margin-left:auto;" onclick="setFilter('Installed'); renderKanbanBoard()">View all installed →</button>
+                </div>
+                <div class="kanban-row kanban-row-completed">
+                    <div class="kanban-col" id="col-Installed" data-status="Installed">
+                        <div class="kanban-col-header" style="--col-color:#5a8f2e">
+                            <span class="kanban-col-title">Installed · awaiting payment</span>
+                            <div class="kanban-col-meta">
+                                <span class="kanban-col-count" id="col-count-Installed">0</span>
+                                <span class="kanban-col-value" id="col-value-Installed">£0</span>
+                            </div>
+                        </div>
+                        <ul class="kanban-cards" id="cards-Installed"></ul>
+                    </div>
+                </div>
             </div>
 
             <!-- Completed section — finished jobs. Cards with an unpaid balance
@@ -2628,8 +2642,9 @@
             const searchTerm = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
             const showArchived = !!window._showArchivedEnquiries;
             const filtered = allOrders.filter(o => {
-                // Archived enquiries only appear when the user opts in
-                if (o.archived && !showArchived) return false;
+                // Archived enquiries — and Installed jobs that are paid or have gone
+                // quiet — drop off the board (they've moved to archive) unless opted in.
+                if ((o.archived || isInstalledArchived(o)) && !showArchived) return false;
                 if (!searchTerm) return true;
                 return (o.deceasedName||'').toLowerCase().includes(searchTerm)
                     || (o.customerName||'').toLowerCase().includes(searchTerm)
@@ -2653,15 +2668,10 @@
                 const orders = groups[status] || [];
                 const total = orders.reduce((sum,o) => sum + getOrderTotal(o), 0);
 
-                // Installed has no kanban-cards column — only a summary bar at
-                // the bottom of the board. Handle it first so the
-                // early-return-on-missing-listEl below doesn't strand its count.
-                // (Completed DOES have a cards column now, so it falls through.)
-                if (status === 'Installed') {
-                    const installedCount = document.getElementById('installed-count');
-                    if (installedCount) installedCount.textContent = orders.length + ' jobs ' + (orders.length === 1 ? 'completed' : 'completed');
-                    return;
-                }
+                // Installed now has its own cards column — the jobs here are
+                // installed but NOT yet fully paid, so they stay on the board
+                // (fully-paid ones are filtered out above into the archive).
+                // It falls through to the normal card rendering below.
 
                 const listEl = document.getElementById('cards-' + status);
                 if (!listEl) return;
@@ -7381,6 +7391,28 @@ ${jobs.length ? `<table>
         // headstone / etc. price changes are reflected.
         function getOrderBalance(order) {
             return Math.max(0, getOrderTotal(order) - (parseFloat(order?.depositPaid) || 0));
+        }
+
+        // Installed jobs stay on the board while they still OWE money and have been
+        // worked recently — so payment can be chased. They drop off into the archive
+        // once fully paid, or once they've gone quiet for INSTALLED_BOARD_DAYS (this
+        // also keeps the ~100 historical jobs imported at go-live off the board).
+        // Archived jobs remain viewable via "View all installed" and search.
+        const INSTALLED_BOARD_DAYS = 60;
+        function orderLastActivityMs(order) {
+            let latest = 0;
+            (order.log || []).forEach(e => { const t = e && e.ts ? Date.parse(e.ts) : 0; if (t > latest) latest = t; });
+            ['installDate', 'updatedAt', 'createdAt', 'orderDate'].forEach(k => {
+                if (order[k]) { const t = Date.parse(order[k]); if (!isNaN(t) && t > latest) latest = t; }
+            });
+            return latest;
+        }
+        function isInstalledArchived(order) {
+            if (!order || order.status !== 'Installed') return false;
+            if (getOrderBalance(order) <= 0) return true;            // nothing owed → done → archive
+            const last = orderLastActivityMs(order);
+            if (!last) return true;                                  // no date at all → treat as old
+            return (Date.now() - last) / 86400000 > INSTALLED_BOARD_DAYS;  // gone quiet → archive
         }
 
         // A completed job that still has money owing is treated as an overdue
