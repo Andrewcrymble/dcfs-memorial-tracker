@@ -7523,11 +7523,19 @@ ${jobs.length ? `<table>
         // A near-blank first page for POSTED documents. Stannp prints the recipient
         // address panel, its reference and its QR/barcode onto page 1 of whatever we
         // send — so page 1 is theirs. Our estimate/invoice starts untouched on page 2.
-        function dcsAddPostCoverPage(doc, kind) {
+        function dcsAddPostCoverPage(doc, kind, rcptName, rcptAddress) {
             doc.insertPage(1);
             doc.setPage(1);
-            // Nothing above 110mm: that whole area belongs to Stannp's address
-            // window, reference line and QR code.
+            // Stannp OCRs the first page to find WHO to post to — the recipient
+            // address must be printed here, in the envelope-window position.
+            // Their reference/QR marks also land on this page, keeping the
+            // actual document clean.
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(0, 0, 0);
+            let ay = 50;
+            doc.text(String(rcptName || ''), 25, ay); ay += 5.5;
+            String(rcptAddress || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (line) {
+                doc.text(line, 25, ay); ay += 5.5;
+            });
             doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(0, 0, 0);
             doc.text('David Crymble & Sons — Memorial Masons', 20, 120);
             doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
@@ -7553,14 +7561,23 @@ ${jobs.length ? `<table>
             try { built = kind === 'invoice' ? await generateInvoice({ returnDoc: true }) : await generateEstimate({ returnDoc: true }); } catch (e) {}
             if (!built || !built.doc) { showToast('⚠ Could not build the ' + kind, 'warn'); return; }
             try {
-                dcsAddPostCoverPage(built.doc, kind);
+                dcsAddPostCoverPage(built.doc, kind, name, address);
                 const r = await fetch(HUB_LETTERS_URL, {
                     method: 'POST',
                     headers: { 'content-type': 'application/json', 'x-letters-key': HUB_LETTERS_KEY },
                     body: JSON.stringify({ pdf: built.doc.output('datauristring'), name: name, address: address, doc_name: 'Memorial ' + kind + ' — ' + (currentOrder.orderRef || currentOrder.orderId || '') })
                 });
                 const j = await r.json();
-                if (j && j.ok) showToast('✅ ' + kind.charAt(0).toUpperCase() + kind.slice(1) + ' posted' + (j.price ? ' (' + j.price + ')' : '') + ' — tracked in the Hub postage board', 'success');
+                if (j && j.ok) {
+                    showToast('✅ ' + kind.charAt(0).toUpperCase() + kind.slice(1) + ' posted' + (j.price ? ' (' + j.price + ')' : '') + ' — tracked in the Hub postage board', 'success');
+                    // Paper trail on the order itself — shows in its activity log.
+                    try {
+                        if (!Array.isArray(currentOrder.log)) currentOrder.log = [];
+                        const ts = new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                        currentOrder.log.push({ timestamp: ts, author: (typeof selectedUser !== 'undefined' && selectedUser) ? selectedUser : 'System', text: '📮 ' + kind.charAt(0).toUpperCase() + kind.slice(1) + ' posted by letter to ' + name + (j.price ? ' (' + j.price + ')' : '') });
+                        await saveOrder(currentOrder);
+                    } catch (logErr) { console.warn('post log failed:', logErr); }
+                }
                 else showToast('⚠ Post failed: ' + ((j && j.error) || ('HTTP ' + r.status)), 'warn');
             } catch (e) { showToast('⚠ Post failed: ' + e.message, 'warn'); }
         }
