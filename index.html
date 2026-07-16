@@ -1901,7 +1901,25 @@
         }
 
         // Configuration
-       const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykAIR6S2ZLHQel0Ot-QTtbIfDzEeL78oYR9Ba7W6gkDNwHnXOj1ErLJ653k4vB5VqJ/exec';
+       const SCRIPT_URL = 'https://crymbleandsons.com/api/memorials'; // Hub memorials API (D1) — replaced Google Apps Script 2026-07-16
+        const SCRIPT_KEY = '503c535e57dace874a46c548e25f01c06b01d17c6439d7db';
+        // Every write to the memorials API carries the shared key — injected here
+        // once instead of at each of the ~15 call sites. no-cors is dropped because
+        // the Hub sets real CORS headers, so responses become readable.
+        (function () {
+            const orig = window.fetch.bind(window);
+            window.fetch = function (url, opts) {
+                try {
+                    if (typeof url === 'string' && url.indexOf(SCRIPT_URL) === 0 && opts && String(opts.method || '').toUpperCase() === 'POST' && typeof opts.body === 'string') {
+                        const b = JSON.parse(opts.body);
+                        if (!b.key) b.key = SCRIPT_KEY;
+                        opts = Object.assign({}, opts, { body: JSON.stringify(b) });
+                        if (opts.mode === 'no-cors') delete opts.mode;
+                    }
+                } catch (e) {}
+                return orig(url, opts);
+            };
+        })();
         const SHEET_ID = '1_pbyhKL1IElgneBZHFIWG76Cv6hNKdUw0fgSHQjMN6M';
 
         // ── Microsoft Outlook (Graph) integration ──
@@ -2140,7 +2158,7 @@
                     if (!resp || !resp.success) console.warn('WhatsApp send failed:', resp);
                     resolve(!!(resp && resp.success));
                 };
-                const params = new URLSearchParams({ action: 'sendWhatsApp', msg: message, callback: cb, _: Date.now() });
+                const params = new URLSearchParams({ action: 'sendWhatsApp', key: SCRIPT_KEY, msg: message, callback: cb, _: Date.now() });
                 if (targetId) params.set('target', targetId);
                 if (currentOrder && currentOrder.orderId) params.set('orderId', currentOrder.orderId);
                 const s = document.createElement('script');
@@ -2329,7 +2347,7 @@
                     };
 
                     const script = document.createElement('script');
-                    script.src = SCRIPT_URL + '?callback=' + callbackName + bust;
+                    script.src = SCRIPT_URL + '?key=' + SCRIPT_KEY + '&callback=' + callbackName + bust;
                     script.onerror = function() {
                         console.error('Error loading orders from Google Sheets');
                         document.getElementById('orderList').innerHTML = `
@@ -7048,7 +7066,7 @@ ${jobs.length ? `<table>
             };
             
             const script = document.createElement('script');
-            script.src = SCRIPT_URL + '?callback=' + callbackName;
+            script.src = SCRIPT_URL + '?key=' + SCRIPT_KEY + '&callback=' + callbackName;
             script.onerror = function() {
                 const testResults = document.getElementById('testResults_' + modalId);
                 if (testResults) {
