@@ -7771,14 +7771,14 @@ ${jobs.length ? `<table>
                             : null;
 
                         if (designLines && designLines.length) {
+                            // Shrink whichever image we embed — composed canvas PNGs
+                            // can run to many MB and blew the postal size limit.
                             const composedDataUrl = await renderInscriptionPreview(stoneDataUrl, design);
-                            if (composedDataUrl) {
-                                doc.addImage(composedDataUrl, 'PNG', imgX, py, imgW, imgH);
-                            } else {
-                                doc.addImage(stoneDataUrl, 'PNG', imgX, py, imgW, imgH);
-                            }
+                            const proofImg = await dcsShrinkImage(composedDataUrl || stoneDataUrl, 1600, 0.85);
+                            doc.addImage(proofImg, /^data:image\/jpe?g/i.test(proofImg) ? 'JPEG' : 'PNG', imgX, py, imgW, imgH);
                         } else {
-                            doc.addImage(stoneDataUrl, 'PNG', imgX, py, imgW, imgH);
+                            const stoneImg = await dcsShrinkImage(stoneDataUrl, 1600, 0.85);
+                            doc.addImage(stoneImg, /^data:image\/jpe?g/i.test(stoneImg) ? 'JPEG' : 'PNG', imgX, py, imgW, imgH);
 
                             // Legacy inscription text overlay for orders without a design
                             if (currentOrder.inscriptionText) {
@@ -8074,6 +8074,8 @@ ${jobs.length ? `<table>
                     imgDataUrl = (designLines && designLines.length)
                         ? (await renderInscriptionPreview(stoneDataUrl, design) || stoneDataUrl)
                         : stoneDataUrl;
+                    // Composed canvas PNGs can run to many MB — print resolution is plenty.
+                    imgDataUrl = await dcsShrinkImage(imgDataUrl, 1600, 0.85);
                     imgAspect = 90 / 108;
                 }
                 if (imgDataUrl) {
