@@ -8066,11 +8066,11 @@ ${jobs.length ? `<table>
             // Table header
             y = dcsPdfTableHeader(doc, y, 'AMOUNT');
 
-            let alt = false;
+            let alt = false, rowsPrinted = 0;
             function row(label, sub, amount) {
                 if (y > 240) { doc.addPage(); dcsPdfLetterheadPage(doc); y = 45; }
                 if (alt) { doc.setFillColor(248, 248, 248); doc.rect(20, y - 4, 170, 8, 'F'); }
-                alt = !alt;
+                alt = !alt; rowsPrinted++;
                 doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
                 doc.text(label, 23, y);
                 if (sub) {
@@ -8125,18 +8125,48 @@ ${jobs.length ? `<table>
             if (servicesSell > 0)
                 row('Additional Services', '', servicesSell);
 
+            // The invoice must agree with what the app shows everywhere else:
+            // getOrderTotal falls back to the order's stored total when the
+            // price-book breakdown can't be rebuilt (legacy/imported orders).
+            // Without this, those invoices printed no items and a £0 Sub Total
+            // while the order screen showed the real figure.
+            const subtotal = getOrderTotal(currentOrder) || (totals.totalSell + servicesSell);
+            if (!rowsPrinted && subtotal > 0)
+                row('Memorial works — as agreed', 'Imported order — see estimate for the full breakdown', subtotal);
+
             // Totals section
             y += 2;
             doc.setDrawColor(0,0,0); doc.setLineWidth(0.3); doc.line(20, y, 190, y); y += 6;
-
-            const subtotal = totals.totalSell + servicesSell;
             const dep = parseFloat(currentOrder.depositPaid) || 0;
             if (dep > 0) {
                 const bal = Math.max(0, subtotal - dep);
+                // Itemise every recorded transaction (date · method), exactly as
+                // the order's own "Payments received" panel shows them. depositPaid
+                // stays the authoritative total: older orders (and some Stripe
+                // payments) predate the itemised history, so any remainder prints
+                // as one "Earlier payment(s) received" line — the lines always add
+                // up to the balance the customer is asked to pay.
+                const guard = function () { if (y > 240) { doc.addPage(); dcsPdfLetterheadPage(doc); y = 45; } };
+                const payLine = function (label, amount) {
+                    guard();
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(0, 0, 0);
+                    doc.text(label, 115, y); doc.text(`-£${amount.toFixed(2)}`, 188, y, { align: 'right' }); y += 7;
+                };
                 doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(0,0,0);
                 doc.text('Sub Total', 115, y); doc.text(`£${subtotal.toFixed(2)}`, 188, y, { align: 'right' }); y += 7;
-                doc.text('Deposit Received', 115, y);
-                doc.text(`-£${dep.toFixed(2)}`, 188, y, { align: 'right' }); y += 7;
+                const pmts = (Array.isArray(currentOrder.payments) ? currentOrder.payments : [])
+                    .map(p => ({ amt: parseFloat(p.amount) || 0, ts: p.ts, method: p.method }))
+                    .filter(p => p.amt > 0);
+                let itemised = 0;
+                pmts.forEach(p => {
+                    if (itemised + p.amt > dep + 0.005) return; // never print more than was actually received
+                    itemised += p.amt;
+                    const d = p.ts ? new Date(p.ts).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+                    payLine('Payment received' + (d ? ' — ' + d : '') + (p.method ? ' · ' + p.method : ''), p.amt);
+                });
+                const remainder = dep - itemised;
+                if (remainder > 0.005) payLine(itemised > 0 ? 'Earlier payment(s) received' : 'Deposit Received', remainder);
+                guard();
                 doc.setLineWidth(0.5); doc.line(110, y, 190, y); y += 5;
                 doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
                 doc.text('BALANCE DUE', 115, y); doc.text(`£${bal.toFixed(2)}`, 188, y, { align: 'right' });
