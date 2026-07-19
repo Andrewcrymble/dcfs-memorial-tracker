@@ -1991,6 +1991,13 @@
                 return;
             }
 
+            // Personal note first (AI-checked) — it leads the WhatsApp message.
+            const personalMsg = await dcsPersonalMessage({
+                title: 'Message to ' + (currentOrder.customerName ? currentOrder.customerName.split(' ')[0] : 'the customer') + ' (goes with the WhatsApp estimate)',
+                skipLabel: 'Send the standard message'
+            });
+            if (personalMsg === null) return;
+
             showToast('📄 Generating estimate…', 'info');
 
             try {
@@ -2077,10 +2084,11 @@
                     ? 'Hi ' + currentOrder.customerName.split(' ')[0] + ','
                     : 'Hello,';
                 const lines = [
-                    greeting + ' please find your memorial estimate from David Crymble & Sons.',
-                    '',
-                    'Reference: ' + refDisplay
+                    greeting + ' please find your memorial estimate from David Crymble & Sons.'
                 ];
+                if (personalMsg) { lines.push(''); lines.push(personalMsg); }
+                lines.push('');
+                lines.push('Reference: ' + refDisplay);
                 if (total > 0) lines.push('Total: £' + total.toFixed(2));
                 if (pdfDriveUrl) {
                     lines.push('');
@@ -4904,6 +4912,7 @@ ${jobs.length ? `<table>
                     <button class="btn btn-cyan" onclick="generateInvoice()">🧾 Invoice</button>
                     <button class="btn btn-cyan" onclick="dcsPostDoc('estimate')">📮 Post estimate</button>
                     <button class="btn btn-cyan" onclick="dcsPostDoc('invoice')">📮 Post invoice</button>
+                    <button class="btn btn-outline" onclick="dcsPostStatus()" title="Check whether posted letters have been printed and dispatched">📬 Post status</button>
                     <button class="btn" style="background:#7c3aed;color:white;" onclick="shareProofLink()">🔗 Share Proof</button>
                     <button class="btn" style="background:#25d366;color:white;" onclick="sendEstimateToCustomerWhatsApp()" ${o.phone ? '' : 'disabled title="No phone number on order"'}>💬 WhatsApp Estimate</button>
                     <button class="btn" style="background:#635bff;color:white;" onclick="createPaymentLink()" title="Create a Stripe link and send it to the customer to pay">💳 Send Payment Request</button>
@@ -7542,7 +7551,90 @@ ${jobs.length ? `<table>
         // A near-blank first page for POSTED documents. Stannp prints the recipient
         // address panel, its reference and its QR/barcode onto page 1 of whatever we
         // send — so page 1 is theirs. Our estimate/invoice starts untouched on page 2.
-        function dcsAddPostCoverPage(doc, kind, rcptName, rcptAddress) {
+        // ── Personal message to the customer, auto-checked by AI before it goes ──
+        // Used by Post estimate/invoice, WhatsApp estimate and Email estimate. The
+        // Hub relays the text to Claude for spelling/grammar correction only — it
+        // never rewrites the sender's voice. Resolves with the final text, '' when
+        // skipped, or null when the send is cancelled outright.
+        const HUB_PROOFREAD_URL = 'https://crymbleandsons.com/api/letters/proofread';
+        async function dcsProofreadText(text) {
+            const r = await fetch(HUB_PROOFREAD_URL, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', 'x-letters-key': HUB_LETTERS_KEY },
+                body: JSON.stringify({ text: text })
+            });
+            return r.json();
+        }
+        function dcsPersonalMessage(opts) {
+            opts = opts || {};
+            return new Promise(function (resolve) {
+                const old = document.getElementById('dcsMsgOverlay'); if (old) old.remove();
+                const ov = document.createElement('div');
+                ov.id = 'dcsMsgOverlay';
+                ov.style.cssText = 'position:fixed;inset:0;background:rgba(17,24,39,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+                ov.innerHTML = `
+                    <div style="background:white;border-radius:14px;max-width:540px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,0.3);overflow:hidden;">
+                        <div style="padding:0.9rem 1.1rem;border-bottom:1px solid #e5e7eb;">
+                            <strong style="font-size:0.95rem;">💬 ${opts.title || 'Personal message'}</strong>
+                            <div style="font-size:0.78rem;color:#6b7280;margin-top:2px;">${opts.hint || 'Write it your way — the AI check tidies spelling and grammar but keeps your words.'}</div>
+                        </div>
+                        <div style="padding:1rem 1.1rem;">
+                            <textarea id="dcsMsgText" rows="5" maxlength="1500" placeholder="${opts.placeholder || 'e.g. Thank you for coming in on Tuesday — here is the estimate we talked through. Take your time, and ring me if anything is unclear.'}" style="width:100%;box-sizing:border-box;border:1.5px solid #d1d5db;border-radius:10px;padding:0.65rem 0.75rem;font:inherit;font-size:0.9rem;resize:vertical;"></textarea>
+                            <div id="dcsMsgChanges" style="display:none;margin-top:0.6rem;font-size:0.78rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:0.55rem 0.75rem;color:#166534;"></div>
+                        </div>
+                        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;padding:0.8rem 1.1rem;border-top:1px solid #e5e7eb;background:#f9fafb;">
+                            <button id="dcsMsgCancel" class="btn btn-outline" style="margin-right:auto;">Cancel</button>
+                            <button id="dcsMsgSkip" class="btn btn-outline">${opts.skipLabel || 'Send without a message'}</button>
+                            <button id="dcsMsgCheck" class="btn" style="background:#1F3A2C;color:white;">✨ Check with AI &amp; use</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(ov);
+                const ta = ov.querySelector('#dcsMsgText');
+                const chBox = ov.querySelector('#dcsMsgChanges');
+                const btn = ov.querySelector('#dcsMsgCheck');
+                if (opts.initial) ta.value = opts.initial;
+                ta.focus();
+                let checkedText = null; // text as it was when last AI-approved
+                const done = function (v) { ov.remove(); resolve(v); };
+                ov.querySelector('#dcsMsgCancel').onclick = function () { done(null); };
+                ov.querySelector('#dcsMsgSkip').onclick = function () { done(''); };
+                ta.addEventListener('input', function () {
+                    // Edits after a check need re-checking — flip the button back.
+                    if (checkedText !== null && ta.value !== checkedText) {
+                        checkedText = null;
+                        btn.innerHTML = '✨ Check with AI &amp; use';
+                        chBox.style.display = 'none';
+                    }
+                });
+                btn.onclick = async function () {
+                    const text = ta.value.trim();
+                    if (!text) { done(''); return; }
+                    if (checkedText !== null && text === checkedText) { done(text); return; }
+                    btn.disabled = true; btn.textContent = '⏳ Checking…';
+                    let j = null;
+                    try { j = await dcsProofreadText(text); } catch (e) {}
+                    btn.disabled = false;
+                    if (!j || !j.ok) {
+                        // AI unavailable — let the message through as written rather than block the send.
+                        chBox.style.display = 'block';
+                        chBox.style.background = '#fef9ec'; chBox.style.borderColor = '#f0e0b0'; chBox.style.color = '#8a6d3b';
+                        chBox.textContent = '⚠ The AI check is unavailable right now — click again to use the message as written.';
+                        checkedText = text;
+                        btn.textContent = 'Use as written';
+                        return;
+                    }
+                    ta.value = j.corrected;
+                    checkedText = j.corrected;
+                    chBox.style.display = 'block';
+                    chBox.style.background = '#f0fdf4'; chBox.style.borderColor = '#bbf7d0'; chBox.style.color = '#166534';
+                    chBox.innerHTML = (j.changes && j.changes.length)
+                        ? '<strong>Tidied up:</strong><br>' + j.changes.map(c => '• ' + String(c).replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]))).join('<br>')
+                        : '✓ No corrections needed — reads well.';
+                    btn.innerHTML = '✅ Looks good — use it';
+                };
+            });
+        }
+        function dcsAddPostCoverPage(doc, kind, rcptName, rcptAddress, personalMsg) {
             doc.insertPage(1);
             doc.setPage(1);
             // Stannp OCRs the first page to find WHO to post to — the recipient
@@ -7560,10 +7652,22 @@ ${jobs.length ? `<table>
             doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
             const ref = currentOrder ? (currentOrder.orderRef || currentOrder.orderId || '') : '';
             doc.text('Re: your memorial ' + kind + (ref ? ' — ref ' + ref : ''), 20, 130);
-            doc.text('Please find your ' + kind + ' enclosed. If you have any questions, or would like to', 20, 140);
-            doc.text('talk anything through, please call us on 028 9066 7784.', 20, 146);
+            let cy = 140;
+            if (personalMsg) {
+                // The sender's own (AI-checked) note replaces the stock line.
+                doc.splitTextToSize(String(personalMsg), 170).slice(0, 16).forEach(function (line) {
+                    doc.text(line, 20, cy); cy += 6;
+                });
+                cy += 4;
+                doc.text('If you have any questions, please call us on 028 9066 7784.', 20, cy);
+                cy += 6;
+            } else {
+                doc.text('Please find your ' + kind + ' enclosed. If you have any questions, or would like to', 20, cy);
+                doc.text('talk anything through, please call us on 028 9066 7784.', 20, cy + 6);
+                cy += 12;
+            }
             doc.setFontSize(8.5); doc.setTextColor(110, 110, 110);
-            doc.text('139 Upper Lisburn Road, Belfast, BT10 0LH  ·  330-332 Woodstock Road, Belfast, BT6 9DP  ·  Crymbleandsons.com', 20, 160);
+            doc.text('139 Upper Lisburn Road, Belfast, BT10 0LH  ·  330-332 Woodstock Road, Belfast, BT6 9DP  ·  Crymbleandsons.com', 20, Math.max(160, cy + 8));
             doc.setTextColor(0, 0, 0);
         }
         async function dcsPostDoc(kind) {
@@ -7575,12 +7679,17 @@ ${jobs.length ? `<table>
             if (!name || !address || !postcode) { alert('This order needs a customer name, address and postcode before it can be posted — open the order and fill in the Customer Details section.'); return; }
             if (!pcRe.test(address)) address += ', ' + postcode;
             if (!confirm('Post the ' + kind + ' by letter to:\n\n' + name + '\n' + address.split(',').map(s => s.trim()).join('\n') + '\n\nIt will be printed, enveloped and mailed (about £1).')) return;
+            const personalMsg = await dcsPersonalMessage({
+                title: 'Message to ' + name + ' (prints on the cover page)',
+                hint: 'A short personal note to go with the posted ' + kind + '. The AI check tidies spelling and grammar but keeps your words.'
+            });
+            if (personalMsg === null) return;
             showToast('📮 Building ' + kind + ' for post…', 'info');
             let built = null;
             try { built = kind === 'invoice' ? await generateInvoice({ returnDoc: true }) : await generateEstimate({ returnDoc: true }); } catch (e) {}
             if (!built || !built.doc) { showToast('⚠ Could not build the ' + kind, 'warn'); return; }
             try {
-                dcsAddPostCoverPage(built.doc, kind, name, address);
+                dcsAddPostCoverPage(built.doc, kind, name, address, personalMsg);
                 const r = await fetch(HUB_LETTERS_URL, {
                     method: 'POST',
                     headers: { 'content-type': 'application/json', 'x-letters-key': HUB_LETTERS_KEY },
@@ -7599,6 +7708,51 @@ ${jobs.length ? `<table>
                 }
                 else showToast('⚠ Post failed: ' + ((j && j.error) || ('HTTP ' + r.status)), 'warn');
             } catch (e) { showToast('⚠ Post failed: ' + e.message, 'warn'); }
+        }
+        // "Did my post go?" — asks the Hub for the live Stannp status of every
+        // letter posted for this order (matched by order ref) and shows them in
+        // a small overlay: accepted for print → being printed → dispatched.
+        async function dcsPostStatus() {
+            if (!currentOrder) { alert('Please select an order first'); return; }
+            const ref = currentOrder.orderRef || currentOrder.orderId || '';
+            showToast('📬 Checking with the postal service…', 'info');
+            let j = null;
+            try {
+                const r = await fetch(HUB_LETTERS_URL.replace(/\/post$/, '/status'), {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json', 'x-letters-key': HUB_LETTERS_KEY },
+                    body: JSON.stringify({ q: ref || (currentOrder.customerName || '') })
+                });
+                j = await r.json();
+            } catch (e) { showToast('⚠ Could not reach the Hub: ' + e.message, 'warn'); return; }
+            if (!j || !j.ok) { showToast('⚠ ' + ((j && j.error) || 'Could not get the post status'), 'warn'); return; }
+            const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+            const rows = (j.letters || []).map(l => {
+                const tone = /fail/i.test(l.friendly) ? '#b91c1c' : /dispatch/i.test(l.friendly) ? '#15803d' : '#8a6d3b';
+                const when = esc((l.sent_at || '').slice(0, 16).replace('T', ' '));
+                return `<tr>
+                    <td style="padding:0.5rem 0.6rem;font-size:0.8rem;color:#6b7280;white-space:nowrap;">${when}</td>
+                    <td style="padding:0.5rem 0.6rem;font-size:0.85rem;">${esc(l.doc)}<div style="font-size:0.75rem;color:#6b7280;">to ${esc(l.to)}</div>${l.detail ? `<div style="font-size:0.72rem;color:#b91c1c;">${esc(l.detail)}</div>` : ''}</td>
+                    <td style="padding:0.5rem 0.6rem;"><span style="font-size:0.75rem;font-weight:700;padding:3px 10px;border-radius:99px;background:${tone}18;color:${tone};white-space:nowrap;">${esc(l.friendly || l.status)}</span></td>
+                    <td style="padding:0.5rem 0.6rem;text-align:right;font-size:0.8rem;color:#374151;">${l.cost ? '£' + esc(l.cost) : ''}</td>
+                </tr>`;
+            }).join('');
+            const old = document.getElementById('dcsPostStatusOverlay');
+            if (old) old.remove();
+            const ov = document.createElement('div');
+            ov.id = 'dcsPostStatusOverlay';
+            ov.style.cssText = 'position:fixed;inset:0;background:rgba(17,24,39,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+            ov.innerHTML = `
+                <div style="background:white;border-radius:14px;max-width:560px;width:100%;max-height:80vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,0.3);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:0.9rem 1.1rem;border-bottom:1px solid #e5e7eb;">
+                        <strong style="font-size:0.95rem;">📬 Posted letters — ${esc(ref || currentOrder.customerName || '')}</strong>
+                        <button onclick="document.getElementById('dcsPostStatusOverlay').remove()" style="border:none;background:none;font-size:1.3rem;cursor:pointer;color:#6b7280;">×</button>
+                    </div>
+                    ${rows ? `<table style="width:100%;border-collapse:collapse;">${rows}</table>` : '<p style="padding:1.2rem;color:#6b7280;font-size:0.9rem;">No letters have been posted for this order yet.</p>'}
+                    <p style="padding:0.7rem 1.1rem;margin:0;border-top:1px solid #e5e7eb;font-size:0.75rem;color:#6b7280;">Statuses come live from the postal service: accepted for print → being printed → dispatched (in the Royal Mail). The full postage board is in the Hub under Comms → Delivery reports.</p>
+                </div>`;
+            ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+            document.body.appendChild(ov);
         }
         async function generateEstimate(opts) {
             if (!currentOrder) { alert('Please select an order first'); return; }
@@ -9462,6 +9616,31 @@ ${jobs.length ? `<table>
             document.getElementById('emailEstimateOverlay').style.display = 'none';
         }
 
+        // Manual "✨ Check with AI" on the email's personal message — corrects the
+        // textarea in place and lists what changed.
+        async function emailCheckMessage() {
+            const ta = document.getElementById('emailPersonalMsg');
+            const box = document.getElementById('emailMsgChanges');
+            const btn = document.getElementById('btnEmailMsgCheck');
+            const text = ta.value.trim();
+            if (!text) { box.style.display = 'none'; return; }
+            btn.disabled = true; btn.textContent = '⏳ Checking…';
+            let j = null;
+            try { j = await dcsProofreadText(text); } catch (e) {}
+            btn.disabled = false; btn.textContent = '✨ Check with AI';
+            box.style.display = 'block';
+            if (!j || !j.ok) {
+                box.style.background = '#fef9ec'; box.style.borderColor = '#f0e0b0'; box.style.color = '#8a6d3b';
+                box.textContent = '⚠ The AI check is unavailable right now — your message will be sent as written.';
+                return;
+            }
+            ta.value = j.corrected;
+            window._emailMsgChecked = j.corrected;
+            box.style.background = '#f0fdf4'; box.style.borderColor = '#bbf7d0'; box.style.color = '#166534';
+            box.innerHTML = (j.changes && j.changes.length)
+                ? '<strong>Tidied up:</strong><br>' + j.changes.map(c => '• ' + String(c).replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]))).join('<br>')
+                : '✓ No corrections needed — reads well.';
+        }
         async function sendEstimateEmailNow() {
             const emailAddr = document.getElementById('emailEstimateAddr').value.trim();
             if (!emailAddr || !emailAddr.includes('@')) {
@@ -9476,6 +9655,21 @@ ${jobs.length ? `<table>
 
             const btn = document.getElementById('btnSendEmail');
             btn.disabled = true;
+
+            // Auto-check the personal message if it was typed but never checked —
+            // the AI pass is part of the send, not an optional extra.
+            let personalMessage = document.getElementById('emailPersonalMsg').value.trim();
+            if (personalMessage && window._emailMsgChecked !== personalMessage) {
+                btn.textContent = '✨ Checking message…';
+                try {
+                    const pj = await dcsProofreadText(personalMessage);
+                    if (pj && pj.ok) {
+                        personalMessage = pj.corrected;
+                        document.getElementById('emailPersonalMsg').value = pj.corrected;
+                        window._emailMsgChecked = pj.corrected;
+                    }
+                } catch (e) { /* AI down — send the message as written */ }
+            }
             btn.textContent = '⏳ Sending…';
 
             const statusEl = document.getElementById('emailEstimateStatus');
@@ -9497,7 +9691,8 @@ ${jobs.length ? `<table>
                         customerName: currentOrder.customerFirstName || currentOrder.customerName || 'Customer',
                         ref: ref,
                         pdfBase64: pdfBase64,
-                        proofUrl: proofUrl
+                        proofUrl: proofUrl,
+                        personalMessage: personalMessage
                     })
                 });
 
@@ -10436,6 +10631,17 @@ ${jobs.length ? `<table>
             <input id="emailEstimateAddr" type="email" placeholder="customer@example.com"
               style="width:100%;padding:0.65rem 0.85rem;border:1.5px solid rgba(60,60,67,0.2);border-radius:10px;font-size:0.95rem;font-family:inherit;outline:none;transition:border-color 0.15s;"
               onfocus="this.style.borderColor='#1F3A2C'" onblur="this.style.borderColor='rgba(60,60,67,0.2)'">
+          </div>
+
+          <!-- Personal message (AI-checked) -->
+          <div>
+            <label style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#6E6A5A;display:block;margin-bottom:5px;">Personal Message <span style="font-weight:500;text-transform:none;letter-spacing:0;">(optional — goes in the email)</span></label>
+            <textarea id="emailPersonalMsg" rows="3" maxlength="1500" placeholder="e.g. It was lovely to meet you on Tuesday — here is the estimate we talked through."
+              style="width:100%;box-sizing:border-box;padding:0.65rem 0.85rem;border:1.5px solid rgba(60,60,67,0.2);border-radius:10px;font-size:0.9rem;font-family:inherit;outline:none;resize:vertical;"
+              onfocus="this.style.borderColor='#1F3A2C'" onblur="this.style.borderColor='rgba(60,60,67,0.2)'" oninput="document.getElementById('emailMsgChanges').style.display='none';window._emailMsgChecked=null;"></textarea>
+            <button type="button" onclick="emailCheckMessage()" id="btnEmailMsgCheck"
+              style="margin-top:6px;padding:0.45rem 0.8rem;background:#f4f1e8;border:1.5px solid #d8d2c0;border-radius:8px;font-size:0.8rem;font-weight:600;color:#1F3A2C;cursor:pointer;font-family:inherit;">✨ Check with AI</button>
+            <div id="emailMsgChanges" style="display:none;margin-top:6px;font-size:0.78rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:0.5rem 0.7rem;color:#166534;"></div>
           </div>
 
           <!-- Include proof link option -->
