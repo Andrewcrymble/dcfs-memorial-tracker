@@ -7728,7 +7728,7 @@ ${jobs.length ? `<table>
             if (!j || !j.ok) { showToast('⚠ ' + ((j && j.error) || 'Could not get the post status'), 'warn'); return; }
             const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
             const rows = (j.letters || []).map(l => {
-                const tone = /fail/i.test(l.friendly) ? '#b91c1c' : /dispatch/i.test(l.friendly) ? '#15803d' : '#8a6d3b';
+                const tone = /fail/i.test(l.friendly) ? '#b91c1c' : /dispatch|deliver/i.test(l.friendly) ? '#15803d' : '#8a6d3b';
                 const when = esc((l.sent_at || '').slice(0, 16).replace('T', ' '));
                 return `<tr>
                     <td style="padding:0.5rem 0.6rem;font-size:0.8rem;color:#6b7280;white-space:nowrap;">${when}</td>
